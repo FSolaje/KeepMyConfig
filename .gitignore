@@ -1,0 +1,25 @@
+# Ignorar archivos temporales y de respaldo
+*.tmp
+*.temp
+*~
+*.swp
+*.swo
+
+# Ignorar archivos comprimidos de backups y logs generados en pruebas locales
+*.tar.gz
+*.tar.zst
+*.tar.bz2
+*.gpg
+*.manifest.log
+/logs/*.log
+
+# Ignorar configuraciones de entorno locales y datos sensibles
+config/*.env.local
+*.key
+*.token
+id_rsa*
+id_ed25519*
+
+# Ignorar archivos de sistema y de escritorio
+.DS_Store
+Thumbs.db
