@@ -25,7 +25,7 @@
    - [x] VSCode: `modules.d/vscode-standard.conf` y `modules.d/vscode-sensitive.conf`.
    - [x] Sistema y Shell: `modules.d/bash-env.conf` (entorno) y `modules.d/ssh-keys.conf` (llaves y credenciales con Vault & Shred) con suite en `tests/test_sample_modules.sh`.
 7. **Manual de Usuario Final (`MANUAL_USUARIO.md`):**
-   - [ ] Redacción integral en rama dedicada `dev/feature/user-manual`:
+   - [x] Redacción integral en rama dedicada `dev/feature/user-manual`:
      - Guía paso a paso TUI (Whiptail) con diagramas de menús y flujos de copia/restauración.
      - Guía de uso CLI Headless con tabla de flags, automatización en cron y códigos de salida.
      - Guía para docentes/administradores: formato de recetas `.conf` y directivas de purga/hooks.
