@@ -21,10 +21,16 @@
 5. **Implementación del Controlador y Entrypoint:**
    - [x] `lib/controllers/app_controller.sh`: Orquestación MVC.
    - [x] `backup_manager.sh`: Punto de entrada CLI y modo TUI interactivo (suite unitaria en `tests/test_controller.sh`).
-6. **Módulos Iniciales de Prueba:**
-   - [x] Creados `modules.d/vscode-standard.conf` y `modules.d/vscode-sensitive.conf`.
-   - Crear `modules.d/bash-env.conf` y `modules.d/ssh-keys.conf`.
-7. **Pruebas y Verificación:**
-   - Pruebas unitarias de backup/restore de cada módulo sin permisos de administración.
-   - Verificación de la purga segura con `shred -u`.
-   - Prueba de detección y desconexión segura del SSD.
+6. **Módulos de Recetas Implementados:**
+   - [x] VSCode: `modules.d/vscode-standard.conf` y `modules.d/vscode-sensitive.conf`.
+   - [x] Sistema y Shell: `modules.d/bash-env.conf` (entorno) y `modules.d/ssh-keys.conf` (llaves y credenciales con Vault & Shred) con suite en `tests/test_sample_modules.sh`.
+7. **Manual de Usuario Final (`MANUAL_USUARIO.md`):**
+   - [ ] Redacción integral en rama dedicada `dev/feature/user-manual`:
+     - Guía paso a paso TUI (Whiptail) con diagramas de menús y flujos de copia/restauración.
+     - Guía de uso CLI Headless con tabla de flags, automatización en cron y códigos de salida.
+     - Guía para docentes/administradores: formato de recetas `.conf` y directivas de purga/hooks.
+     - Guía de inicialización del SSD y resolución de incidencias (Troubleshooting).
+8. **Pruebas y Verificación End-to-End con SSD:**
+   - [ ] Inicialización del marcador `.backup_storage_marker` en el SSD externo.
+   - [ ] Verificación de backup y restore de todos los módulos sin privilegios root.
+   - [ ] Verificación de purga segura con `shred -u` en módulos sensibles.
