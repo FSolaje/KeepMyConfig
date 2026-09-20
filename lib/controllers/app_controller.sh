@@ -1,0 +1,851 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Archivo: lib/controllers/app_controller.sh
+# Descripción: Controlador principal y orquestador MVC de BackupConfig.
+# ==============================================================================
+
+# Variables de entorno y contexto
+CONTROLLER_BASE_DIR=""
+CONTROLLER_INITIALIZED=0
+
+# Inicialización del entorno, configuración, modelos y vistas
+controller_init() {
+    if (( CONTROLLER_INITIALIZED == 1 )); then
+        return 0
+    fi
+
+    local base_dir="${1:-}"
+
+    if [[ -z "$base_dir" ]]; then
+        base_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+    fi
+    CONTROLLER_BASE_DIR="$base_dir"
+
+    # Verificar testigo de la aplicación
+    if [[ ! -f "${CONTROLLER_BASE_DIR}/.backup_app_marker" ]]; then
+        echo "[ERROR] No se encuentra el archivo marcador .backup_app_marker en ${CONTROLLER_BASE_DIR}" >&2
+        return 1
+    fi
+
+    # Cargar configuraciones globales
+    if [[ -f "${CONTROLLER_BASE_DIR}/config/config.conf" ]]; then
+        # shellcheck disable=SC1091
+        source "${CONTROLLER_BASE_DIR}/config/config.conf"
+    fi
+
+    # Cargar modelos
+    # shellcheck disable=SC1091
+    source "${CONTROLLER_BASE_DIR}/lib/models/device_model.sh"
+    # shellcheck disable=SC1091
+    source "${CONTROLLER_BASE_DIR}/lib/models/module_model.sh"
+    # shellcheck disable=SC1091
+    source "${CONTROLLER_BASE_DIR}/lib/models/crypto_model.sh"
+    # shellcheck disable=SC1091
+    source "${CONTROLLER_BASE_DIR}/lib/models/backup_model.sh"
+    # shellcheck disable=SC1091
+    source "${CONTROLLER_BASE_DIR}/lib/models/restore_model.sh"
+
+    # Cargar vistas
+    # shellcheck disable=SC1091
+    source "${CONTROLLER_BASE_DIR}/lib/views/whiptail_view.sh"
+    # shellcheck disable=SC1091
+    source "${CONTROLLER_BASE_DIR}/lib/views/ansi_view.sh"
+
+    # Asegurar rutas por defecto si no vienen fijadas
+    TARGET_USER_HOME="${TARGET_USER_HOME:-$HOME}"
+    MODULES_DIR="${MODULES_DIR:-${CONTROLLER_BASE_DIR}/modules.d}"
+
+    CONTROLLER_INITIALIZED=1
+    return 0
+}
+
+# Obtener y validar el punto de montaje y subcarpeta de backup en el SSD
+_controller_get_backup_dir() {
+    local val_out=""
+    local status=0
+    val_out=$(device_model_validate_storage "${CONTROLLER_BASE_DIR}/config/config.conf") || status=$?
+    if (( status != 0 )); then
+        return "$status"
+    fi
+    local bdir
+    bdir=$(echo "$val_out" | grep '^BACKUP_DIR=' | cut -d'=' -f2-)
+    echo "$bdir"
+    return 0
+}
+
+# Advertencia interactiva de seguridad post-backup si quedaron ficheros sensibles sin purgar
+_controller_check_sensitive_purge_warning() {
+    local module_id="$1"
+    local is_tui="$2"
+
+    local mod_info
+    mod_info=$(module_model_get "$module_id") || return 0
+    local is_sensitive="false"
+    local purge_after="false"
+    local mod_name="$module_id"
+
+    while IFS='=' read -r key val; do
+        case "$key" in
+            IS_SENSITIVE) is_sensitive="$val" ;;
+            PURGE_AFTER_BACKUP) purge_after="$val" ;;
+            NAME) mod_name="$val" ;;
+        esac
+    done <<< "$mod_info"
+
+    if [[ "$is_sensitive" == "true" && "$purge_after" == "false" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            local warn_msg="AVISO DE SEGURIDAD:\n\nEl módulo sensible '${mod_name}' se ha respaldado con éxito en el SSD,\npero sus ficheros aún permanecen en el almacenamiento local de este equipo.\n\n¿Desea eliminarlos de forma segura con shred ahora?"
+            if whiptail_view_yesno "Seguridad y Privacidad" "$warn_msg"; then
+                # Usuario aceptó purgar de forma interactiva
+                local paths_raw
+                paths_raw=$(echo "$mod_info" | grep '^PATHS=' | cut -d'=' -f2- || true)
+                local paths=()
+                IFS='|' read -r -a paths <<< "$paths_raw"
+                for p in "${paths[@]}"; do
+                    crypto_model_shred_path "${TARGET_USER_HOME}/${p}" 3 &>/dev/null || true
+                done
+                whiptail_view_msgbox "Purga Completada" "Los ficheros locales de '${mod_name}' han sido destruidos con shred -u."
+            fi
+        else
+            ansi_view_warning "AVISO DE SEGURIDAD: El módulo sensible '${mod_name}' fue respaldado, pero sus ficheros originales continúan presentes en el equipo local."
+        fi
+    fi
+}
+
+# ==============================================================================
+# Manejadores de Casos de Uso (Handlers)
+# ==============================================================================
+
+# 1. Respaldo Completo (Todos los módulos)
+controller_handle_backup_all() {
+    local is_tui="${1:-false}"
+    local purge_override="${2:-auto}"
+
+    local backup_dir=""
+    local ret=0
+
+    backup_dir=$(_controller_get_backup_dir) || ret=$?
+    if (( ret != 0 )); then
+        local err_txt="No se detectó el SSD externo de backup o falta el archivo marcador .backup_storage_marker."
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Error de Almacenamiento" "$err_txt"
+        else
+            ansi_view_error "$err_txt"
+        fi
+        return 2
+    fi
+
+    # Verificar si hay módulos sensibles
+    local sensitive_mods
+    sensitive_mods=$(module_model_filter_by_sensitivity "true") || true
+    local passphrase=""
+
+    if [[ -n "$sensitive_mods" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            passphrase=$(whiptail_view_password_confirm "Cifrado de Módulos Sensibles" "Introduzca la contraseña GPG AES-256 para proteger sus datos:") || return 1
+        else
+            if [[ -z "${PASSPHRASE:-}" ]]; then
+                passphrase=$(ansi_view_password "Introduzca la contraseña GPG para cifrar módulos sensibles")
+            else
+                passphrase="$PASSPHRASE"
+            fi
+        fi
+    fi
+
+    if [[ "$is_tui" == "false" ]]; then
+        ansi_view_header "INICIANDO RESPALDO COMPLETO"
+        ansi_view_info "Destino del respaldo: $backup_dir"
+    fi
+
+    local report
+    report=$(backup_model_run_all "$backup_dir" "$TARGET_USER_HOME" "$passphrase" "$purge_override")
+    ret=$?
+
+    # Analizar purga post-backup en módulos sensibles
+    local all_mods
+    all_mods=$(module_model_list) || true
+    for m in $all_mods; do
+        _controller_check_sensitive_purge_warning "$m" "$is_tui"
+    done
+
+    if [[ "$is_tui" == "true" ]]; then
+        whiptail_view_msgbox "Respaldo Completo Finalizado" "El proceso de respaldo ha concluido.\n\n$report"
+    else
+        echo "$report"
+        ansi_view_success "Proceso de respaldo global completado."
+    fi
+
+    return "$ret"
+}
+
+# 2. Respaldo por Etiqueta
+controller_handle_backup_tag() {
+    local tag="${1:-}"
+    local is_tui="${2:-false}"
+    local purge_override="${3:-auto}"
+
+    if [[ -z "$tag" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            local all_tags
+            all_tags=$(module_model_get_all_tags) || true
+            local tag_items=()
+            for t in $all_tags; do
+                tag_items+=("$t" "Etiqueta: $t" "OFF")
+            done
+            tag=$(whiptail_view_radiolist "Seleccionar Etiqueta" "Elija la etiqueta a respaldar:" "${tag_items[@]}") || return 1
+        else
+            ansi_view_error "Debe especificar una etiqueta para respaldar."
+            return 5
+        fi
+    fi
+
+    local backup_dir=""
+    local ret=0
+    backup_dir=$(_controller_get_backup_dir) || ret=$?
+    if (( ret != 0 )); then
+        local err_txt="No se detectó el SSD externo de backup o falta el marcador de seguridad."
+        [[ "$is_tui" == "true" ]] && whiptail_view_error "Disco No Disponible" "$err_txt" || ansi_view_error "$err_txt"
+        return 2
+    fi
+
+    # Verificar si la etiqueta contiene módulos sensibles
+    local tag_mods
+    tag_mods=$(module_model_filter_by_tag "$tag") || true
+    local has_sensitive="false"
+    for m in $tag_mods; do
+        local minfo
+        minfo=$(module_model_get "$m") || continue
+        if echo "$minfo" | grep -q 'IS_SENSITIVE=true'; then
+            has_sensitive="true"
+            break
+        fi
+    done
+
+    local passphrase=""
+    if [[ "$has_sensitive" == "true" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            passphrase=$(whiptail_view_password_confirm "Cifrado GPG" "La etiqueta '$tag' contiene módulos sensibles. Introduzca contraseña:") || return 1
+        else
+            passphrase="${PASSPHRASE:-$(ansi_view_password "Introduzca la contraseña GPG para módulos sensibles")}"
+        fi
+    fi
+
+    local report
+    report=$(backup_model_run_by_tag "$tag" "$backup_dir" "$TARGET_USER_HOME" "$passphrase" "$purge_override")
+    ret=$?
+
+    for m in $tag_mods; do
+        _controller_check_sensitive_purge_warning "$m" "$is_tui"
+    done
+
+    if [[ "$is_tui" == "true" ]]; then
+        whiptail_view_msgbox "Respaldo por Etiqueta" "Respaldo de etiqueta '$tag' finalizado.\n\n$report"
+    else
+        echo "$report"
+        ansi_view_success "Respaldo de etiqueta '$tag' concluido."
+    fi
+
+    return "$ret"
+}
+
+# 3. Respaldo Individual de Módulo
+controller_handle_backup_module() {
+    local module_id="${1:-}"
+    local is_tui="${2:-false}"
+    local purge_override="${3:-auto}"
+
+    if [[ -z "$module_id" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            local all_mods
+            all_mods=$(module_model_list) || true
+            local mod_items=()
+            for m in $all_mods; do
+                local minfo
+                minfo=$(module_model_get "$m") || continue
+                local mname
+                mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
+                mod_items+=("$m" "$mname" "OFF")
+            done
+            module_id=$(whiptail_view_radiolist "Seleccionar Módulo" "Elija el módulo individual a respaldar:" "${mod_items[@]}") || return 1
+        else
+            ansi_view_error "Debe especificar el identificador del módulo."
+            return 5
+        fi
+    fi
+
+    local backup_dir=""
+    local ret=0
+    backup_dir=$(_controller_get_backup_dir) || ret=$?
+    if (( ret != 0 )); then
+        local err_txt="No se detectó el SSD externo de backup o falta el marcador de seguridad."
+        [[ "$is_tui" == "true" ]] && whiptail_view_error "Disco No Disponible" "$err_txt" || ansi_view_error "$err_txt"
+        return 2
+    fi
+
+    local minfo
+    minfo=$(module_model_get "$module_id") || {
+        local err_txt="El módulo '$module_id' no existe o está corrupto."
+        [[ "$is_tui" == "true" ]] && whiptail_view_error "Módulo Inválido" "$err_txt" || ansi_view_error "$err_txt"
+        return 3
+    }
+
+    local passphrase=""
+    if echo "$minfo" | grep -q 'IS_SENSITIVE=true'; then
+        if [[ "$is_tui" == "true" ]]; then
+            passphrase=$(whiptail_view_password_confirm "Cifrado GPG" "Módulo sensible. Introduzca la contraseña GPG AES-256:") || return 1
+        else
+            passphrase="${PASSPHRASE:-$(ansi_view_password "Introduzca la contraseña GPG para cifrar '$module_id'")}"
+        fi
+    fi
+
+    local force_purge="false"
+    local no_purge="false"
+    if [[ "$purge_override" == "true" ]]; then
+        force_purge="true"
+    elif [[ "$purge_override" == "false" ]]; then
+        no_purge="true"
+    fi
+
+    local report
+    report=$(backup_model_run "$module_id" "$backup_dir" "$TARGET_USER_HOME" "$passphrase" "$force_purge" "$no_purge" "$MODULES_DIR")
+    ret=$?
+
+    _controller_check_sensitive_purge_warning "$module_id" "$is_tui"
+
+    if [[ "$is_tui" == "true" ]]; then
+        whiptail_view_msgbox "Respaldo de Módulo" "Respaldo del módulo '$module_id' concluido.\n\n$report"
+    else
+        echo "$report"
+        ansi_view_success "Respaldo de '$module_id' completado."
+    fi
+
+    return "$ret"
+}
+
+# 4. Restauración Exprés de Datos Sensibles
+controller_handle_restore_sensitive() {
+    local is_tui="${1:-false}"
+
+    local backup_dir=""
+    local ret=0
+    backup_dir=$(_controller_get_backup_dir) || ret=$?
+    if (( ret != 0 )); then
+        local err_txt="No se detectó el SSD externo de backup o falta el marcador de seguridad."
+        [[ "$is_tui" == "true" ]] && whiptail_view_error "Disco No Disponible" "$err_txt" || ansi_view_error "$err_txt"
+        return 2
+    fi
+
+    local passphrase=""
+    if [[ "$is_tui" == "true" ]]; then
+        passphrase=$(whiptail_view_password "Restauración Exprés Sensible" "Introduzca la contraseña GPG para descifrar todos sus datos sensibles:") || return 1
+    else
+        passphrase="${PASSPHRASE:-$(ansi_view_password "Introduzca la contraseña GPG para restaurar datos sensibles")}"
+    fi
+
+    local report
+    report=$(restore_model_restore_sensitive_all "$backup_dir" "$TARGET_USER_HOME" "$passphrase")
+    ret=$?
+
+    if [[ "$is_tui" == "true" ]]; then
+        whiptail_view_msgbox "Restauración Exprés Sensible" "Resultado de la restauración:\n\n$report"
+    else
+        echo "$report"
+        ansi_view_success "Restauración de módulos protegidos completada."
+    fi
+
+    return "$ret"
+}
+
+# 5. Restauración Selectiva por Módulo e Histórico
+controller_handle_restore_module() {
+    local module_id="${1:-}"
+    local timestamp="${2:-}"
+    local is_tui="${3:-false}"
+
+    local backup_dir=""
+    local ret=0
+    backup_dir=$(_controller_get_backup_dir) || ret=$?
+    if (( ret != 0 )); then
+        local err_txt="No se detectó el SSD externo de backup o falta el marcador de seguridad."
+        [[ "$is_tui" == "true" ]] && whiptail_view_error "Disco No Disponible" "$err_txt" || ansi_view_error "$err_txt"
+        return 2
+    fi
+
+    if [[ -z "$module_id" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            local all_mods
+            all_mods=$(module_model_list) || true
+            local mod_items=()
+            for m in $all_mods; do
+                local minfo
+                minfo=$(module_model_get "$m") || continue
+                local mname
+                mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
+                mod_items+=("$m" "$mname" "OFF")
+            done
+            module_id=$(whiptail_view_radiolist "Seleccionar Módulo" "Elija el módulo a restaurar:" "${mod_items[@]}") || return 1
+        else
+            ansi_view_error "Debe especificar el identificador del módulo a restaurar."
+            return 5
+        fi
+    fi
+
+    # Seleccionar timestamp si estamos en TUI y no se especificó
+    if [[ -z "$timestamp" && "$is_tui" == "true" ]]; then
+        local history
+        history=$(backup_model_list_history "$module_id" "$backup_dir") || true
+        if [[ -z "$history" ]]; then
+            whiptail_view_error "Sin Histórico" "No se encontraron respaldos archivados para el módulo '$module_id'."
+            return 3
+        fi
+
+        local ts_items=()
+        for ts in $history; do
+            ts_items+=("$ts" "Respaldo: $ts")
+        done
+        timestamp=$(whiptail_view_menu "Histórico de Respaldos" "Seleccione la versión a restaurar:" "${ts_items[@]}") || return 1
+    fi
+
+    # Resolver si el archivo está cifrado
+    local arch_info
+    arch_info=$(restore_model_find_archive "$module_id" "$backup_dir" "$timestamp" "$MODULES_DIR") || {
+        local err_txt="No se localizó el archivo de respaldo para '$module_id' en la fecha seleccionada."
+        [[ "$is_tui" == "true" ]] && whiptail_view_error "Archivo Faltante" "$err_txt" || ansi_view_error "$err_txt"
+        return 3
+    }
+
+    local is_enc="false"
+    while IFS='=' read -r k v; do
+        [[ "$k" == "IS_ENCRYPTED" ]] && is_enc="$v"
+    done <<< "$arch_info"
+
+    local passphrase=""
+    if [[ "$is_enc" == "true" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            passphrase=$(whiptail_view_password "Módulo Cifrado" "Introduzca la clave GPG para descifrar '$module_id':") || return 1
+        else
+            passphrase="${PASSPHRASE:-$(ansi_view_password "Introduzca la clave GPG para descifrar '$module_id'")}"
+        fi
+    fi
+
+    local report
+    report=$(restore_model_restore_module "$module_id" "$backup_dir" "$TARGET_USER_HOME" "$timestamp" "$passphrase" "$MODULES_DIR")
+    ret=$?
+
+    if [[ "$is_tui" == "true" ]]; then
+        whiptail_view_msgbox "Restauración Concluida" "Resultado de la restauración:\n\n$report"
+    else
+        echo "$report"
+        ansi_view_success "Restauración de '$module_id' finalizada con éxito."
+    fi
+
+    return "$ret"
+}
+
+# 6. Restauración Total
+controller_handle_restore_all() {
+    local is_tui="${1:-false}"
+
+    local backup_dir=""
+    local ret=0
+    backup_dir=$(_controller_get_backup_dir) || ret=$?
+    if (( ret != 0 )); then
+        local err_txt="No se detectó el SSD externo de backup o falta el marcador de seguridad."
+        [[ "$is_tui" == "true" ]] && whiptail_view_error "Disco No Disponible" "$err_txt" || ansi_view_error "$err_txt"
+        return 2
+    fi
+
+    if [[ "$is_tui" == "true" ]]; then
+        if ! whiptail_view_yesno "Restauración Total" "¿Está seguro de que desea restaurar TODOS los módulos respaldados en el SSD a su sistema local?"; then
+            return 1
+        fi
+    fi
+
+    local passphrase=""
+    # Comprobar si hay módulos sensibles en el SSD
+    local sens_mods
+    sens_mods=$(module_model_filter_by_sensitivity "true") || true
+    if [[ -n "$sens_mods" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            passphrase=$(whiptail_view_password "Clave Requerida" "Existen módulos cifrados. Introduzca la clave GPG global:") || return 1
+        else
+            passphrase="${PASSPHRASE:-$(ansi_view_password "Introduzca la clave GPG para módulos protegidos")}"
+        fi
+    fi
+
+    local report
+    report=$(restore_model_restore_all "$backup_dir" "$TARGET_USER_HOME" "$passphrase")
+    ret=$?
+
+    if [[ "$is_tui" == "true" ]]; then
+        whiptail_view_msgbox "Restauración Total Finalizada" "Reporte de restauración global:\n\n$report"
+    else
+        echo "$report"
+        ansi_view_success "Restauración total completada."
+    fi
+
+    return "$ret"
+}
+
+# 7. Diagnóstico de Disco Externo
+controller_handle_device_check() {
+    local is_tui="${1:-false}"
+    local val_out=""
+    local ret=0
+    val_out=$(device_model_validate_storage "${CONTROLLER_BASE_DIR}/config/config.conf") || ret=$?
+
+    local status="UNKNOWN"
+    local mount_point=""
+    local backup_dir=""
+    local marker_path=""
+    local space_avail=""
+    local space_total=""
+
+    while IFS='=' read -r k v; do
+        case "$k" in
+            STATUS) status="$v" ;;
+            MOUNTPOINT) mount_point="$v" ;;
+            BACKUP_DIR) backup_dir="$v" ;;
+            MARKER_PATH) marker_path="$v" ;;
+            SPACE_AVAILABLE) space_avail="$v" ;;
+            SPACE_TOTAL) space_total="$v" ;;
+        esac
+    done <<< "$val_out"
+
+    local id_type="${STORAGE_ID_TYPE:-LABEL}"
+    local id_val="${STORAGE_ID_VALUE:-Desconocido}"
+
+    if [[ "$is_tui" == "true" ]]; then
+        local diag_txt="ESTADO DEL DISPOSITIVO EXTERNO:\n\n"
+        diag_txt+="• Estado Global    : $status\n"
+        diag_txt+="• Tipo de Búsqueda : $id_type\n"
+        diag_txt+="• Identificador    : $id_val\n"
+        diag_txt+="• Punto de Montaje : ${mount_point:-No encontrado}\n"
+        diag_txt+="• Directorio Backup: ${backup_dir:-N/A}\n"
+        diag_txt+="• Marcador SSD     : ${marker_path:-FALTA .backup_storage_marker}\n"
+        diag_txt+="• Espacio Libre    : ${space_avail} de ${space_total}\n"
+        diag_txt+="• Home a Respaldar : $TARGET_USER_HOME"
+
+        if (( ret == 0 )); then
+            whiptail_view_msgbox "Diagnóstico de Almacenamiento" "$diag_txt"
+        else
+            whiptail_view_error "Alerta de Almacenamiento" "$diag_txt"
+        fi
+    else
+        ansi_view_header "DIAGNÓSTICO DEL ALMACENAMIENTO DE BACKUP"
+        ansi_view_key_value "ESTADO GLOBAL" "$status"
+        ansi_view_key_value "TIPO DE ID" "$id_type"
+        ansi_view_key_value "VALOR ID" "$id_val"
+        ansi_view_key_value "PUNTO DE MONTAJE" "${mount_point:-No detectado}"
+        ansi_view_key_value "DIRECTORIO BACKUP" "${backup_dir:-N/A}"
+        ansi_view_key_value "MARCADOR SEGURIDAD" "${marker_path:-FALTA .backup_storage_marker}"
+        ansi_view_key_value "ESPACIO DISPONIBLE" "${space_avail} de ${space_total}"
+        ansi_view_key_value "USUARIO DESTINO" "$TARGET_USER_HOME"
+    fi
+
+    return "$ret"
+}
+
+# 8. Asistente de Administración de Módulos y Etiquetas (TUI)
+controller_handle_modules_admin() {
+    local is_tui="${1:-true}"
+
+    if [[ "$is_tui" != "true" ]]; then
+        ansi_view_info "Para administrar módulos use los subcomandos de línea de órdenes."
+        return 0
+    fi
+
+    while true; do
+        local admin_choice
+        admin_choice=$(whiptail_view_menu "Administración de Módulos y Etiquetas" "Seleccione una acción:" \
+            "1" "Listar y ver detalle de módulos" \
+            "2" "Crear un nuevo módulo" \
+            "3" "Eliminar un módulo existente" \
+            "4" "Añadir etiqueta al catálogo" \
+            "0" "Volver al Menú Principal") || return 0
+
+        case "$admin_choice" in
+            1)
+                local all_mods
+                all_mods=$(module_model_list) || true
+                if [[ -z "$all_mods" ]]; then
+                    whiptail_view_msgbox "Módulos" "No hay módulos registrados en ${MODULES_DIR}."
+                    continue
+                fi
+                local m_items=()
+                for m in $all_mods; do
+                    local minfo
+                    minfo=$(module_model_get "$m") || continue
+                    local mname
+                    mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
+                    m_items+=("$m" "$mname")
+                done
+                local sel_m
+                sel_m=$(whiptail_view_menu "Módulos Registrados" "Seleccione un módulo para inspeccionar:" "${m_items[@]}") || continue
+                local detail
+                detail=$(module_model_get "$sel_m") || continue
+                whiptail_view_msgbox "Detalle del Módulo '$sel_m'" "$detail"
+                ;;
+            2)
+                # Asistente de creación
+                local mod_id
+                mod_id=$(whiptail_view_input "Nuevo Módulo" "Introduzca el ID único (ej: mi-app):") || continue
+                [[ -z "$mod_id" ]] && continue
+
+                local mod_name
+                mod_name=$(whiptail_view_input "Nuevo Módulo" "Nombre descriptivo (ej: Mi Aplicación):" "$mod_id") || continue
+
+                local mod_paths_str
+                mod_paths_str=$(whiptail_view_input "Rutas" "Rutas relativas a \$HOME separadas por espacio (ej: .config/app .apprc):") || continue
+
+                local all_tags
+                all_tags=$(module_model_get_all_tags) || true
+                local tag_checks=()
+                for t in $all_tags; do
+                    tag_checks+=("$t" "Etiqueta $t" "OFF")
+                done
+                local sel_tags
+                sel_tags=$(whiptail_view_checklist "Etiquetas" "Seleccione las etiquetas para este módulo:" "${tag_checks[@]}") || sel_tags="dev"
+
+                local is_sens="false"
+                if whiptail_view_yesno "Seguridad" "¿Contiene este módulo datos sensibles o confidenciales? (Requiere GPG)"; then
+                    is_sens="true"
+                fi
+
+                local purge_val="false"
+                if [[ "$is_sens" == "true" ]]; then
+                    if whiptail_view_yesno "Vault & Shred" "¿Desea activar purga automática (shred -u) tras el respaldo?"; then
+                        purge_val="true"
+                    fi
+                fi
+
+                local paths_arr=()
+                read -r -a paths_arr <<< "$mod_paths_str"
+                local tags_arr=()
+                read -r -a tags_arr <<< "$sel_tags"
+
+                if module_model_save "$mod_id" "$mod_name" "$is_sens" "$purge_val" "" paths_arr tags_arr; then
+                    whiptail_view_msgbox "Módulo Creado" "El módulo '$mod_id' se ha registrado correctamente en:\n${MODULES_DIR}/${mod_id}.conf"
+                else
+                    whiptail_view_error "Fallo de Creación" "No se pudo crear el archivo del módulo."
+                fi
+                ;;
+            3)
+                local all_mods
+                all_mods=$(module_model_list) || true
+                if [[ -z "$all_mods" ]]; then
+                    whiptail_view_msgbox "Eliminación" "No hay módulos para eliminar."
+                    continue
+                fi
+                local del_items=()
+                for m in $all_mods; do
+                    del_items+=("$m" "Módulo: $m" "OFF")
+                done
+                local to_delete
+                to_delete=$(whiptail_view_radiolist "Eliminar Módulo" "Seleccione el módulo a borrar permanentemente:" "${del_items[@]}") || continue
+
+                if whiptail_view_yesno "Confirmación de Borrado" "¿Está completamente seguro de eliminar el módulo '$to_delete'?\nEsta acción no se puede deshacer."; then
+                    if module_model_delete "$to_delete"; then
+                        whiptail_view_msgbox "Borrado Exitoso" "El módulo '$to_delete' ha sido eliminado de modules.d/."
+                    else
+                        whiptail_view_error "Error" "No se pudo eliminar el módulo '$to_delete'."
+                    fi
+                fi
+                ;;
+            4)
+                local new_tag
+                new_tag=$(whiptail_view_input "Nueva Etiqueta" "Introduzca el nombre de la nueva etiqueta (alfanumérico):") || continue
+                if [[ -n "$new_tag" ]]; then
+                    if module_model_add_tag_to_catalog "$new_tag"; then
+                        whiptail_view_msgbox "Catálogo Actualizado" "La etiqueta '$new_tag' ha sido incorporada al catálogo global."
+                    else
+                        whiptail_view_error "Fallo" "No se pudo registrar la etiqueta."
+                    fi
+                fi
+                ;;
+            0)
+                return 0
+                ;;
+        esac
+    done
+}
+
+# ==============================================================================
+# Bucles Principales (TUI y CLI)
+# ==============================================================================
+
+# Bucle principal TUI interactivo
+controller_run_tui() {
+    controller_init "${CONTROLLER_BASE_DIR:-}"
+
+    if ! whiptail_view_check_deps; then
+        ansi_view_error "La herramienta 'whiptail' no está instalada. Ejecute en modo CLI headless o instale whiptail."
+        return 10
+    fi
+
+    while true; do
+        local choice
+        choice=$(whiptail_view_main_menu) || break
+
+        case "$choice" in
+            1) controller_handle_backup_all "true" "auto" ;;
+            2) controller_handle_backup_tag "" "true" "auto" ;;
+            3) controller_handle_backup_module "" "true" "auto" ;;
+            4) controller_handle_restore_sensitive "true" ;;
+            5) controller_handle_restore_module "" "" "true" ;;
+            6) controller_handle_restore_all "true" ;;
+            7) controller_handle_modules_admin "true" ;;
+            8) controller_handle_device_check "true" ;;
+            0) break ;;
+            *) whiptail_view_error "Opción no reconocida" "La opción seleccionada no es válida." ;;
+        esac
+    done
+
+    clear
+    ansi_view_info "Sesión finalizada. ¡Hasta pronto!"
+    return 0
+}
+
+# Parser y ejecutor CLI headless
+controller_run_cli() {
+    controller_init "${CONTROLLER_BASE_DIR:-}"
+
+    local purge_flag="auto"
+    local action=""
+    local param_val=""
+    local timestamp_val=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                ansi_view_header "GESTOR DE BACKUP Y RECUPERACIÓN (CLI HEADLESS)"
+                echo "Uso: $0 [OPCIONES]"
+                echo ""
+                echo "Operaciones de Respaldo:"
+                echo "  --backup-all [--purge | --no-purge]            Respaldo global de todos los módulos."
+                echo "  --backup-tag <tag> [--purge | --no-purge]      Respaldo de módulos asociados a una etiqueta."
+                echo "  --backup-module <id> [--purge | --no-purge]    Respaldo de un módulo individual."
+                echo ""
+                echo "Operaciones de Restauración:"
+                echo "  --restore-sensitive                            Restauración rápida de datos sensibles (GPG)."
+                echo "  --restore-all                                  Restauración completa de todos los módulos."
+                echo "  --restore-module <id> [--timestamp <TS>]       Restauración de un módulo (o marca de tiempo)."
+                echo ""
+                echo "Diagnóstico e Información:"
+                echo "  --check-device                                 Verificar detección de SSD y marcador de seguridad."
+                echo "  --list-modules                                 Listar módulos configurados y su estado."
+                echo "  --list-tags                                    Listar catálogo de etiquetas activas."
+                echo "  -h, --help                                     Mostrar este menú de ayuda."
+                return 0
+                ;;
+            --purge)
+                purge_flag="true"
+                shift
+                ;;
+            --no-purge)
+                purge_flag="false"
+                shift
+                ;;
+            --backup-all)
+                action="backup-all"
+                shift
+                ;;
+            --backup-tag)
+                action="backup-tag"
+                param_val="${2:-}"
+                shift 2 || true
+                ;;
+            --backup-module)
+                action="backup-module"
+                param_val="${2:-}"
+                shift 2 || true
+                ;;
+            --restore-sensitive)
+                action="restore-sensitive"
+                shift
+                ;;
+            --restore-all)
+                action="restore-all"
+                shift
+                ;;
+            --restore-module)
+                action="restore-module"
+                param_val="${2:-}"
+                shift 2 || true
+                ;;
+            --timestamp)
+                timestamp_val="${2:-}"
+                shift 2 || true
+                ;;
+            --check-device)
+                action="check-device"
+                shift
+                ;;
+            --list-modules)
+                action="list-modules"
+                shift
+                ;;
+            --list-tags)
+                action="list-tags"
+                shift
+                ;;
+            *)
+                ansi_view_error "Opción no reconocida: $1"
+                echo "Ejecute '$0 --help' para ver las opciones disponibles."
+                return 5
+                ;;
+        esac
+    done
+
+    case "$action" in
+        backup-all)
+            controller_handle_backup_all "false" "$purge_flag"
+            ;;
+        backup-tag)
+            controller_handle_backup_tag "$param_val" "false" "$purge_flag"
+            ;;
+        backup-module)
+            controller_handle_backup_module "$param_val" "false" "$purge_flag"
+            ;;
+        restore-sensitive)
+            controller_handle_restore_sensitive "false"
+            ;;
+        restore-all)
+            controller_handle_restore_all "false"
+            ;;
+        restore-module)
+            controller_handle_restore_module "$param_val" "$timestamp_val" "false"
+            ;;
+        check-device)
+            controller_handle_device_check "false"
+            ;;
+        list-modules)
+            ansi_view_header "MÓDULOS REGISTRADOS"
+            local mods
+            mods=$(module_model_list) || true
+            for m in $mods; do
+                local minfo
+                minfo=$(module_model_get "$m") || continue
+                local mname
+                mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
+                local msens
+                msens=$(echo "$minfo" | grep '^IS_SENSITIVE=' | cut -d'=' -f2- || echo "false")
+                ansi_view_key_value "$m" "$mname (Sensible: $msens)"
+            done
+            return 0
+            ;;
+        list-tags)
+            ansi_view_header "CATÁLOGO DE ETIQUETAS"
+            local tags
+            tags=$(module_model_get_all_tags) || true
+            for t in $tags; do
+                echo "  • $t"
+            done
+            return 0
+            ;;
+        "")
+            ansi_view_error "No se especificó ninguna acción. Use --help para consultar las opciones."
+            return 5
+            ;;
+    esac
+}
