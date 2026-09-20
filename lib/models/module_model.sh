@@ -17,7 +17,7 @@ export MOD_ERR_ALREADY_EXISTS=6
 export MOD_ERR_IO=7
 
 # Resolución del directorio base de módulos por defecto
-_MODULE_MODEL_DEFAULT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../modules.d" 2>/dev/null && pwd)"
+_MODULE_MODEL_DEFAULT_DIR="${MODULES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../modules.d" 2>/dev/null && pwd)}"
 _MODULE_MODEL_DEFAULT_TAGS="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../config" 2>/dev/null && pwd)/default_tags.conf"
 
 # ------------------------------------------------------------------------------
@@ -49,7 +49,7 @@ module_model_validate_id() {
 # ------------------------------------------------------------------------------
 module_model_get() {
     local mod_id="${1:-}"
-    local modules_dir="${2:-$_MODULE_MODEL_DEFAULT_DIR}"
+    local modules_dir="${2:-${MODULES_DIR:-$_MODULE_MODEL_DEFAULT_DIR}}"
 
     [[ -n "$mod_id" ]] || return "$MOD_ERR_CONFIG"
     module_model_validate_id "$mod_id" || return "$MOD_ERR_INVALID_ID"
@@ -115,7 +115,7 @@ module_model_get() {
 #   MOD_OK (incluso si la lista está vacía)
 # ------------------------------------------------------------------------------
 module_model_list() {
-    local modules_dir="${1:-$_MODULE_MODEL_DEFAULT_DIR}"
+    local modules_dir="${1:-${MODULES_DIR:-$_MODULE_MODEL_DEFAULT_DIR}}"
     [[ -d "$modules_dir" ]] || return "$MOD_ERR_NOT_FOUND"
 
     local conf_file mod_id
@@ -142,7 +142,7 @@ module_model_list() {
 # ------------------------------------------------------------------------------
 module_model_filter_by_tag() {
     local target_tag="${1:-}"
-    local modules_dir="${2:-$_MODULE_MODEL_DEFAULT_DIR}"
+    local modules_dir="${2:-${MODULES_DIR:-$_MODULE_MODEL_DEFAULT_DIR}}"
 
     [[ -n "$target_tag" ]] || return "$MOD_ERR_CONFIG"
 
@@ -177,7 +177,7 @@ module_model_filter_by_tag() {
 # ------------------------------------------------------------------------------
 module_model_filter_by_sensitivity() {
     local target_sens="${1:-}"
-    local modules_dir="${2:-$_MODULE_MODEL_DEFAULT_DIR}"
+    local modules_dir="${2:-${MODULES_DIR:-$_MODULE_MODEL_DEFAULT_DIR}}"
 
     [[ "$target_sens" =~ ^(true|false)$ ]] || return "$MOD_ERR_CONFIG"
 
