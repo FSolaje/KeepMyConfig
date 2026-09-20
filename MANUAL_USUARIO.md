@@ -133,46 +133,43 @@ lsblk -f
 ```
 Identifique el identificador `LABEL` (ejemplo: `SSD_BACKUP`) o su `UUID` (ejemplo: `UUID`), así como el punto de montaje (ejemplo: `/media/$USER/SSD_BACKUP` o `/mnt/SSD_BACKUP`).
 
-#### Paso 2: Crear la estructura de directorios
-En su disco externo, cree la carpeta designada para sus copias de Lliurex 25:
+#### Paso 2: Crear la estructura de directorios y el marcador de seguridad
+
+**Método Automático (Recomendado):**
+Puede inicializar cualquier subdirectorio de destino en el almacenamiento con una sola orden CLI o mediante la **Opción 8** de la TUI:
+```bash
+# Inicializar la carpeta para un equipo específico y fijarla como activa
+./backup_manager.sh --init-target "Backups/Personal_PC" --set-default
+```
+Esta orden crea automáticamente `archives/`, `logs/`, despliega `.backup_storage_marker` y actualiza `config/config.conf`.
+
+**Método Manual Alternativo:**
+Si prefiere crearlo manualmente en su disco externo:
 ```bash
 mkdir -p /media/$USER/DISCO_BACKUP/Backups/Lliurex25/archives
 mkdir -p /media/$USER/DISCO_BACKUP/Backups/Lliurex25/logs
-```
-
-#### Paso 3: Inicializar el marcador de seguridad
-Copie el marcador provisto en la plantilla del repositorio o créelo manualmente:
-```bash
-# Opción A: Copiar desde el repositorio
 cp markers/.backup_storage_marker /media/$USER/DISCO_BACKUP/Backups/Lliurex25/.backup_storage_marker
-
-# Opción B: Crear manualmente con la firma oficial
-cat << 'EOF' > /media/$USER/DISCO_BACKUP/Backups/Lliurex25/.backup_storage_marker
-# BACKUPCONFIG STORAGE SAFETY MARKER
-# Este archivo certifica que este punto de montaje es el almacenamiento externo válido.
-# NO ELIMINAR ESTE ARCHIVO.
-STATUS=AUTHORIZED_BACKUP_TARGET
-EOF
 ```
 
 ---
 
 ### 2.3 Configuración Central (`config/config.conf`)
 
-Edite el archivo `config/config.conf` para vincular su método preferido de detección del disco:
+Edite el archivo `config/config.conf` para vincular su método preferido de detección de la unidad o carpeta:
 
 ```bash
-# Método de identificación: "LABEL", "UUID" o "STATIC_PATH"
+# Métodos de identificación soportados:
+#   - LABEL       : Busca la etiqueta de partición mediante lsblk / blkid
+#   - UUID        : Busca el identificador único universal de partición
+#   - STATIC_PATH : Usa una ruta fija de punto de montaje
+#   - LOCAL_PATH  : Usa cualquier carpeta o disco local del equipo (o montaje de red)
 STORAGE_ID_TYPE="LABEL"
 
 # Valor de búsqueda correspondiente al método anterior
 STORAGE_ID_VALUE="DISCO_BACKUP"
 
-# Ruta fija alternativa (solo se utiliza si STORAGE_ID_TYPE="STATIC_PATH")
-STORAGE_STATIC_MOUNT_PATH=""
-
-# Subdirectorio dentro de la unidad donde residen las copias
-BACKUP_SUBDIR="Backups/Lliurex25"
+# Subdirectorio activo dentro del almacenamiento donde residen las copias
+STORAGE_SUBDIR="Backups/Lliurex25"
 
 # Algoritmo de cifrado simétrico GPG (AES256 recomendado)
 CIPHER_ALGO="AES256"
@@ -185,7 +182,8 @@ LOG_RETENTION_DAYS=90
 ```
 
 > [!TIP]
-> Si suele cambiar de puerto USB o equipo, se recomienda **`STORAGE_ID_TYPE="LABEL"`** o **`"UUID"`**, ya que detectará automáticamente el punto de montaje sin importar la ruta asignada por el sistema.
+> - **Para discos externos móviles:** Se recomienda **`STORAGE_ID_TYPE="LABEL"`** o **`"UUID"`**, ya que detectará automáticamente el punto de montaje sin importar la ruta asignada por el sistema.
+> - **Para copias en carpetas locales o montajes de red (SSHFS / NFS / SMB):** Use **`STORAGE_ID_TYPE="LOCAL_PATH"`** y defina `STORAGE_ID_VALUE="/ruta/a/mi/carpeta"`. El sistema validará los permisos y el marcador sin exigir que sea una partición externa independiente.
 
 ---
 
@@ -218,7 +216,7 @@ El sistema verificará la presencia de `whiptail` y abrirá el menú principal d
 │    5 [RESTORE] Restauración Selectiva (Módulo / Histórico AAAAMMDD_HHMMSS)          │
 │    6 [RESTORE] Restauración Total                                                   │
 │    7 [MODULES] Administrar Módulos y Etiquetas (Asistente TUI)                      │
-│    8 [CONFIG] Diagnóstico de Disco Externo y Estado                                 │
+│    8 [CONFIG] Gestión de Almacenamiento y Diagnóstico                               │
 │    0 Salir                                                                          │
 │                                                                                     │
 │                             <Aceptar>      <Cancelar>                               │
@@ -263,8 +261,12 @@ El sistema verificará la presencia de `whiptail` y abrirá el menú principal d
   - **Eliminar un módulo:** Da de baja un archivo de receta.
   - **Añadir etiquetas:** Enriquecer el catálogo `config/default_tags.conf`.
 
-#### Opción 8: `[CONFIG] Diagnóstico de Disco Externo y Estado`
-- **¿Qué hace?:** Ejecuta una auditoría instantánea de la unidad de almacenamiento. Comprueba si el disco está conectado, valida el marcador de seguridad `.backup_storage_marker`, muestra la ruta de montaje activa y reporta el espacio disponible y ocupado.
+#### Opción 8: `[CONFIG] Gestión de Almacenamiento y Diagnóstico`
+- **¿Qué hace?:** Abre un submenú para controlar el almacenamiento y los perfiles de máquina:
+  1. **Ver diagnóstico de almacenamiento y espacio libre:** Audita la conexión, valida el marcador `.backup_storage_marker` y muestra el espacio disponible.
+  2. **Listar carpetas de equipo en el almacenamiento:** Muestra todas las carpetas con marcador identificando cuál es la activa actualmente.
+  3. **Cambiar carpeta de equipo activa (`STORAGE_SUBDIR`):** Permite conmutar interactivamente el destino predeterminado en `config/config.conf`.
+  4. **Inicializar nueva carpeta de equipo en el almacenamiento:** Asistente que crea la estructura completa (`archives/`, `logs/`) y el marcador de seguridad (sugiriendo `Backups/$(hostname)`).
 
 ---
 
@@ -316,7 +318,12 @@ La interfaz de línea de comandos está optimizada para scripts bash, tareas pro
 | `--timestamp` | `<TS>` | *(Opcional)* Especifica la marca de tiempo `AAAAMMDD_HHMMSS` a restaurar. |
 | `--purge` | *Ninguno* | Fuerza la purga segura con `shred -u` tras el backup (ignora receta). |
 | `--no-purge` | *Ninguno* | Desactiva la purga tras el backup aunque la receta lo tenga activo. |
-| `--check-device` | *Ninguno* | Comprueba la detección del SSD y el marcador de seguridad. |
+| `--check-device` | *Ninguno* | Comprueba la detección del almacenamiento y el marcador de seguridad. |
+| `--init-target` | `<subdir>` | Inicializa la subcarpeta en el almacenamiento (directorios y marcador). |
+| `--set-default` | *Ninguno* | Flag modificador para `--init-target` que lo fija en `config/config.conf`. |
+| `--list-targets`| *Ninguno* | Lista todos los destinos y subcarpetas con marcador en el soporte. |
+| `--set-active-target` | `<subdir>` | Establece el subdirectorio activo en `config/config.conf`. |
+| `--target-subdir` | `<subdir>` | Redirige temporalmente la operación actual a ese subdirectorio. |
 | `--list-modules` | *Ninguno* | Imprime en consola todos los módulos registrados y su confidencialidad. |
 | `--list-tags` | *Ninguno* | Imprime el catálogo de etiquetas disponibles. |
 | `-h, --help` | *Ninguno* | Muestra la ayuda rápida de sintaxis CLI. |
