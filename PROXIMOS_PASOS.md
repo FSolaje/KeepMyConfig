@@ -12,7 +12,7 @@
 3. **Implementación de los Modelos (Lógica de Negocio):**
    - [x] `lib/models/device_model.sh`: Identificación del SSD (UUID/LABEL/Path), comprobación de `.backup_storage_marker` y suite unitaria en `tests/test_device_model.sh`.
    - [x] `lib/models/module_model.sh`: Parser y CRUD de archivos en `modules.d/`, validación aislada en subshell y suite unitaria en `tests/test_module_model.sh`.
-   - `lib/models/crypto_model.sh`: Encriptación/Desencriptación GPG AES-256 simétrica y borrado seguro con `shred -u`.
+   - [x] `lib/models/crypto_model.sh`: Encriptación/Desencriptación GPG AES-256 simétrica, verificación en memoria, sha256 y borrado seguro recursivo con `shred -u` (test unitario en `tests/test_crypto_model.sh`).
    - `lib/models/backup_model.sh`: Motor de empaquetado (tar/zstd), generación de marcas de tiempo `AAAAMMDD_HHMMSS`, manifest y diffs.
    - `lib/models/restore_model.sh`: Desempaquetado selectivo y hooks posteriores.
 4. **Implementación de la Vista (Presentación Desacoplada):**
