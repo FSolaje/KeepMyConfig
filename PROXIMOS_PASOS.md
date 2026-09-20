@@ -35,3 +35,10 @@
    - [x] Verificación de backup y restore de módulos estándar y por lotes (`--backup-tag`, `--backup-all`, `--restore-all`).
    - [x] Verificación de purga segura con `shred -u` y descifrado GPG AES-256 en módulos sensibles.
    - [x] Implementación y validación de operaciones colectivas en `dev/feature/backup-batch-ops`.
+9. **Gestión de Destinos de Backup (`storage-target-init`) y Almacenamiento Universal (`LOCAL_PATH`):**
+   - [x] Soporte para almacenamiento universal con `STORAGE_ID_TYPE="LOCAL_PATH"` (rutas directas, discos locales o carpetas de red montadas).
+   - [x] Implementación en `lib/models/device_model.sh`: `device_model_init_target_directory`, `device_model_list_targets`, `device_model_update_config_subdir`.
+   - [x] Implementación en `lib/controllers/app_controller.sh`: `--init-target`, `--set-default`, `--list-targets`, `--set-active-target`, `--target-subdir` y submenú interactivo en la Opción 8 de la TUI.
+   - [x] Actualización de la documentación en `MANUAL_USUARIO.md`.
+   - [x] Verificación completa con 8 suites de tests unitarios y prueba en vivo en SSD externo.
+   - [x] Escáner SAST de seguridad y privacidad ejecutado y aprobado con 0 alertas.
