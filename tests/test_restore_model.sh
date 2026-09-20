@@ -75,6 +75,11 @@ PASS_SECRET="ClaveSecreta_9876"
 # Respaldamos sin purga para poder testear su contenido
 backup_model_run "vscode-sensitive" "$MOCK_STORAGE" "$MOCK_HOME" "$PASS_SECRET" "false" "true" "$PROJECT_ROOT/modules.d" >/dev/null
 
+# 3. Preparar y respaldar ssh-keys
+mkdir -p "$MOCK_HOME/.ssh"
+echo "MOCK_SSH_PRIVATE_KEY" > "$MOCK_HOME/.ssh/id_rsa"
+backup_model_run "ssh-keys" "$MOCK_STORAGE" "$MOCK_HOME" "$PASS_SECRET" "false" "true" "$PROJECT_ROOT/modules.d" >/dev/null
+
 # ------------------------------------------------------------------------------
 # Test 2: find_archive en módulo existente
 # ------------------------------------------------------------------------------

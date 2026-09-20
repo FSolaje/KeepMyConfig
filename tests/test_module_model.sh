@@ -122,7 +122,8 @@ assert_equals "0" "$?" "filter_by_tag 'dev' debe encontrar ambos módulos"
 
 SENS_TAG=$(module_model_filter_by_tag "sensitive" "$PROJECT_ROOT/modules.d")
 assert_exit_code "$MOD_OK" $? "filter_by_tag 'sensitive' debe retornar MOD_OK"
-assert_equals "vscode-sensitive" "$SENS_TAG" "filter_by_tag 'sensitive' debe retornar solo vscode-sensitive"
+[[ "$SENS_TAG" =~ vscode-sensitive && "$SENS_TAG" =~ ssh-keys ]]
+assert_equals "0" "$?" "filter_by_tag 'sensitive' debe incluir módulos sensibles (vscode-sensitive y ssh-keys)"
 
 module_model_filter_by_tag "etiqueta_no_existente" "$PROJECT_ROOT/modules.d" >/dev/null 2>&1
 assert_exit_code "$MOD_ERR_NOT_FOUND" $? "filter_by_tag inexistente debe retornar MOD_ERR_NOT_FOUND"
@@ -131,10 +132,12 @@ assert_exit_code "$MOD_ERR_NOT_FOUND" $? "filter_by_tag inexistente debe retorna
 # Test 6: Filtrado por sensibilidad
 # ------------------------------------------------------------------------------
 SENS_TRUE=$(module_model_filter_by_sensitivity "true" "$PROJECT_ROOT/modules.d")
-assert_equals "vscode-sensitive" "$SENS_TRUE" "filter_by_sensitivity 'true' debe retornar vscode-sensitive"
+[[ "$SENS_TRUE" =~ vscode-sensitive && "$SENS_TRUE" =~ ssh-keys ]]
+assert_equals "0" "$?" "filter_by_sensitivity 'true' debe incluir vscode-sensitive y ssh-keys"
 
 SENS_FALSE=$(module_model_filter_by_sensitivity "false" "$PROJECT_ROOT/modules.d")
-assert_equals "vscode-standard" "$SENS_FALSE" "filter_by_sensitivity 'false' debe retornar vscode-standard"
+[[ "$SENS_FALSE" =~ vscode-standard && "$SENS_FALSE" =~ bash-env ]]
+assert_equals "0" "$?" "filter_by_sensitivity 'false' debe incluir vscode-standard y bash-env"
 
 # ------------------------------------------------------------------------------
 # Test 7: Comprobación de rutas en entorno simulado
