@@ -865,7 +865,28 @@ controller_handle_modules_admin() {
                 local tags_arr=()
                 read -r -a tags_arr <<< "$sel_tags"
 
-                if module_model_save "$mod_id" "$mod_name" "$is_sens" "$purge_val" "" paths_arr tags_arr; then
+                local paths_joined=""
+                for p in "${paths_arr[@]}"; do
+                    [[ -n "$p" ]] || continue
+                    if [[ -n "$paths_joined" ]]; then
+                        paths_joined+="|$p"
+                    else
+                        paths_joined="$p"
+                    fi
+                done
+
+                local tags_joined=""
+                for t in "${tags_arr[@]}"; do
+                    [[ -n "$t" ]] || continue
+                    if [[ -n "$tags_joined" ]]; then
+                        tags_joined+=",$t"
+                    else
+                        tags_joined="$t"
+                    fi
+                done
+                [[ -z "$tags_joined" ]] && tags_joined="dev"
+
+                if module_model_save "$mod_id" "$mod_name" "$tags_joined" "$paths_joined" "$is_sens" "$purge_val" "" "$MODULES_DIR"; then
                     whiptail_view_msgbox "Módulo Creado" "El módulo '$mod_id' se ha registrado correctamente en:\n${MODULES_DIR}/${mod_id}.conf"
                 else
                     whiptail_view_error "Fallo de Creación" "No se pudo crear el archivo del módulo."
