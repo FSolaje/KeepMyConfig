@@ -203,6 +203,19 @@ ctrl_override_bdir=$(_controller_get_backup_dir)
 assert_eq "$MOCK_STORAGE/Backups/Personal_PC" "$ctrl_override_bdir" "_controller_get_backup_dir debe respetar TARGET_SUBDIR_OVERRIDE"
 TARGET_SUBDIR_OVERRIDE=""
 
+# Test 13: Creación de módulo con formato del asistente TUI
+wizard_paths="Documentos/Pruebas_Macros"
+wizard_tags="sensitive"
+module_model_save "test-cualquiera" "cualquier módulo." "$wizard_tags" "$wizard_paths" "true" "true" "" "$MOCK_MODULES_DIR"
+mod_save_status=$?
+assert_eq "0" "$mod_save_status" "Creación de módulo tipo asistente debe retornar 0"
+
+saved_mod_info=$(module_model_get "test-cualquiera" "$MOCK_MODULES_DIR")
+assert_contains "$saved_mod_info" "NAME=cualquier módulo." "El nombre del módulo debe preservarse"
+assert_contains "$saved_mod_info" "IS_SENSITIVE=true" "IS_SENSITIVE debe ser true"
+assert_contains "$saved_mod_info" "PURGE_AFTER_BACKUP=true" "PURGE_AFTER_BACKUP debe ser true"
+assert_contains "$saved_mod_info" "PATHS=Documentos/Pruebas_Macros" "La ruta debe registrarse correctamente"
+
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
 
