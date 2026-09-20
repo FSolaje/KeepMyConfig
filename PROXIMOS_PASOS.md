@@ -1,8 +1,9 @@
-# Próximos Pasos: Gestor de Backup y Recuperación (MVC en Bash)
+# Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
-**Estado actual:** Fase de Especificación completada y aprobada conceptualmente. Especificación técnica volcada en `BackupConfig/ESPECIFICACION.md`.
+> **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
+> **Estado actual:** Versión Alfa **`v0.1.0-alpha.1`** completada, verificada y etiquetada en Git. Hitos 1 al 11 superados al 100%. Rama activa `develop` (árbol limpio y pruebas unitarias al 100%).  
+> **Paso inmediato para la próxima sesión:** Iniciar el **Hito 12** (Sistema de "Perfiles de Backup") creando la rama `dev/feature/backup-profiles`, redactar sus documentos SDD (`specs/backup_profiles/`) y actualizar los títulos a `KeepMyConfig`.
 
-## Tareas Inmediatas Pendientes:
 1. **Validación del Documento de Especificación:**
    - [x] Revisión del archivo `ESPECIFICACION.md` completada y aprobada con la inclusión de `PURGE_AFTER_BACKUP=true/false` para control atómico de purga segura con `shred -u`.
 2. **Creación de la Estructura Base de Directorios:**
