@@ -183,11 +183,15 @@ Cada archivo `.manifest.log` incluye:
 
 ### 6.2 Purga Segura con `shred`
 - La purga se ejecuta de acuerdo a la configuración del módulo (`PURGE_AFTER_BACKUP=true`) o cuando se invoque con el flag explícito `--purge`.
-- Precedencia y control:
+- **Precedencia y control:**
   - Si un módulo tiene `PURGE_AFTER_BACKUP=true`, se purga automáticamente salvo que se use el flag `--no-purge`.
-  - Si un módulo tiene `PURGE_AFTER_BACKUP=false`, no se purga salvo que se invoque con `--purge`.
-  - En la interfaz TUI, se presentará confirmación visual informando los módulos que tienen activada la purga por configuración.
-- Procedimiento estricto de purga:
+  - Si un módulo tiene `PURGE_AFTER_BACKUP=false`, no se purga automáticamente salvo que se invoque con `--purge`.
+  - **Advertencia de seguridad interactiva (Módulos Sensibles sin auto-purga):**
+    - Si se respalda un módulo con `IS_SENSITIVE=true` y `PURGE_AFTER_BACKUP=false`:
+      - **En modo TUI:** Al finalizar la copia y verificación en el SSD, se mostrará un cuadro de advertencia (`whiptail --yesno`):
+        *«AVISO DE SEGURIDAD: El módulo sensible '[nombre]' se ha copiado con éxito al SSD, pero sus ficheros aún permanecen en el disco local de este equipo. ¿Desea eliminarlos de forma segura con shred ahora?»*
+      - **En modo CLI:** Si no se pasó `--no-purge`, se emitirá una advertencia visual destacada en terminal y en el log de auditoría alertando de que quedan ficheros sensibles en el equipo anfitrión.
+- **Procedimiento estricto de purga:**
   1. Se verifica la integridad del archivo generado en el SSD (test de descompresión o verificación de integridad del paquete cifrado).
   2. Solo tras confirmar la integridad en el SSD, para cada archivo respaldado:
      ```bash
