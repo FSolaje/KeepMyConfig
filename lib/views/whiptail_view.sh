@@ -5,6 +5,9 @@
 # Arquitectura: Patrón MVC (Solo presentación, sin lógica de negocio).
 # ==============================================================================
 
+[[ -n "${_WHIPTAIL_VIEW_LOADED:-}" ]] && return 0
+_WHIPTAIL_VIEW_LOADED=1
+
 # Códigos de retorno estándar de la vista
 readonly VIEW_OK=0
 readonly VIEW_CANCEL=1
