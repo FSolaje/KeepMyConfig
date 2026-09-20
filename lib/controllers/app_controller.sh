@@ -512,6 +512,28 @@ controller_handle_device_check() {
         esac
     done <<< "$val_out"
 
+    # Si no se obtuvieron por clave directa, extraer de tokens espaciados (SPACE_FREE_HUMAN / SPACE_TOTAL_KB)
+    if [[ -z "$space_avail" || -z "$space_total" ]]; then
+        for token in $val_out; do
+            case "$token" in
+                SPACE_FREE_HUMAN=*)
+                    [[ -z "$space_avail" ]] && space_avail="${token#*=}"
+                    ;;
+                SPACE_TOTAL_KB=*)
+                    if [[ -z "$space_total" ]]; then
+                        local tkb="${token#*=}"
+                        if [[ "$tkb" =~ ^[0-9]+$ ]] && (( tkb > 0 )); then
+                            local tgb=$(( tkb / 1024 / 1024 ))
+                            space_total="${tgb}G"
+                        fi
+                    fi
+                    ;;
+            esac
+        done
+    fi
+    space_avail="${space_avail:-Desconocido}"
+    space_total="${space_total:-Desconocido}"
+
     local id_type="${STORAGE_ID_TYPE:-LABEL}"
     local id_val="${STORAGE_ID_VALUE:-Desconocido}"
 

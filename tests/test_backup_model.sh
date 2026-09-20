@@ -165,6 +165,34 @@ HIST_LIST=$(backup_model_list_history "vscode-standard" "$MOCK_STORAGE")
 HIST_COUNT=$(echo "$HIST_LIST" | wc -l)
 assert_equals "2" "$HIST_COUNT" "backup_model_list_history debe retornar las 2 marcas de tiempo de vscode-standard"
 
+# ------------------------------------------------------------------------------
+# Test 7: backup_model_run_by_tag con etiqueta inexistente
+# ------------------------------------------------------------------------------
+backup_model_run_by_tag "etiqueta_inexistente" "$MOCK_STORAGE" "$MOCK_HOME" "" "auto" "$PROJECT_ROOT/modules.d" >/dev/null 2>&1
+assert_exit_code "$BACKUP_ERR_MODULE" $? "run_by_tag en etiqueta inexistente debe retornar BACKUP_ERR_MODULE"
+
+# ------------------------------------------------------------------------------
+# Test 8: backup_model_run_by_tag con etiqueta válida
+# ------------------------------------------------------------------------------
+TAG_OUT=$(backup_model_run_by_tag "editor" "$MOCK_STORAGE" "$MOCK_HOME" "clave123" "false" "$PROJECT_ROOT/modules.d")
+assert_exit_code "$BACKUP_OK" $? "run_by_tag con etiqueta válida debe retornar BACKUP_OK"
+echo "$TAG_OUT" | grep -qs "BACKUP_SUCCESS=vscode-standard"
+assert_equals "0" "$?" "run_by_tag debe reportar éxito para vscode-standard"
+
+# ------------------------------------------------------------------------------
+# Test 9: backup_model_run_all
+# ------------------------------------------------------------------------------
+mkdir -p "$MOCK_HOME/.ssh"
+echo "ssh-rsa AAAA..." > "$MOCK_HOME/.ssh/id_rsa"
+echo "export FOO=BAR" > "$MOCK_HOME/.bashrc"
+
+ALL_OUT=$(backup_model_run_all "$MOCK_STORAGE" "$MOCK_HOME" "clave123" "false" "$PROJECT_ROOT/modules.d")
+assert_exit_code "$BACKUP_OK" $? "backup_model_run_all debe retornar BACKUP_OK"
+echo "$ALL_OUT" | grep -qs "BACKUP_SUCCESS=vscode-standard"
+assert_equals "0" "$?" "run_all debe incluir vscode-standard"
+echo "$ALL_OUT" | grep -qs "BACKUP_SUCCESS=bash-env"
+assert_equals "0" "$?" "run_all debe incluir bash-env"
+
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
 if [[ $TESTS_FAILED -eq 0 ]]; then

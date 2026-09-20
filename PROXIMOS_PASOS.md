@@ -31,6 +31,7 @@
      - Guía para docentes/administradores: formato de recetas `.conf` y directivas de purga/hooks.
      - Guía de inicialización del SSD y resolución de incidencias (Troubleshooting).
 8. **Pruebas y Verificación End-to-End con SSD:**
-   - [ ] Inicialización del marcador `.backup_storage_marker` en el SSD externo.
-   - [ ] Verificación de backup y restore de todos los módulos sin privilegios root.
-   - [ ] Verificación de purga segura con `shred -u` en módulos sensibles.
+   - [x] Inicialización del marcador `.backup_storage_marker` en el SSD externo (`/media/$USER/DISCO_BACKUP/Backups/Lliurex25/`).
+   - [x] Verificación de backup y restore de módulos estándar y por lotes (`--backup-tag`, `--backup-all`, `--restore-all`).
+   - [x] Verificación de purga segura con `shred -u` y descifrado GPG AES-256 en módulos sensibles.
+   - [x] Implementación y validación de operaciones colectivas en `dev/feature/backup-batch-ops`.

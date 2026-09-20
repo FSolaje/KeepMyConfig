@@ -375,3 +375,125 @@ EOF
 
     return "$BACKUP_OK"
 }
+
+# ------------------------------------------------------------------------------
+# Función: backup_model_run_by_tag
+# Descripción: Respalda todos los módulos asociados a una etiqueta.
+# Parámetros:
+#   $1 - Nombre de la etiqueta
+#   $2 - Directorio de backups ($BACKUP_DIR)
+#   $3 - (Opcional) Home destino ($HOME)
+#   $4 - (Opcional) Frase de paso GPG
+#   $5 - (Opcional) purge_override ("auto", "true", "false")
+#   $6 - (Opcional) Directorio de módulos alternativo
+#   $7 - (Opcional) Nivel de compresión zstd
+#   $8 - (Opcional) Cifrado GPG
+# Salida stdout:
+#   Líneas BACKUP_SUCCESS=<id> o BACKUP_FAILED=<id>
+# Retorno:
+#   0 si todos tuvieron éxito, >0 si falló alguno o la etiqueta no existe.
+# ------------------------------------------------------------------------------
+backup_model_run_by_tag() {
+    local tag="${1:-}"
+    local backup_dir="${2:-}"
+    local target_home="${3:-${HOME}}"
+    local passphrase="${4:-}"
+    local purge_override="${5:-auto}"
+    local modules_dir="${6:-}"
+    local comp_level="${7:-3}"
+    local cipher="${8:-AES256}"
+
+    [[ -n "$tag" && -n "$backup_dir" ]] || return "$BACKUP_ERR_CONFIG"
+
+    local tag_modules
+    tag_modules=$(module_model_filter_by_tag "$tag" ${modules_dir:+"$modules_dir"}) || return "$BACKUP_ERR_MODULE"
+    [[ -n "$tag_modules" ]] || return "$BACKUP_ERR_MODULE"
+
+    local force_purge="false"
+    local no_purge="false"
+    if [[ "$purge_override" == "true" ]]; then
+        force_purge="true"
+    elif [[ "$purge_override" == "false" ]]; then
+        no_purge="true"
+    fi
+
+    local total_errors=0
+    local processed_count=0
+    while IFS= read -r mod_id; do
+        [[ -n "$mod_id" ]] || continue
+        local res mod_status=0
+        res=$(backup_model_run "$mod_id" "$backup_dir" "$target_home" "$passphrase" "$force_purge" "$no_purge" "$modules_dir" "$comp_level" "$cipher") || mod_status=$?
+        if (( mod_status == 0 )); then
+            echo "BACKUP_SUCCESS=$mod_id"
+            ((processed_count++))
+        elif (( mod_status == BACKUP_ERR_NO_FILES )); then
+            echo "BACKUP_SKIPPED=$mod_id (Sin ficheros locales)"
+        else
+            echo "BACKUP_FAILED=$mod_id"
+            ((total_errors++))
+        fi
+    done <<< "$tag_modules"
+
+    [[ $total_errors -eq 0 ]] && return "$BACKUP_OK"
+    return "$BACKUP_ERR_ARCHIVE"
+}
+
+# ------------------------------------------------------------------------------
+# Función: backup_model_run_all
+# Descripción: Respalda todos los módulos registrados en el sistema.
+# Parámetros:
+#   $1 - Directorio de backups ($BACKUP_DIR)
+#   $2 - (Opcional) Home destino ($HOME)
+#   $3 - (Opcional) Frase de paso GPG
+#   $4 - (Opcional) purge_override ("auto", "true", "false")
+#   $5 - (Opcional) Directorio de módulos alternativo
+#   $6 - (Opcional) Nivel de compresión zstd
+#   $7 - (Opcional) Cifrado GPG
+# Salida stdout:
+#   Líneas BACKUP_SUCCESS=<id>, BACKUP_SKIPPED=<id> o BACKUP_FAILED=<id>
+# Retorno:
+#   0 si todos tuvieron éxito, >0 si falló alguno o catálogo vacío.
+# ------------------------------------------------------------------------------
+backup_model_run_all() {
+    local backup_dir="${1:-}"
+    local target_home="${2:-${HOME}}"
+    local passphrase="${3:-}"
+    local purge_override="${4:-auto}"
+    local modules_dir="${5:-}"
+    local comp_level="${6:-3}"
+    local cipher="${7:-AES256}"
+
+    [[ -n "$backup_dir" ]] || return "$BACKUP_ERR_CONFIG"
+
+    local all_modules
+    all_modules=$(module_model_list ${modules_dir:+"$modules_dir"}) || return "$BACKUP_ERR_MODULE"
+    [[ -n "$all_modules" ]] || return "$BACKUP_ERR_MODULE"
+
+    local force_purge="false"
+    local no_purge="false"
+    if [[ "$purge_override" == "true" ]]; then
+        force_purge="true"
+    elif [[ "$purge_override" == "false" ]]; then
+        no_purge="true"
+    fi
+
+    local total_errors=0
+    local processed_count=0
+    while IFS= read -r mod_id; do
+        [[ -n "$mod_id" ]] || continue
+        local res mod_status=0
+        res=$(backup_model_run "$mod_id" "$backup_dir" "$target_home" "$passphrase" "$force_purge" "$no_purge" "$modules_dir" "$comp_level" "$cipher") || mod_status=$?
+        if (( mod_status == 0 )); then
+            echo "BACKUP_SUCCESS=$mod_id"
+            ((processed_count++))
+        elif (( mod_status == BACKUP_ERR_NO_FILES )); then
+            echo "BACKUP_SKIPPED=$mod_id (Sin ficheros locales)"
+        else
+            echo "BACKUP_FAILED=$mod_id"
+            ((total_errors++))
+        fi
+    done <<< "$all_modules"
+
+    [[ $total_errors -eq 0 ]] && return "$BACKUP_OK"
+    return "$BACKUP_ERR_ARCHIVE"
+}
