@@ -235,7 +235,7 @@ EOF
 # Función: device_model_validate_storage
 # Descripción: Ejecuta la validación completa según un archivo de configuración.
 # Parámetros:
-#   $1 - Ruta al archivo config.env (o usa variables de entorno ya cargadas)
+#   $1 - Ruta al archivo config.conf (o usa variables de entorno ya cargadas)
 # Salida stdout:
 #   Salida estructurada clave=valor con el diagnóstico completo.
 # Códigos de retorno:
