@@ -11,7 +11,7 @@
    - [x] Archivos testigo de seguridad `.backup_app_marker` y `markers/.backup_storage_marker`.
 3. **Implementación de los Modelos (Lógica de Negocio):**
    - [x] `lib/models/device_model.sh`: Identificación del SSD (UUID/LABEL/Path), comprobación de `.backup_storage_marker` y suite unitaria en `tests/test_device_model.sh`.
-   - `lib/models/module_model.sh`: Parser y CRUD de archivos en `modules.d/`.
+   - [x] `lib/models/module_model.sh`: Parser y CRUD de archivos en `modules.d/`, validación aislada en subshell y suite unitaria en `tests/test_module_model.sh`.
    - `lib/models/crypto_model.sh`: Encriptación/Desencriptación GPG AES-256 simétrica y borrado seguro con `shred -u`.
    - `lib/models/backup_model.sh`: Motor de empaquetado (tar/zstd), generación de marcas de tiempo `AAAAMMDD_HHMMSS`, manifest y diffs.
    - `lib/models/restore_model.sh`: Desempaquetado selectivo y hooks posteriores.
@@ -21,7 +21,7 @@
    - `lib/controllers/app_controller.sh`: Orquestación MVC.
    - `backup_manager.sh`: Punto de entrada CLI y modo TUI interactivo.
 6. **Módulos Iniciales de Prueba:**
-   - Crear `modules.d/vscode-standard.conf` y `modules.d/vscode-sensitive.conf`.
+   - [x] Creados `modules.d/vscode-standard.conf` y `modules.d/vscode-sensitive.conf`.
    - Crear `modules.d/bash-env.conf` y `modules.d/ssh-keys.conf`.
 7. **Pruebas y Verificación:**
    - Pruebas unitarias de backup/restore de cada módulo sin permisos de administración.
