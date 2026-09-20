@@ -85,7 +85,7 @@ echo '{"theme": "dark"}' > "$MOCK_HOME/.config/Code/User/settings.json"
 # Crear configuración de prueba
 cat << EOF > "$MOCK_CONFIG"
 TARGET_USER_HOME="$MOCK_HOME"
-STORAGE_ID_TYPE="STATIC_PATH"
+STORAGE_ID_TYPE="LOCAL_PATH"
 STORAGE_ID_VALUE="$MOCK_STORAGE"
 STORAGE_STATIC_FALLBACK="$MOCK_STORAGE"
 STORAGE_SUBDIR="Backups"
@@ -111,6 +111,9 @@ controller_init "$PROJECT_ROOT"
 # Sobrescribir variables de entorno para usar el sandbox
 TARGET_USER_HOME="$MOCK_HOME"
 MODULES_DIR="$MOCK_MODULES_DIR"
+CONTROLLER_CONFIG_FILE="$MOCK_CONFIG"
+# shellcheck disable=SC1090
+source "$MOCK_CONFIG"
 
 # Test 5: Diagnóstico con marcador ausente
 set +e
@@ -160,6 +163,45 @@ else
     echo "  [FAIL] El archivo settings.json no reapareció tras la restauración" >&2
     TESTS_FAILED=$((TESTS_FAILED + 1))
 fi
+
+# Restaurar implementación real de device_model_validate_storage
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/lib/models/device_model.sh"
+
+# Test 9: controller_handle_init_target crea destino y estructura
+init_tgt_out=$(controller_handle_init_target "Backups/Personal_PC" "true" "false")
+init_tgt_status=$?
+assert_eq "0" "$init_tgt_status" "controller_handle_init_target debe retornar 0"
+assert_contains "$init_tgt_out" "Backups/Personal_PC" "init_target debe confirmar la ruta creada"
+
+if [[ -f "$MOCK_STORAGE/Backups/Personal_PC/.backup_storage_marker" && -d "$MOCK_STORAGE/Backups/Personal_PC/archives" ]]; then
+    echo "  [PASS] Estructura y marcador de target desplegados en mock storage"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo "  [FAIL] No se creó el marcador o directorios en el nuevo target" >&2
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+
+# Test 10: controller_handle_list_targets lista los destinos disponibles
+list_tgt_out=$(controller_handle_list_targets "false")
+list_tgt_status=$?
+assert_eq "0" "$list_tgt_status" "controller_handle_list_targets debe retornar 0"
+assert_contains "$list_tgt_out" "Backups/Personal_PC" "list_targets debe incluir Backups/Personal_PC"
+
+# Test 11: controller_handle_set_active_target conmuta la carpeta activa en config
+device_model_init_target_directory "$MOCK_STORAGE" "Backups/Servidor_DAW" "$PROJECT_ROOT/markers/.backup_storage_marker" >/dev/null
+set_active_out=$(controller_handle_set_active_target "Backups/Servidor_DAW" "false")
+set_active_status=$?
+assert_eq "0" "$set_active_status" "controller_handle_set_active_target debe retornar 0"
+assert_contains "$set_active_out" "Backups/Servidor_DAW" "set_active_target debe confirmar el nuevo subdirectorio"
+grep -q '^STORAGE_SUBDIR="Backups/Servidor_DAW"' "$MOCK_CONFIG"
+assert_eq "0" "$?" "MOCK_CONFIG debe contener el nuevo STORAGE_SUBDIR"
+
+# Test 12: TARGET_SUBDIR_OVERRIDE con backup
+TARGET_SUBDIR_OVERRIDE="Backups/Personal_PC"
+ctrl_override_bdir=$(_controller_get_backup_dir)
+assert_eq "$MOCK_STORAGE/Backups/Personal_PC" "$ctrl_override_bdir" "_controller_get_backup_dir debe respetar TARGET_SUBDIR_OVERRIDE"
+TARGET_SUBDIR_OVERRIDE=""
 
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."

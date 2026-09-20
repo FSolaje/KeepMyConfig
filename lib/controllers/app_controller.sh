@@ -7,6 +7,12 @@
 # Variables de entorno y contexto
 CONTROLLER_BASE_DIR=""
 CONTROLLER_INITIALIZED=0
+TARGET_SUBDIR_OVERRIDE=""
+CONTROLLER_CONFIG_FILE=""
+
+_controller_get_config_file() {
+    echo "${CONTROLLER_CONFIG_FILE:-${CONTROLLER_BASE_DIR}/config/config.conf}"
+}
 
 # Inicialización del entorno, configuración, modelos y vistas
 controller_init() {
@@ -28,9 +34,11 @@ controller_init() {
     fi
 
     # Cargar configuraciones globales
-    if [[ -f "${CONTROLLER_BASE_DIR}/config/config.conf" ]]; then
-        # shellcheck disable=SC1091
-        source "${CONTROLLER_BASE_DIR}/config/config.conf"
+    local cfg_file
+    cfg_file=$(_controller_get_config_file)
+    if [[ -f "$cfg_file" ]]; then
+        # shellcheck disable=SC1090
+        source "$cfg_file"
     fi
 
     # Cargar modelos
@@ -63,7 +71,7 @@ controller_init() {
 _controller_get_backup_dir() {
     local val_out=""
     local status=0
-    val_out=$(device_model_validate_storage "${CONTROLLER_BASE_DIR}/config/config.conf") || status=$?
+    val_out=$(device_model_validate_storage "$(_controller_get_config_file)" "${TARGET_SUBDIR_OVERRIDE:-}") || status=$?
     if (( status != 0 )); then
         return "$status"
     fi
@@ -487,12 +495,12 @@ controller_handle_restore_all() {
     return "$ret"
 }
 
-# 7. Diagnóstico de Disco Externo
-controller_handle_device_check() {
+# Diagnóstico detallado del almacenamiento (TUI y CLI)
+_controller_show_device_diagnostics() {
     local is_tui="${1:-false}"
     local val_out=""
     local ret=0
-    val_out=$(device_model_validate_storage "${CONTROLLER_BASE_DIR}/config/config.conf") || ret=$?
+    val_out=$(device_model_validate_storage "$(_controller_get_config_file)" "${TARGET_SUBDIR_OVERRIDE:-}") || ret=$?
 
     local status="UNKNOWN"
     local mount_point=""
@@ -538,7 +546,7 @@ controller_handle_device_check() {
     local id_val="${STORAGE_ID_VALUE:-Desconocido}"
 
     if [[ "$is_tui" == "true" ]]; then
-        local diag_txt="ESTADO DEL DISPOSITIVO EXTERNO:\n\n"
+        local diag_txt="ESTADO DEL DISPOSITIVO / ALMACENAMIENTO:\n\n"
         diag_txt+="• Estado Global    : $status\n"
         diag_txt+="• Tipo de Búsqueda : $id_type\n"
         diag_txt+="• Identificador    : $id_val\n"
@@ -566,6 +574,217 @@ controller_handle_device_check() {
     fi
 
     return "$ret"
+}
+
+# Inicialización de Destino de Almacenamiento
+controller_handle_init_target() {
+    local subdir="${1:-}"
+    local set_default="${2:-false}"
+    local is_tui="${3:-false}"
+
+    if [[ "$is_tui" == "true" && -z "$subdir" ]]; then
+        local def_sub="Backups/$(hostname)"
+        subdir=$(whiptail_view_input "Inicializar Destino de Backup" \
+            "Introduzca la ruta relativa de la subcarpeta para este equipo:" "$def_sub") || return 0
+        [[ -z "$subdir" ]] && return 0
+
+        if whiptail_view_yesno "Destino Predeterminado" "¿Desea establecer '$subdir' como la carpeta activa en config.conf?"; then
+            set_default="true"
+        fi
+    fi
+
+    if [[ -z "$subdir" ]]; then
+        ansi_view_error "Debe especificar la subcarpeta a inicializar (ej: --init-target Backups/Personal_PC)."
+        return 1
+    fi
+
+    local storage_root
+    storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE:-LABEL}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+    if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
+        local err_msg="No se pudo localizar el almacenamiento configurado (${STORAGE_ID_TYPE:-LABEL}=${STORAGE_ID_VALUE:-DISCO_BACKUP})."
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Almacenamiento No Detectado" "$err_msg"
+        else
+            ansi_view_error "$err_msg"
+        fi
+        return "$DEV_ERR_NOT_FOUND"
+    fi
+
+    local marker_tmpl="${CONTROLLER_BASE_DIR}/markers/.backup_storage_marker"
+    local init_res
+    local ret=0
+    init_res=$(device_model_init_target_directory "$storage_root" "$subdir" "$marker_tmpl") || ret=$?
+
+    if (( ret == 0 )); then
+        if [[ "$set_default" == "true" ]]; then
+            device_model_update_config_subdir "$(_controller_get_config_file)" "$subdir"
+            STORAGE_SUBDIR="$subdir"
+        fi
+
+        if [[ "$is_tui" == "true" ]]; then
+            local msg="Carpeta de destino inicializada correctamente en:\n$init_res\n\nMarcador de seguridad y estructura listos."
+            [[ "$set_default" == "true" ]] && msg+="\n\nEstablecida como carpeta activa (STORAGE_SUBDIR=\"$subdir\")."
+            whiptail_view_msgbox "Destino Inicializado" "$msg"
+        else
+            ansi_view_success "Destino inicializado correctamente en: $init_res"
+            [[ "$set_default" == "true" ]] && ansi_view_info "Configuración actualizada: STORAGE_SUBDIR=\"$subdir\""
+        fi
+        return 0
+    else
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Error de Inicialización" "No se pudo inicializar la carpeta '$subdir' en '$storage_root' (código: $ret)."
+        else
+            ansi_view_error "Fallo al inicializar '$subdir' en '$storage_root' (código: $ret)."
+        fi
+        return "$ret"
+    fi
+}
+
+# Listado de Destinos Disponibles en el Almacenamiento
+controller_handle_list_targets() {
+    local is_tui="${1:-false}"
+
+    local storage_root
+    storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE:-LABEL}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+    if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
+        local err_msg="No se pudo localizar el almacenamiento configurado (${STORAGE_ID_TYPE:-LABEL}=${STORAGE_ID_VALUE:-DISCO_BACKUP})."
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Almacenamiento No Detectado" "$err_msg"
+        else
+            ansi_view_error "$err_msg"
+        fi
+        return "$DEV_ERR_NOT_FOUND"
+    fi
+
+    local targets
+    local ret=0
+    targets=$(device_model_list_targets "$storage_root") || ret=$?
+
+    if (( ret != 0 )) || [[ -z "$targets" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_msgbox "Destinos de Backup" "No se encontraron carpetas con marcador de seguridad en '$storage_root'."
+        else
+            ansi_view_warning "No se encontraron subdirectorios con marcador .backup_storage_marker en '$storage_root'."
+        fi
+        return 0
+    fi
+
+    if [[ "$is_tui" == "true" ]]; then
+        local list_txt="Carpetas de backup detectadas en el almacenamiento:\n\n"
+        while IFS= read -r t; do
+            [[ -n "$t" ]] || continue
+            if [[ "$t" == "${STORAGE_SUBDIR:-}" ]]; then
+                list_txt+=" • $t  [ACTIVO]\n"
+            else
+                list_txt+=" • $t\n"
+            fi
+        done <<< "$targets"
+        whiptail_view_msgbox "Destinos de Backup" "$list_txt"
+    else
+        ansi_view_header "DESTINOS DE BACKUP DETECTADOS EN EL ALMACENAMIENTO"
+        while IFS= read -r t; do
+            [[ -n "$t" ]] || continue
+            if [[ "$t" == "${STORAGE_SUBDIR:-}" ]]; then
+                echo -e "  \033[1;32m• $t [ACTIVO]\033[0m"
+            else
+                echo "  • $t"
+            fi
+        done <<< "$targets"
+    fi
+    return 0
+}
+
+# Conmutar Carpeta de Destino Activa en config.conf
+controller_handle_set_active_target() {
+    local target="${1:-}"
+    local is_tui="${2:-false}"
+
+    local storage_root
+    storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE:-LABEL}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+
+    if [[ "$is_tui" == "true" && -z "$target" ]]; then
+        if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
+            whiptail_view_error "Error" "No se detectó el soporte de almacenamiento para listar destinos."
+            return "$DEV_ERR_NOT_FOUND"
+        fi
+
+        local targets
+        targets=$(device_model_list_targets "$storage_root") || true
+        if [[ -z "$targets" ]]; then
+            whiptail_view_error "Destinos" "No se encontraron carpetas con marcador en el almacenamiento."
+            return 1
+        fi
+
+        local t_items=()
+        while IFS= read -r t; do
+            [[ -n "$t" ]] || continue
+            local st="OFF"
+            [[ "$t" == "${STORAGE_SUBDIR:-}" ]] && st="ON"
+            t_items+=("$t" "Destino: $t" "$st")
+        done <<< "$targets"
+
+        target=$(whiptail_view_radiolist "Seleccionar Carpeta Activa" "Elija la carpeta de backup predeterminada:" "${t_items[@]}") || return 0
+        [[ -z "$target" ]] && return 0
+    fi
+
+    if [[ -z "$target" ]]; then
+        ansi_view_error "Debe especificar la subcarpeta a activar (ej: --set-active-target Backups/Personal_PC)."
+        return 1
+    fi
+
+    # Verificar que el marcador exista en la ruta seleccionada si el soporte está accesible
+    if [[ -n "$storage_root" && -d "$storage_root" ]]; then
+        local check_path="$storage_root"
+        [[ "$target" != "." && -n "$target" ]] && check_path="$storage_root/$target"
+        if ! device_model_check_marker "$check_path" >/dev/null 2>&1; then
+            local warn_txt="Aviso: La ruta '$check_path' no contiene el marcador .backup_storage_marker."
+            if [[ "$is_tui" == "true" ]]; then
+                if ! whiptail_view_yesno "Aviso de Marcador" "$warn_txt\n\n¿Desea establecerla como activa igualmente?"; then
+                    return 1
+                fi
+            else
+                ansi_view_warning "$warn_txt"
+            fi
+        fi
+    fi
+
+    device_model_update_config_subdir "$(_controller_get_config_file)" "$target"
+    STORAGE_SUBDIR="$target"
+
+    if [[ "$is_tui" == "true" ]]; then
+        whiptail_view_msgbox "Configuración Actualizada" "La carpeta activa de backup se ha establecido en:\n$target"
+    else
+        ansi_view_success "Carpeta de backup activa actualizada en config.conf: STORAGE_SUBDIR=\"$target\""
+    fi
+    return 0
+}
+
+# 7. Diagnóstico y Gestión de Almacenamiento y Destinos
+controller_handle_device_check() {
+    local is_tui="${1:-false}"
+
+    if [[ "$is_tui" != "true" ]]; then
+        _controller_show_device_diagnostics "false"
+        return $?
+    fi
+
+    while true; do
+        local choice
+        choice=$(whiptail_view_menu "Gestión y Diagnóstico de Almacenamiento" "Seleccione una operación:" \
+            "1" "Ver diagnóstico de almacenamiento y espacio libre" \
+            "2" "Listar carpetas de equipo en el almacenamiento" \
+            "3" "Cambiar carpeta de equipo activa (STORAGE_SUBDIR)" \
+            "4" "Inicializar nueva carpeta de equipo en el almacenamiento" \
+            "0" "Volver al Menú Principal") || return 0
+
+        case "$choice" in
+            1) _controller_show_device_diagnostics "true" ;;
+            2) controller_handle_list_targets "true" ;;
+            3) controller_handle_set_active_target "" "true" ;;
+            4) controller_handle_init_target "" "false" "true" ;;
+            0) return 0 ;;
+        esac
+    done
 }
 
 # 8. Asistente de Administración de Módulos y Etiquetas (TUI)
@@ -733,6 +952,7 @@ controller_run_cli() {
     controller_init "${CONTROLLER_BASE_DIR:-}"
 
     local purge_flag="auto"
+    local set_default_flag="false"
     local action=""
     local param_val=""
     local timestamp_val=""
@@ -753,8 +973,12 @@ controller_run_cli() {
                 echo "  --restore-all                                  Restauración completa de todos los módulos."
                 echo "  --restore-module <id> [--timestamp <TS>]       Restauración de un módulo (o marca de tiempo)."
                 echo ""
-                echo "Diagnóstico e Información:"
-                echo "  --check-device                                 Verificar detección de SSD y marcador de seguridad."
+                echo "Diagnóstico y Gestión de Destinos:"
+                echo "  --check-device                                 Verificar detección de almacenamiento y marcador."
+                echo "  --init-target <subdir> [--set-default]         Inicializar carpeta de equipo en el almacenamiento."
+                echo "  --list-targets                                 Listar destinos/carpetas con marcador en almacenamiento."
+                echo "  --set-active-target <subdir>                   Fijar subdirectorio activo en config/config.conf."
+                echo "  --target-subdir <subdir>                       Usar destino temporal para la operación actual."
                 echo "  --list-modules                                 Listar módulos configurados y su estado."
                 echo "  --list-tags                                    Listar catálogo de etiquetas activas."
                 echo "  -h, --help                                     Mostrar este menú de ayuda."
@@ -803,6 +1027,28 @@ controller_run_cli() {
                 action="check-device"
                 shift
                 ;;
+            --init-target)
+                action="init-target"
+                param_val="${2:-}"
+                shift 2 || true
+                ;;
+            --set-default)
+                set_default_flag="true"
+                shift
+                ;;
+            --target-subdir)
+                TARGET_SUBDIR_OVERRIDE="${2:-}"
+                shift 2 || true
+                ;;
+            --list-targets)
+                action="list-targets"
+                shift
+                ;;
+            --set-active-target)
+                action="set-active-target"
+                param_val="${2:-}"
+                shift 2 || true
+                ;;
             --list-modules)
                 action="list-modules"
                 shift
@@ -840,6 +1086,17 @@ controller_run_cli() {
             ;;
         check-device)
             controller_handle_device_check "false"
+            ;;
+        init-target)
+            local target_sub="${param_val:-${TARGET_SUBDIR_OVERRIDE:-}}"
+            controller_handle_init_target "$target_sub" "$set_default_flag" "false"
+            ;;
+        list-targets)
+            controller_handle_list_targets "false"
+            ;;
+        set-active-target)
+            local target_sub="${param_val:-${TARGET_SUBDIR_OVERRIDE:-}}"
+            controller_handle_set_active_target "$target_sub" "false"
             ;;
         list-modules)
             ansi_view_header "MÓDULOS REGISTRADOS"
