@@ -42,3 +42,7 @@ id_ed25519*
 *.pem
 *.p12
 *.jks
+ 
+# Entornos de sandbox y pruebas locales end-to-end
+sandbox/
+modules.d/sandbox-*.conf

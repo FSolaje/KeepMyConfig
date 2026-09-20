@@ -224,6 +224,10 @@ restore_model_restore_sensitive_all() {
     local total_errors=0
     while IFS= read -r mod_id; do
         [[ -n "$mod_id" ]] || continue
+        if ! restore_model_find_archive "$mod_id" "$backup_dir" "" ${modules_dir:+"$modules_dir"} >/dev/null 2>&1; then
+            echo "SKIPPED_SENSITIVE=$mod_id"
+            continue
+        fi
         if restore_model_restore_module "$mod_id" "$backup_dir" "$target_home" "" "$passphrase" ${modules_dir:+"$modules_dir"} >/dev/null 2>&1; then
             echo "RESTORED_SENSITIVE=$mod_id"
         else
