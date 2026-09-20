@@ -1,6 +1,6 @@
 # Manual de Usuario y Administración: BackupConfig
 
-> **Versión:** 1.0.0  
+> **Versión:** 0.1.0-alpha.1  
 > **Sistema Operativo Objetivo:** Lliurex 25 / Ubuntu 24.04 LTS  
 > **Privilegios:** Usuario estándar sin privilegios (`non-root`, sin `sudo`)  
 > **Arquitectura:** Modelo-Vista-Controlador (MVC) en Bash 5+  
@@ -38,6 +38,12 @@
    - [6.1 Árbol de Directorios en la Unidad Externa](#61-árbol-de-directorios-en-la-unidad-externa)
    - [6.2 Registro Histórico y Manifiestos de Integridad](#62-registro-histórico-y-manifiestos-de-integridad)
    - [6.3 Matriz de Resolución de Incidencias](#63-matriz-de-resolución-de-incidencias)
+7. [Apéndice A: Política de Versionado (SemVer), Tags y Publicación en GitHub](#apéndice-a-política-de-versionado-semver-tags-y-publicación-en-github)
+   - [A.1 Estándar SemVer 2.0.0 y Reglas de Incremento](#a1-estándar-semver-200-y-reglas-de-incremento)
+   - [A.2 Ciclo de Pre-Releases (Alfa, Beta, RC)](#a2-ciclo-de-pre-releases-alfa-beta-rc)
+   - [A.3 Publicación de Releases en GitHub desde Tags de Git](#a3-publicación-de-releases-en-github-desde-tags-de-git)
+   - [A.4 Registro de Cambios (`CHANGELOG.md`)](#a4-registro-de-cambios-changelogmd)
+
 
 ---
 
@@ -549,3 +555,66 @@ Una vez realizadas las primeras copias, la carpeta configurada en su unidad exte
 - **Solución:**
   1. Utilice la opción 8 del menú TUI (`Diagnóstico de Disco Externo`) para comprobar el espacio libre.
   2. Purgue snapshots obsoletos de la carpeta `archives/`.
+
+---
+
+## Apéndice A: Política de Versionado (SemVer), Tags y Publicación en GitHub
+
+### A.1 Estándar SemVer 2.0.0 y Reglas de Incremento
+
+El proyecto implementa estrictamente la especificación [Semantic Versioning 2.0.0](https://semver.org/lang/es/) mediante el formato:
+
+```text
+v<MAJOR>.<MINOR>.<PATCH>[-<PRERELEASE>]
+```
+
+El prefijo `v` es obligatorio para todos los tags de Git y publicaciones de GitHub. Las reglas de incremento asociadas a los tipos de [Conventional Commits](https://www.conventionalcommits.org/) son:
+
+1. **`MAJOR` (X.0.0):** Cambios que rompen la compatibilidad hacia atrás (*Breaking Changes*), identificados por `!` o pie `BREAKING CHANGE:`.
+2. **`MINOR` (X.Y.0):** Nuevas funcionalidades o capacidades compatibles hacia atrás, identificadas por `feat(...)`. Reinicia el contador de `PATCH` a 0.
+3. **`PATCH` (X.Y.Z):** Corrección de errores y bugs compatibles hacia atrás, identificadas por `fix(...)`.
+4. **`<PRERELEASE>` (`-alpha.N`, `-beta.N`, `-rc.N`):** Versiones preliminares para pruebas, validación e iteración controlada.
+
+---
+
+### A.2 Ciclo de Pre-Releases (Alfa, Beta, RC)
+
+Durante el ciclo de desarrollo activo:
+- **Salto de Hito Funcional:** Al iniciar o planificar un conjunto de funcionalidades mayores (por ejemplo, el Sistema de Perfiles), se incrementa el número menor preparatorio (de `v0.1.0-alpha.X` a `v0.2.0-alpha.1`).
+- **Iteraciones de Validación:** Correcciones, ajustes y pruebas dentro de la misma fase de desarrollo incrementan el sufijo de pre-release (`v0.1.0-alpha.1` ➔ `v0.1.0-alpha.2`).
+- **Paso a Beta / RC:** Cuando las funcionalidades están completas y se entra en fase de congelación para pruebas intensivas de estabilidad, se transmuta a `-beta.1` y finalmente `-rc.1` (Release Candidate) antes de la versión final de producción (`v1.0.0`).
+
+---
+
+### A.3 Publicación de Releases en GitHub desde Tags de Git
+
+GitHub integra soporte nativo para Semantic Versioning y pre-releases:
+
+1. **Reconocimiento Automático de Pre-Release:**
+   Cualquier tag que incluya un guion seguido de texto (como `-alpha.1` o `-beta.1`) es reconocido automáticamente por la plataforma y marcado con la insignia visual **`Pre-release`**, impidiendo que sustituya a la versión oficial de producción (`Latest`).
+2. **Creación de Tags Anotados en Git:**
+   Los tags deben crearse siempre de forma anotada para registrar autoría, firma y mensaje descriptivo:
+   ```bash
+   git tag -a v0.1.0-alpha.1 -m "release: versión alfa inicial (MVP funcional: MVC, GPG, Shred, TUI/CLI, Multi-target)"
+   ```
+3. **Publicación del Tag hacia GitHub:**
+   Para subir la etiqueta al repositorio remoto (cuando se autorice expresamente):
+   ```bash
+   git push origin v0.1.0-alpha.1
+   ```
+4. **Generación de la Release en GitHub:**
+   - Desde la interfaz web de GitHub: Acceder a **Releases** ➔ **Draft a new release** ➔ Seleccionar el tag existente `v0.1.0-alpha.1`.
+   - GitHub activará automáticamente la casilla *"Set as a pre-release"*.
+   - El cuerpo de la release se puede autocompletar haciendo clic en *"Generate release notes"* o pegando el extracto correspondiente de `CHANGELOG.md`.
+
+---
+
+### A.4 Registro de Cambios (`CHANGELOG.md`)
+
+Todo cambio significativo debe documentarse de forma continua en `CHANGELOG.md` bajo las siguientes directivas:
+- `### Added`: Nuevas características añadidas (`feat`).
+- `### Fixed`: Errores o problemas solucionados (`fix`).
+- `### Changed`: Modificaciones en el comportamiento de funcionalidades existentes.
+- `### Security`: Mejoras de seguridad, algoritmos de cifrado o purga de datos.
+- `### Documentation`: Actualizaciones sustanciales en guías, especificaciones y manuales.
+

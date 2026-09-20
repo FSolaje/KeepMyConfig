@@ -54,9 +54,9 @@
 ## Hoja de Ruta Inmediata y Futuras Funcionalidades (Roadmap):
 
 ### Hito 11: Política de Versionado SemVer y Lanzamiento Alfa (`v0.1.0-alpha.1`)
-- [ ] **Definición de estándar SemVer:** Estructurar el versionado con prefijo `v` (`vMAJOR.MINOR.PATCH-PRERELEASE`) compatible con GitHub Releases.
-- [ ] **Generación de Tag Anotado:** Creación del tag `v0.1.0-alpha.1` en Git para congelar el hito funcional del MVP base (MVC, GPG, Shred, TUI/CLI, Multi-target, Local Path).
-- [ ] **Documentación de Publicación:** Registrar en `MANUAL_USUARIO.md` o documentación del repositorio el procedimiento de publicación de releases y pre-releases en GitHub.
+- [x] **Definición de estándar SemVer:** Estructurar el versionado con prefijo `v` (`vMAJOR.MINOR.PATCH-PRERELEASE`) compatible con GitHub Releases.
+- [x] **Generación de Tag Anotado:** Creación del tag `v0.1.0-alpha.1` en Git para congelar el hito funcional del MVP base (MVC, GPG, Shred, TUI/CLI, Multi-target, Local Path).
+- [x] **Documentación de Publicación:** Registrar en `MANUAL_USUARIO.md` o documentación del repositorio el procedimiento de publicación de releases y pre-releases en GitHub.
 
 ### Hito 12: Sistema de "Perfiles de Backup" (Backup Profiles & Scoped Modules)
 - [ ] **Modelo de Perfiles:** Definición del perfil activo (`ACTIVE_PROFILE` en configuración y flag CLI `--profile <nombre>`).
