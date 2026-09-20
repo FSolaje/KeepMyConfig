@@ -52,9 +52,14 @@ device_model_find_mount() {
                 mountpoint=$(lsblk -rno MOUNTPOINT,UUID 2>/dev/null | awk -v u="$id_value" '$2 == u {print $1; exit}')
             fi
             ;;
-        STATIC_PATH)
+        STATIC_PATH|LOCAL_PATH)
             if [[ -d "$id_value" ]]; then
                 mountpoint="$id_value"
+            elif [[ "$id_type" == "LOCAL_PATH" && -n "$id_value" ]]; then
+                mkdir -p "$id_value" 2>/dev/null || true
+                if [[ -d "$id_value" ]]; then
+                    mountpoint="$id_value"
+                fi
             fi
             ;;
         *)
@@ -248,6 +253,7 @@ EOF
 # ------------------------------------------------------------------------------
 device_model_validate_storage() {
     local config_file="${1:-}"
+    local subdir_override="${2:-}"
 
     # Si se pasa un archivo de configuración existente, cargarlo
     if [[ -n "$config_file" && -f "$config_file" ]]; then
@@ -258,7 +264,7 @@ device_model_validate_storage() {
     local id_type="${STORAGE_ID_TYPE:-LABEL}"
     local id_value="${STORAGE_ID_VALUE:-DISCO_BACKUP}"
     local fallback="${STORAGE_STATIC_FALLBACK:-}"
-    local subdir="${STORAGE_SUBDIR:-Backups/Lliurex25}"
+    local subdir="${subdir_override:-${STORAGE_SUBDIR:-Backups/Lliurex25}}"
     local marker_name="${STORAGE_MARKER_FILE:-.backup_storage_marker}"
 
     # 1. Encontrar punto de montaje
@@ -273,17 +279,22 @@ device_model_validate_storage() {
         return "$DEV_ERR_NOT_FOUND"
     fi
 
-    # 2. Verificar que el punto de montaje está activo
-    if ! device_model_is_mounted "$mountpoint"; then
-        echo "STATUS=DEVICE_NOT_MOUNTED"
-        echo "ERROR_CODE=$DEV_ERR_NOT_MOUNTED"
-        echo "MOUNTPOINT=$mountpoint"
-        echo "MESSAGE=La ruta '$mountpoint' no corresponde a un punto de montaje activo."
-        return "$DEV_ERR_NOT_MOUNTED"
+    # 2. Verificar que el punto de montaje está activo (salvo para LOCAL_PATH)
+    if [[ "$id_type" != "LOCAL_PATH" ]]; then
+        if ! device_model_is_mounted "$mountpoint"; then
+            echo "STATUS=DEVICE_NOT_MOUNTED"
+            echo "ERROR_CODE=$DEV_ERR_NOT_MOUNTED"
+            echo "MOUNTPOINT=$mountpoint"
+            echo "MESSAGE=La ruta '$mountpoint' no corresponde a un punto de montaje activo."
+            return "$DEV_ERR_NOT_MOUNTED"
+        fi
     fi
 
     # 3. Construir ruta de backup completa
-    local backup_dir="$mountpoint/$subdir"
+    local backup_dir="$mountpoint"
+    if [[ -n "$subdir" && "$subdir" != "." ]]; then
+        backup_dir="$mountpoint/$subdir"
+    fi
 
     # 4. Verificar marcador de seguridad (comprobar en backup_dir y en mountpoint)
     local marker_path=""
@@ -324,3 +335,108 @@ device_model_validate_storage() {
     echo "MESSAGE=Dispositivo verificado y listo para operaciones de respaldo/restauración."
     return "$DEV_OK"
 }
+
+# ------------------------------------------------------------------------------
+# Función: device_model_init_target_directory
+# Descripción: Inicializa la estructura completa de un destino de backup y su marcador.
+# Parámetros:
+#   $1 - Directorio base / punto de montaje ($storage_root)
+#   $2 - (Opcional) Subdirectorio de destino (ej: Backups/Personal_PC)
+#   $3 - (Opcional) Ruta de la plantilla del marcador
+# Retorno:
+#   0 en éxito, >0 si falló la creación o permisos.
+# Salida stdout:
+#   Ruta completa del directorio inicializado
+# ------------------------------------------------------------------------------
+device_model_init_target_directory() {
+    local storage_root="${1:-}"
+    local subdir="${2:-}"
+    local template_path="${3:-}"
+
+    [[ -n "$storage_root" ]] || return "$DEV_ERR_CONFIG"
+
+    local target_dir="$storage_root"
+    if [[ -n "$subdir" ]]; then
+        target_dir="$storage_root/$subdir"
+    fi
+
+    mkdir -p "$target_dir/archives" "$target_dir/logs" 2>/dev/null || return "$DEV_ERR_NOT_WRITABLE"
+
+    if ! device_model_init_storage_marker "$target_dir" "$template_path"; then
+        return "$DEV_ERR_NOT_WRITABLE"
+    fi
+
+    if ! device_model_check_marker "$target_dir" >/dev/null 2>&1; then
+        return "$DEV_ERR_NO_MARKER"
+    fi
+
+    echo "$target_dir"
+    return "$DEV_OK"
+}
+
+# ------------------------------------------------------------------------------
+# Función: device_model_list_targets
+# Descripción: Busca y lista los subdirectorios que contienen un marcador válido.
+# Parámetros:
+#   $1 - Directorio base / punto de montaje ($storage_root)
+# Salida stdout:
+#   Una línea por cada subdirectorio encontrado (ruta relativa respecto a storage_root)
+# Retorno:
+#   0 si se listó con éxito, >0 si storage_root no existe.
+# ------------------------------------------------------------------------------
+device_model_list_targets() {
+    local storage_root="${1:-}"
+    [[ -n "$storage_root" && -d "$storage_root" ]] || return "$DEV_ERR_CONFIG"
+
+    local marker_name=".backup_storage_marker"
+    local found=0
+
+    # Comprobar la propia raíz
+    if [[ -f "$storage_root/$marker_name" ]]; then
+        echo "."
+        found=1
+    fi
+
+    # Buscar en subdirectorios hasta profundidad 3
+    while IFS= read -r marker_file; do
+        [[ -n "$marker_file" ]] || continue
+        local dir
+        dir=$(dirname "$marker_file")
+        [[ "$dir" == "$storage_root" ]] && continue
+        # Obtener ruta relativa respecto a storage_root
+        local rel_dir="${dir#$storage_root/}"
+        echo "$rel_dir"
+        found=1
+    done < <(find "$storage_root" -maxdepth 3 -name "$marker_name" 2>/dev/null | sort -u)
+
+    [[ $found -eq 1 ]] && return "$DEV_OK"
+    return "$DEV_ERR_NOT_FOUND"
+}
+
+# ------------------------------------------------------------------------------
+# Función: device_model_update_config_subdir
+# Descripción: Actualiza atómicamente la variable STORAGE_SUBDIR en el config.
+# Parámetros:
+#   $1 - Ruta al archivo config.conf
+#   $2 - Nuevo valor de subdirectorio (ej: Backups/Personal_PC)
+# Retorno:
+#   0 en éxito, >0 en caso de fallo.
+# ------------------------------------------------------------------------------
+device_model_update_config_subdir() {
+    local config_file="${1:-}"
+    local new_subdir="${2:-}"
+
+    [[ -n "$config_file" && -f "$config_file" ]] || return "$DEV_ERR_CONFIG"
+
+    local temp_cfg="${config_file}.tmp.$$"
+    if grep -q '^STORAGE_SUBDIR=' "$config_file"; then
+        sed "s|^STORAGE_SUBDIR=.*|STORAGE_SUBDIR=\"$new_subdir\"|" "$config_file" > "$temp_cfg"
+    else
+        cp "$config_file" "$temp_cfg"
+        echo "STORAGE_SUBDIR=\"$new_subdir\"" >> "$temp_cfg"
+    fi
+
+    mv -f "$temp_cfg" "$config_file"
+    return "$DEV_OK"
+}
+

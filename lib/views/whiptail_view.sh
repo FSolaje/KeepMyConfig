@@ -171,7 +171,7 @@ whiptail_view_main_menu() {
         "5" "[RESTORE]  Restauración Selectiva (Módulo / Histórico)" \
         "6" "[RESTORE]  Restauración Total" \
         "7" "[MODULES]  Administrar Módulos y Etiquetas" \
-        "8" "[CONFIG]   Verificar Disco Externo y Estado" \
+        "8" "[CONFIG]   Gestión de Almacenamiento y Diagnóstico" \
         "0" "[SALIR]    Salir del gestor" \
         3>&1 1>&2 2>&3)
     status=$?

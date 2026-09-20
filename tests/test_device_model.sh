@@ -134,6 +134,65 @@ assert_equals "0" "$?" "validate_storage debe reportar STATUS=READY"
 # Limpieza del directorio de test temporal
 rm -rf "$TEST_DEST" "$TEST_CONFIG"
 
+# Test 12: find_mount con LOCAL_PATH (debe resolver ruta existente o crearla)
+LOCAL_TARGET_DIR="/tmp/test_local_path_$$"
+LOCAL_RESOLVED=$(device_model_find_mount "LOCAL_PATH" "$LOCAL_TARGET_DIR")
+LOCAL_EXIT=$?
+assert_exit_code "$DEV_OK" "$LOCAL_EXIT" "find_mount con LOCAL_PATH debe retornar DEV_OK"
+assert_equals "$LOCAL_TARGET_DIR" "$LOCAL_RESOLVED" "find_mount con LOCAL_PATH debe retornar la ruta directa"
+
+# Test 13: validate_storage con LOCAL_PATH sin marcador (debe fallar con DEV_ERR_NO_MARKER sin requerir is_mounted)
+LOCAL_CFG="/tmp/test_local_cfg_$$.conf"
+cat <<EOF > "$LOCAL_CFG"
+STORAGE_ID_TYPE="LOCAL_PATH"
+STORAGE_ID_VALUE="$LOCAL_TARGET_DIR"
+STORAGE_SUBDIR="Backups/EquipoLocal"
+EOF
+
+LOCAL_VAL_OUT=$(device_model_validate_storage "$LOCAL_CFG")
+LOCAL_VAL_EXIT=$?
+assert_exit_code "$DEV_ERR_NO_MARKER" "$LOCAL_VAL_EXIT" "validate_storage en LOCAL_PATH sin marcador debe retornar DEV_ERR_NO_MARKER"
+
+# Test 14: device_model_init_target_directory despliega estructura y marcador
+INIT_DIR=$(device_model_init_target_directory "$LOCAL_TARGET_DIR" "Backups/EquipoLocal" "$PROJECT_ROOT/markers/.backup_storage_marker")
+INIT_EXIT=$?
+assert_exit_code "$DEV_OK" "$INIT_EXIT" "init_target_directory debe retornar DEV_OK"
+assert_equals "$LOCAL_TARGET_DIR/Backups/EquipoLocal" "$INIT_DIR" "init_target_directory debe devolver la ruta creada"
+
+[[ -d "$LOCAL_TARGET_DIR/Backups/EquipoLocal/archives" && -d "$LOCAL_TARGET_DIR/Backups/EquipoLocal/logs" ]]
+assert_equals "0" "$?" "init_target_directory debe crear las carpetas archives y logs"
+
+[[ -f "$LOCAL_TARGET_DIR/Backups/EquipoLocal/.backup_storage_marker" ]]
+assert_equals "0" "$?" "init_target_directory debe desplegar .backup_storage_marker"
+
+# Validar ahora que validate_storage pasa en LOCAL_PATH con marcador
+LOCAL_VAL_OUT2=$(device_model_validate_storage "$LOCAL_CFG")
+LOCAL_VAL_EXIT2=$?
+assert_exit_code "$DEV_OK" "$LOCAL_VAL_EXIT2" "validate_storage en LOCAL_PATH con marcador debe retornar DEV_OK"
+[[ "$LOCAL_VAL_OUT2" =~ STATUS=READY ]]
+assert_equals "0" "$?" "validate_storage en LOCAL_PATH debe retornar STATUS=READY"
+
+# Test 15: device_model_list_targets debe descubrir los destinos con marcador
+# Crear un segundo destino
+device_model_init_target_directory "$LOCAL_TARGET_DIR" "Backups/SegundoEquipo" "$PROJECT_ROOT/markers/.backup_storage_marker" >/dev/null
+TARGETS_LIST=$(device_model_list_targets "$LOCAL_TARGET_DIR")
+LIST_EXIT=$?
+assert_exit_code "$DEV_OK" "$LIST_EXIT" "device_model_list_targets debe retornar DEV_OK"
+[[ "$TARGETS_LIST" =~ Backups/EquipoLocal ]]
+assert_equals "0" "$?" "list_targets debe encontrar Backups/EquipoLocal"
+[[ "$TARGETS_LIST" =~ Backups/SegundoEquipo ]]
+assert_equals "0" "$?" "list_targets debe encontrar Backups/SegundoEquipo"
+
+# Test 16: device_model_update_config_subdir actualiza STORAGE_SUBDIR atómicamente
+device_model_update_config_subdir "$LOCAL_CFG" "Backups/SegundoEquipo"
+UPDATE_EXIT=$?
+assert_exit_code "$DEV_OK" "$UPDATE_EXIT" "update_config_subdir debe retornar DEV_OK"
+grep -q '^STORAGE_SUBDIR="Backups/SegundoEquipo"' "$LOCAL_CFG"
+assert_equals "0" "$?" "config.conf debe reflejar el nuevo STORAGE_SUBDIR"
+
+# Limpieza de temporales LOCAL_PATH
+rm -rf "$LOCAL_TARGET_DIR" "$LOCAL_CFG"
+
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
 if [[ $TESTS_FAILED -eq 0 ]]; then
