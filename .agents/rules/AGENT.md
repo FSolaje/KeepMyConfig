@@ -51,6 +51,10 @@ Se adopta **GitFlow** como modelo de control de versiones y ciclo de ramas:
 3. **Ciclo de Integración:**
    - Cada tarea se implementa, especifica y verifica en su rama de feature correspondiente.
    - Una vez concluida y validada por el escáner de seguridad y pruebas unitarias, se integrará en `develop` preservando el histórico.
+4. **Comandos Git Modernos (`git switch` y `git restore`):**
+   - Queda prohibido el uso del comando sobrecargado `git checkout`.
+   - Para la navegación y creación de ramas se usará exclusivamente `git switch` (ej. `git switch <rama>` o `git switch -c dev/feature/<nombre>`).
+   - Para descartar cambios o gestionar el área de preparación (staging) se usará exclusivamente `git restore` (ej. `git restore <archivo>` o `git restore --staged <archivo>`).
 
 ---
 
