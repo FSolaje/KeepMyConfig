@@ -268,9 +268,11 @@ module_model_save() {
 
     mkdir -p "$modules_dir" 2>/dev/null || return "$MOD_ERR_IO"
 
-    # Procesar etiquetas en formato array bash
+    # Procesar etiquetas en formato array bash (soporta comas o espacios)
     local tags_formatted=""
-    IFS=',' read -r -a tags_arr <<< "$tags_str"
+    local tags_delim=','
+    [[ "$tags_str" =~ , ]] || tags_delim=' '
+    IFS="$tags_delim" read -r -a tags_arr <<< "$tags_str"
     for t in "${tags_arr[@]}"; do
         t=$(echo "$t" | xargs) # Limpiar espacios
         [[ -n "$t" ]] && tags_formatted+="\"$t\" "
