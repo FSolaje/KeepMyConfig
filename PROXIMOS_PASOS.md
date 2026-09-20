@@ -42,3 +42,9 @@
    - [x] Actualización de la documentación en `MANUAL_USUARIO.md`.
    - [x] Verificación completa con 8 suites de tests unitarios y prueba en vivo en SSD externo.
    - [x] Escáner SAST de seguridad y privacidad ejecutado y aprobado con 0 alertas.
+10. **Corrección de Creación de Módulos en TUI (`dev/fix/module-admin-wizard`):**
+    - [x] Corrección del ensamblado de rutas y etiquetas y orden de argumentos en la llamada a `module_model_save` desde `lib/controllers/app_controller.sh`.
+    - [x] Flexibilización de parseo de tags en `lib/models/module_model.sh` (admite delimitador coma y espacio).
+    - [x] Nueva prueba unitaria añadida en `tests/test_controller.sh` (Test 13).
+    - [x] 8/8 suites de pruebas superadas y escáner SAST limpio.
+    - [x] Integración en rama `develop` completada.
