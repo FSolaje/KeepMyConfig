@@ -38,7 +38,7 @@ Permite respaldar, cifrar, purgar y restaurar configuraciones del sistema y apli
 BackupConfig/
 ├── backup_manager.sh        # Ejecutable principal (TUI / CLI)
 ├── config/
-│   ├── config.env           # Configuración general (dispositivo, rutas)
+│   ├── config.conf          # Configuración general (dispositivo, rutas)
 │   └── default_tags.conf    # Catálogo de etiquetas
 ├── modules.d/               # Recetas individuales de backup (.conf)
 ├── lib/

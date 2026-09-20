@@ -25,7 +25,7 @@ El sistema tiene por objeto proporcionar una solución de respaldo y restauraci�
 BackupConfig/
 ├── backup_manager.sh             # Punto de entrada (CLI + invocación del Controller)
 ├── config/
-│   ├── config.env                # Configuración global (UUID/LABEL, rutas, defaults)
+│   ├── config.conf               # Configuración global (UUID/LABEL, rutas, defaults)
 │   └── default_tags.conf         # Etiquetas predefinidas (dev, sensitive, system, etc.)
 ├── modules.d/                    # Directorio de módulos independientes
 │   ├── vscode-standard.conf      # Módulo no sensible de VSCode
@@ -123,7 +123,7 @@ La vista `whiptail` proporcionará un asistente de administración:
 ## 4. Identificación de Dispositivos y Seguridad de Rutas
 
 Para evitar pérdida de datos o escrituras en el disco interno si el SSD se desmonta:
-1. **Configuración en `config/config.env`:**
+1. **Configuración en `config/config.conf`:**
    - `TARGET_USER_HOME`: Ruta al home a respaldar (por defecto `$HOME`).
    - `STORAGE_ID_TYPE`: Tipo de identificación (`LABEL`, `UUID`, o `STATIC_PATH`).
    - `STORAGE_ID_VALUE`: Valor identificador (ej: `DISCO_BACKUP` o el UUID de partición obtenido por `blkid`/`lsblk`).

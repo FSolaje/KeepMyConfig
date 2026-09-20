@@ -1,25 +1,44 @@
-# Ignorar archivos temporales y de respaldo
+# ==============================================================================
+# BackupConfig - .gitignore
+# ==============================================================================
+
+# Herramientas locales, SAST y espacio privado del desarrollador (Regla 5 de AGENT.md)
+user_data/
+
+# Archivos temporales, copias de seguridad de editores y papelera
 *.tmp
 *.temp
 *~
+*.bak
 *.swp
 *.swo
+.netrwhist
+.directory
 
-# Ignorar archivos comprimidos de backups y logs generados en pruebas locales
+# Archivos de entorno de escritorio y sistemas operativos
+.DS_Store
+Thumbs.db
+
+# Entornos y ajustes locales de IDEs
+.idea/
+.vscode/settings.json
+
+# Archivos comprimidos de backups y logs generados en pruebas locales
 *.tar.gz
 *.tar.zst
 *.tar.bz2
 *.gpg
 *.manifest.log
-/logs/*.log
+logs/
+*.log
+cache/
+.cache/
 
-# Ignorar configuraciones de entorno locales y datos sensibles
-config/*.env.local
+# Archivos con secretos, certificados o llaves privadas
 *.key
 *.token
 id_rsa*
 id_ed25519*
-
-# Ignorar archivos de sistema y de escritorio
-.DS_Store
-Thumbs.db
+*.pem
+*.p12
+*.jks
