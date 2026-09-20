@@ -27,11 +27,32 @@ Todos los commits realizados en este repositorio deben seguir **estrictamente** 
 - **`style`**: Formateo de código, indentación o ajuste de espaciado sin alterar lógica.
 
 ### Ámbitos Sugeridos (`scope`)
-- `model`, `view`, `controller`, `modules`, `crypto`, `tui`, `cli`, `storage`, `deps`.
+- `model`, `view`, `controller`, `modules`, `crypto`, `tui`, `cli`, `storage`, `deps`, `structure`.
 
 ---
 
-## 2. Continuidad de Sesión y Estado
+## 2. Estrategia de Ramas: GitFlow
+
+Se adopta **GitFlow** como modelo de control de versiones y ciclo de ramas:
+
+1. **Ramas Principales:**
+   - **`main`**: Rama de producción y versiones estables publicadas.
+   - **`develop`**: Rama base de integración activa para el desarrollo continuo.
+2. **Ramas de Funcionalidad (`feature branches`):**
+   - Para el desarrollo de cada componente, modelo, vista, controlador o lógica específica, se creará una rama dedicada que partirá de `develop` (o de `main` en su defecto al inicializar) con la nomenclatura:
+     ```text
+     dev/feature/<nombre-de-la-feature>
+     ```
+   - Ejemplos: `dev/feature/device-model`, `dev/feature/crypto-shred`, `dev/feature/whiptail-views`.
+3. **Ciclo de Integración:**
+   - Cada tarea o modelo se implementa y verifica en su rama de feature correspondiente.
+   - Una vez concluida y probada la funcionalidad, se integrará en `develop` mediante merge limpio preservando el histórico.
+4. **Commits en la rama:**
+   - Todos los commits dentro de las ramas de feature deben mantener la regla de **Conventional Commits**.
+
+---
+
+## 3. Continuidad de Sesión y Estado
 
 1. **Al iniciar cualquier sesión:**
    - Comprobar automáticamente la existencia del archivo `PROXIMOS_PASOS.md` en el espacio de trabajo.
@@ -41,7 +62,7 @@ Todos los commits realizados en este repositorio deben seguir **estrictamente** 
 
 ---
 
-## 3. Principios de Arquitectura y Desarrollo
+## 4. Principios de Arquitectura y Desarrollo
 
 1. **Patrón MVC Estricto en Bash:**
    - **Modelos (`lib/models/`):** Contienen exclusivamente lógica de negocio (empaquetado, cálculo de hashes SHA-256, llamadas a `gpg`, borrado con `shred`, lectura de `.conf`). **Jamás** deben invocar `whiptail`, ni imprimir menús, ni pedir entradas directas al usuario. Comunican resultados mediante códigos de salida (`return 0` / `return 1`) y datos estructurados por `stdout`.
