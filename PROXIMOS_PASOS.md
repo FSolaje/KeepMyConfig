@@ -19,8 +19,8 @@
    - [x] `lib/views/whiptail_view.sh`: Funciones modulares de diálogo con `whiptail` (menús, checklists de etiquetas/módulos, passwordbox, progress gauge).
    - [x] `lib/views/ansi_view.sh`: Funciones de consola con formato ANSI, encabezados, captura segura de contraseñas y confirmaciones interactivas (suite unitaria en `tests/test_views.sh`).
 5. **Implementación del Controlador y Entrypoint:**
-   - `lib/controllers/app_controller.sh`: Orquestación MVC.
-   - `backup_manager.sh`: Punto de entrada CLI y modo TUI interactivo.
+   - [x] `lib/controllers/app_controller.sh`: Orquestación MVC.
+   - [x] `backup_manager.sh`: Punto de entrada CLI y modo TUI interactivo (suite unitaria en `tests/test_controller.sh`).
 6. **Módulos Iniciales de Prueba:**
    - [x] Creados `modules.d/vscode-standard.conf` y `modules.d/vscode-sensitive.conf`.
    - Crear `modules.d/bash-env.conf` y `modules.d/ssh-keys.conf`.
