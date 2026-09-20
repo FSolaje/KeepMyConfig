@@ -6,7 +6,9 @@
 1. **Validación del Documento de Especificación:**
    - [x] Revisión del archivo `ESPECIFICACION.md` completada y aprobada con la inclusión de `PURGE_AFTER_BACKUP=true/false` para control atómico de purga segura con `shred -u`.
 2. **Creación de la Estructura Base de Directorios:**
-   - Crear el esqueleto de carpetas: `BackupConfig/config/`, `BackupConfig/modules.d/`, `BackupConfig/lib/models/`, `BackupConfig/lib/views/`, `BackupConfig/lib/controllers/`, `BackupConfig/markers/`.
+   - [x] Creado el esqueleto de carpetas: `config/`, `modules.d/`, `lib/models/`, `lib/views/`, `lib/controllers/`, `markers/`.
+   - [x] Configuración global `config/config.env` y catálogo de etiquetas `config/default_tags.conf`.
+   - [x] Archivos testigo de seguridad `.backup_app_marker` y `markers/.backup_storage_marker`.
 3. **Implementación de los Modelos (Lógica de Negocio):**
    - `lib/models/device_model.sh`: Identificación del SSD (UUID/LABEL/Path) y comprobación de `.backup_storage_marker`.
    - `lib/models/module_model.sh`: Parser y CRUD de archivos en `modules.d/`.
