@@ -82,23 +82,39 @@
 
 ## Hoja de Ruta Inmediata y Futuras Funcionalidades (Roadmap):
 
-### Sub-Hito 12.1: Módulos con Ámbito y Sanitización de Rutas (Completado y Verificado)
+### Sub-Hito 12.1: Módulos con Ámbito y Sanitización de Rutas (Completado y Consolidado)
 - [x] Documentos SDD aprobados por el usuario (`specs/scoped_modules_sanitization/`).
 - [x] Implementar `module_model_sanitize_path` en `lib/models/module_model.sh` (limpieza automática de `$HOME/`, `~/`, `/home/<user>/`).
 - [x] Implementar selector de ámbito en el asistente TUI de creación de módulos (`modules.d/` vs `profiles/<activo>/modules.d/`).
 - [x] Sanitización de barras iniciales y `$HOME` en `TARGET_SUBDIR`.
 - [x] Suites de pruebas unitarias y de integración (298 tests passing).
-- [ ] Commit independiente del Sub-Hito 12.1 (pendiente de orden humana).
+- [x] Commit independiente del Sub-Hito 12.1 consolidado (`a5e5ea3`).
 
-### Sub-Hito 12.2: Almacenamiento por Perfil, Perfil Default y Onboarding (Próximo paso)
+### Sub-Hito 12.2: Biblioteca de Plantillas (`templates.d/`), Activación y Desactivación en Perfiles (Próximo paso)
+- [ ] Creación del catálogo `templates.d/` con recetas estándar listas para usar (Firefox, IntelliJ, Git, VSCode, SSH, Bash, etc.).
+- [ ] Estado inicial limpio de primera ejecución: 0 módulos activos por defecto; catálogo disponible para activación selectiva.
+- [ ] Soporte de directiva `DISABLED_MODULES=("mod1" "mod2")` en `profile.conf` para desactivar módulos globales en perfiles particulares.
+- [ ] Adaptación de la resolución en cascada en `profile_model.sh` para filtrar exclusiones por perfil.
+- [ ] Asistente TUI/CLI para activar módulos desde la biblioteca de plantillas y gestionar exclusiones en perfiles.
+- [ ] Suites de pruebas unitarias y de integración.
+- [ ] Commit independiente del Sub-Hito 12.2.
+
+### Sub-Hito 12.3: Almacenamiento por Perfil, Perfil Default y Onboarding
 - [ ] Plantilla neutra en `config/config.conf` (`INITIAL_SETUP_DONE="false"`).
 - [ ] Asistente interactivo de primera ejecución (Onboarding Wizard en TUI) con aviso acordado y carpeta local `$HOME/Backups/KeepMyConfig` por defecto.
 - [ ] Opción `REMEMBER_LAST_PROFILE=true/false` para arrancar con el perfil de la última sesión.
 - [ ] Directorio físico permanente `profiles/default/profile.conf` y auto-recreación de emergencia.
 - [ ] Desacoplamiento de directivas de almacenamiento por perfil (herencia de `STORAGE_*` si están vacíos o sobrescritura si están definidos).
-- [ ] Commit independiente del Sub-Hito 12.2.
+- [ ] Commit independiente del Sub-Hito 12.3.
 
-### Sub-Hito 12.3 (Roadmap): Asistente de Configuración Guiado por Consola CLI
+### Sub-Hito 12.4: Sistema de Empaquetado y Distribución Automatizada para Releases
+- [ ] Definición de Manifiesto de Distribución con Lista Blanca estricta (exclusión de `.agents/`, `specs/`, `tests/`, `user_data/`, etc.).
+- [ ] Script reproducible de empaquetado `scripts/package.sh` para generar `KeepMyConfig-vX.Y.Z.tar.gz` (sin tarbomb) y `SHA256SUMS.txt`.
+- [ ] Script de instalación opcional sin sudo `install.sh` (`~/.local/bin` y lanzador desktop para Lliurex 25 / Ubuntu 24.04).
+- [ ] Actualización del workflow `.github/workflows/release.yml` para adjuntar los artefactos empaquetados oficiales en cada release de GitHub.
+- [ ] Commit independiente del Sub-Hito 12.4.
+
+### Sub-Hito 12.5 (Roadmap): Asistente de Configuración Guiado por Consola CLI
 - [ ] Modo interactivo paso a paso por terminal estándar (`--setup` / CLI Wizard) sin dependencia de `whiptail`, ideal para servidores headless y sesiones SSH mínimas.
 
 ### Hito 13: Almacenamiento Remoto (SSH, SFTP, Rsync)

@@ -15,10 +15,12 @@ Permite respaldar, cifrar, purgar y restaurar configuraciones del sistema y apli
 - **Sistema de Perfiles de Backup & Scoped Modules (`profiles/`):**
   - Soporte de múltiples perfiles de trabajo (ej. `docente`, `desarrollo`, `default`).
   - Resolución jerárquica en cascada: módulos específicos del perfil tienen precedencia (*override*) sobre módulos globales.
-  - Soporte para módulos exclusivos por perfil y deduplicación automática.
+  - Selector de ámbito en el asistente TUI: permite crear módulos en el catálogo global o exclusivos del perfil activo.
+  - Soporte para módulos exclusivos por perfil y deduplicación automática de listados.
   - Vinculación opcional de carpetas de destino por perfil (`TARGET_SUBDIR`).
-- **Módulos Atómicos e Independientes (`modules.d/`):**
+- **Módulos Atómicos con Sanitización Automática de Rutas (`modules.d/`):**
   - Cada aplicación o configuración es una receta independiente (`.conf`).
+  - Normalización inteligente de rutas en recetas (`$HOME/`, `~/`, `/home/<user>/` convertidos a rutas relativas).
   - Desacoplamiento de aplicaciones complejas en perfiles estándar y sensibles (ej. `vscode-standard` vs `vscode-sensitive`).
 - **Sistema de Etiquetas Dinámicas:**
   - Agrupación de respaldos y restauraciones por etiquetas (`dev`, `sensitive`, `system`, etc.).
