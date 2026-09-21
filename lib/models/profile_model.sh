@@ -140,6 +140,59 @@ profile_model_get() {
 }
 
 # ------------------------------------------------------------------------------
+# Función: profile_model_sanitize_target_subdir
+# Descripción: Normaliza y sanea la subcarpeta de destino (TARGET_SUBDIR) de un
+#              perfil para que sea siempre una ruta relativa dentro del medio de
+#              almacenamiento, eliminando prefijos ($HOME, ~, /home/<user>/),
+#              barras iniciales redundantes y bloqueando '..'.
+# Parámetros:
+#   $1 - Subcarpeta ingresada
+# Salida stdout:
+#   Subcarpeta relativa limpia (o cadena vacía si apunta a la raíz del volumen)
+# Retorno:
+#   PROFILE_OK si es válida, PROFILE_ERR_PARAM si contiene '..'
+# ------------------------------------------------------------------------------
+profile_model_sanitize_target_subdir() {
+    local raw_subdir="${1:-}"
+    if [[ -z "$raw_subdir" ]]; then
+        echo ""
+        return "$PROFILE_OK"
+    fi
+
+    local clean
+    clean="$(echo "$raw_subdir" | xargs 2>/dev/null || echo "$raw_subdir")"
+    if [[ -z "$clean" ]]; then
+        echo ""
+        return "$PROFILE_OK"
+    fi
+
+    # Bloquear intentos de navegación hacia directorios superiores (..)
+    if [[ "$clean" =~ (^|/)\.\.(/|$) ]]; then
+        return "$PROFILE_ERR_PARAM"
+    fi
+
+    # Eliminar prefijos de inicio: ${HOME}, $HOME, ~, /home/<usuario>
+    clean=$(echo "$clean" | sed -E 's#^(\$\{HOME\}|\$HOME|~|/home/[^/]+)(/.*)?$#\2#')
+
+    # Eliminar barras iniciales
+    clean=$(echo "$clean" | sed -E 's#^/+##')
+
+    # Eliminar barras finales
+    clean=$(echo "$clean" | sed -E 's#/+$##')
+
+    # Reducir secuencias de múltiples barras internas a una sola
+    clean=$(echo "$clean" | sed -E 's#/{2,}#/#g')
+
+    # Si tras limpiar es '.' o queda vacía, significa raíz del volumen
+    if [[ "$clean" == "." ]]; then
+        clean=""
+    fi
+
+    echo "$clean"
+    return "$PROFILE_OK"
+}
+
+# ------------------------------------------------------------------------------
 # Función: profile_model_create
 # Descripción: Crea la estructura de un nuevo perfil en disco con profile.conf y modules.d/.
 # Parámetros:
@@ -161,6 +214,11 @@ profile_model_create() {
     [[ -n "$profile_id" ]] || return "$PROFILE_ERR_PARAM"
     profile_model_validate_id "$profile_id" || return "$PROFILE_ERR_INVALID_ID"
 
+    local clean_subdir=""
+    if [[ -n "$target_subdir" ]]; then
+        clean_subdir=$(profile_model_sanitize_target_subdir "$target_subdir") || return "$PROFILE_ERR_PARAM"
+    fi
+
     local p_dir="$profiles_dir/$profile_id"
     if [[ -d "$p_dir" && -f "$p_dir/profile.conf" ]]; then
         return "$PROFILE_ERR_ALREADY_EXISTS"
@@ -176,7 +234,7 @@ profile_model_create() {
 PROFILE_ID="$profile_id"
 PROFILE_NAME="${name:-$profile_id}"
 PROFILE_DESCRIPTION="${desc:-}"
-TARGET_SUBDIR="${target_subdir:-}"
+TARGET_SUBDIR="${clean_subdir}"
 EOF
     chmod 644 "$conf_file" 2>/dev/null || true
     return "$PROFILE_OK"

@@ -925,37 +925,64 @@ controller_handle_modules_admin() {
 
         case "$admin_choice" in
             1)
+                local act_prof
+                act_prof=$(_controller_get_active_profile)
                 local all_mods
-                all_mods=$(module_model_list) || true
+                all_mods=$(profile_model_list_modules "$act_prof" "$CONTROLLER_BASE_DIR") || true
                 if [[ -z "$all_mods" ]]; then
-                    whiptail_view_msgbox "Módulos" "No hay módulos registrados en ${MODULES_DIR}."
+                    whiptail_view_msgbox "Módulos" "No hay módulos registrados para el perfil activo ($act_prof)."
                     continue
                 fi
                 local m_items=()
                 for m in $all_mods; do
+                    local m_path
+                    m_path=$(profile_model_resolve_module "$m" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null || true)
+                    local scope_tag="[Global]"
+                    if [[ "$m_path" =~ /profiles/ ]]; then
+                        scope_tag="[Perfil: $act_prof]"
+                    fi
                     local minfo
-                    minfo=$(module_model_get "$m") || continue
+                    minfo=$(module_model_get "$m" "$(dirname "$m_path")") || continue
                     local mname
                     mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
-                    m_items+=("$m" "$mname")
+                    m_items+=("$m" "$scope_tag $mname")
                 done
                 local sel_m
                 sel_m=$(whiptail_view_menu "Módulos Registrados" "Seleccione un módulo para inspeccionar:" "${m_items[@]}") || continue
+                local sel_path
+                sel_path=$(profile_model_resolve_module "$sel_m" "$act_prof" "$CONTROLLER_BASE_DIR") || continue
                 local detail
-                detail=$(module_model_get "$sel_m") || continue
+                detail=$(module_model_get "$sel_m" "$(dirname "$sel_path")") || continue
                 whiptail_view_msgbox "Detalle del Módulo '$sel_m'" "$detail"
                 ;;
             2)
                 # Asistente de creación
+                local act_prof
+                act_prof=$(_controller_get_active_profile)
+                local target_modules_dir="$MODULES_DIR"
+                local scope_desc="Catálogo Global"
+
+                if [[ "$act_prof" != "default" && -n "$act_prof" ]]; then
+                    local scope_choice
+                    scope_choice=$(whiptail_view_menu "Ámbito del Módulo" "¿Dónde desea registrar este módulo?" \
+                        "1" "Catálogo Global (modules.d/ - compartido)" \
+                        "2" "Exclusivo del Perfil '$act_prof' (profiles/$act_prof/modules.d/)") || continue
+                    if [[ "$scope_choice" == "2" ]]; then
+                        target_modules_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}/${act_prof}/modules.d"
+                        scope_desc="Perfil '$act_prof'"
+                        mkdir -p "$target_modules_dir" 2>/dev/null || true
+                    fi
+                fi
+
                 local mod_id
-                mod_id=$(whiptail_view_input "Nuevo Módulo" "Introduzca el ID único (ej: mi-app):") || continue
+                mod_id=$(whiptail_view_input "Nuevo Módulo ($scope_desc)" "Introduzca el ID único (ej: mi-app):") || continue
                 [[ -z "$mod_id" ]] && continue
 
                 local mod_name
-                mod_name=$(whiptail_view_input "Nuevo Módulo" "Nombre descriptivo (ej: Mi Aplicación):" "$mod_id") || continue
+                mod_name=$(whiptail_view_input "Nuevo Módulo ($scope_desc)" "Nombre descriptivo (ej: Mi Aplicación):" "$mod_id") || continue
 
                 local mod_paths_str
-                mod_paths_str=$(whiptail_view_input "Rutas" "Rutas relativas a \$HOME separadas por espacio (ej: .config/app .apprc):") || continue
+                mod_paths_str=$(whiptail_view_input "Rutas ($scope_desc)" "Rutas relativas a \$HOME separadas por espacio (ej: .config/app .apprc):") || continue
 
                 local all_tags
                 all_tags=$(module_model_get_all_tags) || true
@@ -1004,29 +1031,44 @@ controller_handle_modules_admin() {
                 done
                 [[ -z "$tags_joined" ]] && tags_joined="dev"
 
-                if module_model_save "$mod_id" "$mod_name" "$tags_joined" "$paths_joined" "$is_sens" "$purge_val" "" "$MODULES_DIR"; then
-                    whiptail_view_msgbox "Módulo Creado" "El módulo '$mod_id' se ha registrado correctamente en:\n${MODULES_DIR}/${mod_id}.conf"
+                if module_model_save "$mod_id" "$mod_name" "$tags_joined" "$paths_joined" "$is_sens" "$purge_val" "" "$target_modules_dir"; then
+                    whiptail_view_msgbox "Módulo Creado" "El módulo '$mod_id' se ha registrado correctamente en:\n${target_modules_dir}/${mod_id}.conf"
                 else
                     whiptail_view_error "Fallo de Creación" "No se pudo crear el archivo del módulo."
                 fi
                 ;;
             3)
+                local act_prof
+                act_prof=$(_controller_get_active_profile)
                 local all_mods
-                all_mods=$(module_model_list) || true
+                all_mods=$(profile_model_list_modules "$act_prof" "$CONTROLLER_BASE_DIR") || true
                 if [[ -z "$all_mods" ]]; then
                     whiptail_view_msgbox "Eliminación" "No hay módulos para eliminar."
                     continue
                 fi
                 local del_items=()
                 for m in $all_mods; do
-                    del_items+=("$m" "Módulo: $m" "OFF")
+                    local m_path
+                    m_path=$(profile_model_resolve_module "$m" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null || true)
+                    local scope_tag="[Global]"
+                    if [[ "$m_path" =~ /profiles/ ]]; then
+                        scope_tag="[Perfil: $act_prof]"
+                    fi
+                    del_items+=("$m" "$scope_tag Módulo: $m" "OFF")
                 done
                 local to_delete
                 to_delete=$(whiptail_view_radiolist "Eliminar Módulo" "Seleccione el módulo a borrar permanentemente:" "${del_items[@]}") || continue
 
-                if whiptail_view_yesno "Confirmación de Borrado" "¿Está completamente seguro de eliminar el módulo '$to_delete'?\nEsta acción no se puede deshacer."; then
-                    if module_model_delete "$to_delete"; then
-                        whiptail_view_msgbox "Borrado Exitoso" "El módulo '$to_delete' ha sido eliminado de modules.d/."
+                local del_path
+                del_path=$(profile_model_resolve_module "$to_delete" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null || true)
+                local del_dir="$MODULES_DIR"
+                if [[ -n "$del_path" ]]; then
+                    del_dir="$(dirname "$del_path")"
+                fi
+
+                if whiptail_view_yesno "Confirmación de Borrado" "¿Está completamente seguro de eliminar el módulo '$to_delete' localizado en:\n$del_path?\nEsta acción no se puede deshacer."; then
+                    if module_model_delete "$to_delete" "$del_dir"; then
+                        whiptail_view_msgbox "Borrado Exitoso" "El módulo '$to_delete' ha sido eliminado correctamente de:\n$del_dir."
                     else
                         whiptail_view_error "Error" "No se pudo eliminar el módulo '$to_delete'."
                     fi

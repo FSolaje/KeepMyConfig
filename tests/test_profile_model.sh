@@ -228,6 +228,43 @@ assert_exit_code "$PROFILE_OK" $? "set_active 'work' debe retornar PROFILE_OK"
 new_active=$(profile_model_get_active "$SANDBOX_CONFIG")
 assert_equals "work" "$new_active" "Tras set_active, get_active debe retornar 'work'"
 
+# ------------------------------------------------------------------------------
+# Test 11: Sanitización de TARGET_SUBDIR (profile_model_sanitize_target_subdir)
+# ------------------------------------------------------------------------------
+SAN_SUB1=$(profile_model_sanitize_target_subdir "/Backups/Docente")
+assert_exit_code "$PROFILE_OK" $? "sanitize_target_subdir con barra inicial debe retornar PROFILE_OK"
+assert_equals "Backups/Docente" "$SAN_SUB1" "Debe eliminar la barra inicial de /Backups/Docente"
+
+SAN_SUB2=$(profile_model_sanitize_target_subdir "///Backups///Docente///")
+assert_exit_code "$PROFILE_OK" $? "sanitize_target_subdir con barras redundantes debe retornar PROFILE_OK"
+assert_equals "Backups/Docente" "$SAN_SUB2" "Debe normalizar barras múltiples a Backups/Docente"
+
+SAN_SUB3=$(profile_model_sanitize_target_subdir "\$HOME/TEST_Backups")
+assert_exit_code "$PROFILE_OK" $? "sanitize_target_subdir con \$HOME/ debe retornar PROFILE_OK"
+assert_equals "TEST_Backups" "$SAN_SUB3" "Debe convertir \$HOME/TEST_Backups a ruta relativa TEST_Backups"
+
+SAN_SUB4=$(profile_model_sanitize_target_subdir "~/Mis_Backups")
+assert_exit_code "$PROFILE_OK" $? "sanitize_target_subdir con ~/ debe retornar PROFILE_OK"
+assert_equals "Mis_Backups" "$SAN_SUB4" "Debe convertir ~/Mis_Backups a Mis_Backups"
+
+SAN_SUB5=$(profile_model_sanitize_target_subdir "/home/usuario/Backups_USB")
+assert_exit_code "$PROFILE_OK" $? "sanitize_target_subdir con /home/<user>/ debe retornar PROFILE_OK"
+assert_equals "Backups_USB" "$SAN_SUB5" "Debe convertir /home/usuario/Backups_USB a Backups_USB"
+
+SAN_SUB_EMPTY=$(profile_model_sanitize_target_subdir "")
+assert_exit_code "$PROFILE_OK" $? "sanitize_target_subdir con cadena vacía debe retornar PROFILE_OK"
+assert_equals "" "$SAN_SUB_EMPTY" "Cadena vacía debe mantenerse vacía (raíz de almacenamiento)"
+
+profile_model_sanitize_target_subdir "../hack_dir" >/dev/null 2>&1
+assert_exit_code "$PROFILE_ERR_PARAM" $? "sanitize_target_subdir con '..' debe retornar PROFILE_ERR_PARAM"
+
+# Verificación de integración en profile_model_create
+profile_model_create "sanitized-prof" "Sanitized Profile" "Test" "\$HOME/Backups_Sanitized" "$SANDBOX_PROFILES"
+assert_exit_code "$PROFILE_OK" $? "profile_model_create con \$HOME en target_subdir debe retornar PROFILE_OK"
+PROF_DATA=$(profile_model_get "sanitized-prof" "$SANDBOX_PROFILES")
+[[ "$PROF_DATA" =~ TARGET_SUBDIR=Backups_Sanitized ]]
+assert_equals "0" "$?" "profile_model_create debe almacenar TARGET_SUBDIR saneado"
+
 # ==============================================================================
 # Resumen
 # ==============================================================================

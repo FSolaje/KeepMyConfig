@@ -235,6 +235,53 @@ module_model_check_paths() {
 }
 
 # ------------------------------------------------------------------------------
+# Función: module_model_sanitize_path
+# Descripción: Normaliza y sanea una ruta para garantizar que sea relativa al HOME
+#              del usuario, eliminando prefijos ($HOME, ~, /home/<user>/), barras
+#              redundantes y bloqueando intentos de directory traversal (..).
+# Parámetros:
+#   $1 - Ruta en bruto ingresada
+# Salida stdout:
+#   Ruta relativa limpia
+# Retorno:
+#   MOD_OK si es válida, MOD_ERR_CONFIG si queda vacía, es '.' o contiene '..'
+# ------------------------------------------------------------------------------
+module_model_sanitize_path() {
+    local raw_path="${1:-}"
+    [[ -n "$raw_path" ]] || return "$MOD_ERR_CONFIG"
+
+    # Limpiar espacios en blanco al inicio y al final
+    local clean
+    clean="$(echo "$raw_path" | xargs 2>/dev/null || echo "$raw_path")"
+    [[ -n "$clean" ]] || return "$MOD_ERR_CONFIG"
+
+    # Bloquear intentos de navegación hacia directorios superiores (..)
+    if [[ "$clean" =~ (^|/)\.\.(/|$) ]]; then
+        return "$MOD_ERR_CONFIG"
+    fi
+
+    # Eliminar prefijos de inicio: ${HOME}, $HOME, ~, /home/<usuario>
+    clean=$(echo "$clean" | sed -E 's#^(\$\{HOME\}|\$HOME|~|/home/[^/]+)(/.*)?$#\2#')
+
+    # Eliminar barras iniciales
+    clean=$(echo "$clean" | sed -E 's#^/+##')
+
+    # Eliminar barras finales
+    clean=$(echo "$clean" | sed -E 's#/+$##')
+
+    # Reducir secuencias de múltiples barras internas a una sola
+    clean=$(echo "$clean" | sed -E 's#/{2,}#/#g')
+
+    # Validar que no quede vacía o sea solo "."
+    if [[ -z "$clean" || "$clean" == "." ]]; then
+        return "$MOD_ERR_CONFIG"
+    fi
+
+    echo "$clean"
+    return "$MOD_OK"
+}
+
+# ------------------------------------------------------------------------------
 # Función: module_model_save
 # Descripción: Crea o sobrescribe un archivo .conf de módulo de forma atómica.
 # Parámetros:
@@ -278,15 +325,23 @@ module_model_save() {
         [[ -n "$t" ]] && tags_formatted+="\"$t\" "
     done
 
-    # Procesar rutas (soportando separador pipe '|' o comas)
+    # Procesar rutas (soportando separador pipe '|' o comas) y sanear automáticamente
     local paths_formatted=""
     local delim='|'
     [[ "$paths_str" =~ \| ]] || delim=','
     IFS="$delim" read -r -a paths_raw <<< "$paths_str"
+    local valid_paths_count=0
     for p in "${paths_raw[@]}"; do
         p=$(echo "$p" | xargs)
-        [[ -n "$p" ]] && paths_formatted+="    \"$p\""$'\n'
+        [[ -n "$p" ]] || continue
+        local san_p
+        if san_p=$(module_model_sanitize_path "$p"); then
+            paths_formatted+="    \"$san_p\""$'\n'
+            valid_paths_count=$((valid_paths_count + 1))
+        fi
     done
+
+    [[ $valid_paths_count -gt 0 ]] || return "$MOD_ERR_CONFIG"
 
     local target_file="$modules_dir/$mod_id.conf"
     local temp_file="$modules_dir/.tmp_${mod_id}_$$"

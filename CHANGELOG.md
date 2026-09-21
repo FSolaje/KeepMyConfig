@@ -27,6 +27,12 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
     - Submenú completo para inspección, cambio de perfil activo, creación asistida, visualización de módulos con estado y borrado seguro de perfiles.
   - **Suite de Pruebas Unitarias:** 41 pruebas específicas en `tests/test_profile_model.sh` y 18 pruebas adicionales de integración en `tests/test_controller.sh`.
   - **Rebranding a KeepMyConfig:** Unificación de identidad y nombres en títulos de consola, diálogos de interfaz, cabeceras y scripts.
+- **Módulos con Ámbito y Sanitización de Rutas (Sub-Hito 12.1):**
+  - **Sanitización de Rutas en `module_model.sh`:** Función `module_model_sanitize_path` para normalización automática de rutas de recetas (`MODULE_PATHS`), suprimiendo prefijos `$HOME/`, `${HOME}/`, `~/` o `/home/<user>/`, eliminando barras redundantes y bloqueando intentos de directory traversal (`..`).
+  - **Sanitización de Destinos en `profile_model.sh`:** Función `profile_model_sanitize_target_subdir` que garantiza que `TARGET_SUBDIR` sea una ruta relativa al medio de almacenamiento, limpiando barras iniciales redundantes y previniendo colisiones con el punto de montaje.
+  - **Selector de Ámbito en Asistente TUI (`app_controller.sh`):** Al crear un módulo con un perfil activo distinto de `default`, se ofrece la opción de asignarlo al catálogo global (`modules.d/`) o exclusivamente al perfil activo (`profiles/<activo>/modules.d/`).
+  - **Visualización de Ámbito en TUI:** Etiquetas visuales `[Global]` o `[Perfil: <id>]` al listar, inspeccionar o eliminar recetas en la Opción 7.
+  - **Ampliación de Cobertura:** 49 nuevas aserciones en pruebas unitarias (`test_module_model.sh`, `test_profile_model.sh` y `test_controller.sh`), alcanzando 298 tests al 100% de éxito.
 
 ### Planned
 - Soporte para almacenamiento remoto (Hito 13: SSH, SFTP y Rsync sin privilegios root).

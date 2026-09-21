@@ -272,6 +272,26 @@ cli_list_prof=$("${PROJECT_ROOT}/backup_manager.sh" --list-profiles 2>&1)
 assert_contains "$cli_list_prof" "PERFILES DE BACKUP CONFIGURADOS" "backup_manager.sh --list-profiles debe mostrar encabezado"
 assert_contains "$cli_list_prof" "default" "backup_manager.sh --list-profiles debe listar default"
 
+# Test 19: Guardado de módulo en ámbito de perfil con sanitización de rutas
+mkdir -p "$MOCK_PROFILES_DIR/docente/modules.d"
+module_model_save "docente-excl" "Exclusivo Docente" "doc" "\$HOME/Documentos/Planificaciones" "false" "false" "" "$MOCK_PROFILES_DIR/docente/modules.d"
+assert_eq "0" "$?" "module_model_save en ámbito de perfil debe retornar 0"
+grep -q '"Documentos/Planificaciones"' "$MOCK_PROFILES_DIR/docente/modules.d/docente-excl.conf"
+assert_eq "0" "$?" "Módulo de perfil debe almacenar ruta sanitizada sin \$HOME"
+
+res_docente=$(profile_model_resolve_module "docente-excl" "docente" "$SANDBOX_DIR")
+assert_eq "$MOCK_PROFILES_DIR/docente/modules.d/docente-excl.conf" "$res_docente" "Debe resolver el módulo exclusivo en perfil docente"
+
+res_default_status=0
+profile_model_resolve_module "docente-excl" "default" "$SANDBOX_DIR" >/dev/null 2>&1 || res_default_status=$?
+assert_eq "$PROFILE_ERR_NOT_FOUND" "$res_default_status" "Módulo exclusivo de perfil no debe ser visible en default"
+
+# Test 20: Creación de perfil con sanitización de TARGET_SUBDIR vía controlador
+controller_handle_create_profile "investigador" "Perfil Investigador" "Lab" "\$HOME/TEST_Lab" "false" >/dev/null
+assert_eq "0" "$?" "controller_handle_create_profile con \$HOME debe retornar 0"
+grep -q '^TARGET_SUBDIR="TEST_Lab"' "$MOCK_PROFILES_DIR/investigador/profile.conf"
+assert_eq "0" "$?" "TARGET_SUBDIR debe haberse sanitizado a ruta relativa en profile.conf"
+
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
 
