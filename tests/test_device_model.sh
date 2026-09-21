@@ -190,6 +190,49 @@ assert_exit_code "$DEV_OK" "$UPDATE_EXIT" "update_config_subdir debe retornar DE
 grep -q '^STORAGE_SUBDIR="Backups/SegundoEquipo"' "$LOCAL_CFG"
 assert_equals "0" "$?" "config.conf debe reflejar el nuevo STORAGE_SUBDIR"
 
+# Test 17: device_model_sanitize_subdir normaliza prefijos y bloquea traversal
+s_home=$(device_model_sanitize_subdir "\$HOME/Mis_Backups")
+assert_equals "Mis_Backups" "$s_home" "sanitize_subdir debe eliminar \$HOME"
+
+s_tilde=$(device_model_sanitize_subdir "~/Backups_Tilde//test/")
+assert_equals "Backups_Tilde/test" "$s_tilde" "sanitize_subdir debe normalizar tilde y barras dobles"
+
+s_user=$(device_model_sanitize_subdir "/home/usuario/Backups_Directos")
+assert_equals "Backups_Directos" "$s_user" "sanitize_subdir debe eliminar /home/<usuario>"
+
+set +e
+device_model_sanitize_subdir "Backups/../../etc" >/dev/null 2>&1
+s_trav_status=$?
+set -e
+assert_equals "1" "$s_trav_status" "sanitize_subdir debe rechazar directory traversal con '..'"
+
+# Test 18: validate_storage con auto-creación de subdirectorio nuevo si el almacenamiento ya contiene destinos válidos
+HIER_STORAGE="/tmp/test_hier_storage_$$"
+mkdir -p "$HIER_STORAGE/Backups/Existente"
+touch "$HIER_STORAGE/Backups/Existente/.backup_storage_marker"
+
+HIER_CFG="/tmp/test_hier_cfg_$$.conf"
+cat <<EOF > "$HIER_CFG"
+STORAGE_ID_TYPE="LOCAL_PATH"
+STORAGE_ID_VALUE="$HIER_STORAGE"
+STORAGE_SUBDIR="Backup/NuevoPerfil"
+EOF
+
+HIER_VAL_OUT=$(device_model_validate_storage "$HIER_CFG")
+HIER_VAL_EXIT=$?
+assert_exit_code "$DEV_OK" "$HIER_VAL_EXIT" "validate_storage debe auto-crear subdirectorio nuevo si el medio está verificado"
+[[ "$HIER_VAL_OUT" =~ STATUS=READY ]]
+assert_equals "0" "$?" "validate_storage debe retornar STATUS=READY para subcarpeta nueva en medio verificado"
+[[ -f "$HIER_STORAGE/Backup/NuevoPerfil/.backup_storage_marker" ]]
+assert_equals "0" "$?" "validate_storage debe auto-desplegar .backup_storage_marker en el nuevo subdirectorio"
+
+# Test 19: update_config_subdir sanitiza $HOME al actualizar config
+device_model_update_config_subdir "$HIER_CFG" "\$HOME/Backups_Sanitizados"
+grep -q '^STORAGE_SUBDIR="Backups_Sanitizados"' "$HIER_CFG"
+assert_equals "0" "$?" "update_config_subdir debe sanitizar \$HOME a ruta relativa limpia"
+
+rm -rf "$HIER_STORAGE" "$HIER_CFG"
+
 # Limpieza de temporales LOCAL_PATH
 rm -rf "$LOCAL_TARGET_DIR" "$LOCAL_CFG"
 

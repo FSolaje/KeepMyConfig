@@ -237,6 +237,54 @@ EOF
 }
 
 # ------------------------------------------------------------------------------
+# Función: device_model_sanitize_subdir
+# Descripción: Sanitiza y normaliza un subdirectorio de almacenamiento eliminando
+#              prefijos ($HOME, ~, /home/<usuario>), barras iniciales y bloqueando '..'.
+# Parámetros:
+#   $1 - Cadena de subdirectorio ingresada
+# Salida stdout:
+#   Subdirectorio relativo saneado (o cadena vacía si es raíz)
+# Retorno:
+#   0 en éxito, 1 si contiene '..' (inválido).
+# ------------------------------------------------------------------------------
+device_model_sanitize_subdir() {
+    local raw_subdir="${1:-}"
+    if [[ -z "$raw_subdir" ]]; then
+        echo ""
+        return 0
+    fi
+
+    local clean
+    clean="$(echo "$raw_subdir" | xargs 2>/dev/null || echo "$raw_subdir")"
+    if [[ -z "$clean" ]]; then
+        echo ""
+        return 0
+    fi
+
+    # Bloquear intentos de navegación hacia directorios superiores (..)
+    if [[ "$clean" =~ (^|/)\.\.(/|$) ]]; then
+        return 1
+    fi
+
+    # Eliminar prefijos de inicio: ${HOME}, $HOME, ~, /home/<usuario>
+    clean=$(echo "$clean" | sed -E 's#^(\$\{HOME\}|\$HOME|~|/home/[^/]+)(/.*)?$#\2#')
+
+    # Eliminar barras iniciales y finales
+    clean=$(echo "$clean" | sed -E 's#^/+##')
+    clean=$(echo "$clean" | sed -E 's#/+$##')
+
+    # Reducir secuencias de múltiples barras internas a una sola
+    clean=$(echo "$clean" | sed -E 's#/{2,}#/#g')
+
+    if [[ "$clean" == "." ]]; then
+        clean=""
+    fi
+
+    echo "$clean"
+    return 0
+}
+
+# ------------------------------------------------------------------------------
 # Función: device_model_validate_storage
 # Descripción: Ejecuta la validación completa según un archivo de configuración.
 # Parámetros:
@@ -264,7 +312,9 @@ device_model_validate_storage() {
     local id_type="${STORAGE_ID_TYPE:-LABEL}"
     local id_value="${STORAGE_ID_VALUE:-DISCO_BACKUP}"
     local fallback="${STORAGE_STATIC_FALLBACK:-}"
-    local subdir="${subdir_override:-${STORAGE_SUBDIR:-Backups/Lliurex25}}"
+    local raw_subdir="${subdir_override:-${STORAGE_SUBDIR:-Backups/Lliurex25}}"
+    local subdir
+    subdir=$(device_model_sanitize_subdir "$raw_subdir") || subdir=""
     local marker_name="${STORAGE_MARKER_FILE:-.backup_storage_marker}"
 
     # 1. Encontrar punto de montaje
@@ -296,13 +346,30 @@ device_model_validate_storage() {
         backup_dir="$mountpoint/$subdir"
     fi
 
-    # 4. Verificar marcador de seguridad (comprobar en backup_dir y en mountpoint)
+    # 4. Verificar marcador de seguridad con resolución jerárquica
     local marker_path=""
+    local storage_verified=false
+
     if marker_path=$(device_model_check_marker "$backup_dir" "$marker_name"); then
-        :
+        storage_verified=true
     elif marker_path=$(device_model_check_marker "$mountpoint" "$marker_name"); then
-        :
-    else
+        storage_verified=true
+        # Si el almacenamiento base es válido y backup_dir no tiene marcador pero el medio es escribible, auto-crear e inicializar
+        if [[ ! -f "$backup_dir/$marker_name" && -w "$mountpoint" ]]; then
+            mkdir -p "$backup_dir" 2>/dev/null || true
+            device_model_init_storage_marker "$backup_dir" "$marker_path" 2>/dev/null || true
+        fi
+    elif device_model_list_targets "$mountpoint" "$marker_name" >/dev/null 2>&1; then
+        # Hay al menos un destino previo en este almacenamiento: el medio es legítimo
+        storage_verified=true
+        if [[ -w "$mountpoint" ]]; then
+            device_model_init_storage_marker "$mountpoint" "" 2>/dev/null || true
+            mkdir -p "$backup_dir" 2>/dev/null || true
+            device_model_init_storage_marker "$backup_dir" "$mountpoint/$marker_name" 2>/dev/null || true
+        fi
+    fi
+
+    if [[ "$storage_verified" != "true" ]]; then
         echo "STATUS=STORAGE_MARKER_MISSING"
         echo "ERROR_CODE=$DEV_ERR_NO_MARKER"
         echo "MOUNTPOINT=$mountpoint"
@@ -312,6 +379,13 @@ device_model_validate_storage() {
     fi
 
     # 5. Comprobar permisos de escritura
+    if ! device_model_check_writable "$backup_dir"; then
+        if [[ ! -d "$backup_dir" && -w "$mountpoint" ]]; then
+            mkdir -p "$backup_dir" 2>/dev/null || true
+            device_model_init_storage_marker "$backup_dir" "" 2>/dev/null || true
+        fi
+    fi
+
     if ! device_model_check_writable "$backup_dir"; then
         echo "STATUS=DESTINATION_NOT_WRITABLE"
         echo "ERROR_CODE=$DEV_ERR_NOT_WRITABLE"
@@ -386,9 +460,9 @@ device_model_init_target_directory() {
 # ------------------------------------------------------------------------------
 device_model_list_targets() {
     local storage_root="${1:-}"
+    local marker_name="${2:-.backup_storage_marker}"
     [[ -n "$storage_root" && -d "$storage_root" ]] || return "$DEV_ERR_CONFIG"
 
-    local marker_name=".backup_storage_marker"
     local found=0
 
     # Comprobar la propia raíz
@@ -427,6 +501,10 @@ device_model_update_config_subdir() {
     local new_subdir="${2:-}"
 
     [[ -n "$config_file" && -f "$config_file" ]] || return "$DEV_ERR_CONFIG"
+
+    local clean_sub
+    clean_sub=$(device_model_sanitize_subdir "$new_subdir") || return "$DEV_ERR_CONFIG"
+    new_subdir="$clean_sub"
 
     local temp_cfg="${config_file}.tmp.$$"
     if grep -q '^STORAGE_SUBDIR=' "$config_file"; then

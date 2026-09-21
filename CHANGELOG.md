@@ -47,6 +47,11 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
     - Nuevas banderas CLI: `--list-templates`, `--enable-template <id>` y `--export-template <mod_id>`.
   - **Suites de Pruebas Actualizadas:** Cobertura ampliada en `tests/test_module_model.sh`, `tests/test_profile_model.sh` y `tests/test_controller.sh`, superando 318 pruebas unitarias al 100% de éxito.
 
+### Fixed
+- **Validación Jerárquica de Marcador y Sanitización de Destinos (`fix(storage)`):**
+  - **Validación Jerárquica:** `device_model_validate_storage` ahora reconoce como válidas unidades de almacenamiento que tengan el marcador de seguridad en la raíz o en cualquier subdirectorio previo, auto-creando de forma atómica y transparente las nuevas subcarpetas de perfil (`mkdir -p`) sin obligar al usuario a ejecutar una inicialización manual previa.
+  - **Sanitización de `STORAGE_SUBDIR`:** Implementada la función `device_model_sanitize_subdir` para depurar prefijos `$HOME`, `~` o `/home/<usuario>` antes de concatenar rutas, evitando la creación de carpetas físicas literales con el nombre `'$HOME'` dentro del almacenamiento.
+
 ### Planned
 - Soporte para almacenamiento remoto (Hito 13: SSH, SFTP y Rsync sin privilegios root).
 
