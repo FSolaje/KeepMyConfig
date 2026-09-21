@@ -1,0 +1,32 @@
+name: CI Test Suite
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  test:
+    name: Run Unit Tests & Syntax Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y whiptail zstd gnupg
+
+      - name: Verify Bash Syntax (bash -n)
+        run: |
+          find . -type f \( -name "*.sh" -o -name "*.conf" \) -not -path "*/.git/*" -exec bash -n {} +
+
+      - name: Run Test Suites
+        run: |
+          for test_file in tests/test_*.sh; do
+            echo "::group::Running $test_file"
+            bash "$test_file"
+            echo "::endgroup::"
+          done
