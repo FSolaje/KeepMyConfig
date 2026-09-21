@@ -60,8 +60,10 @@ assert_contains "$list_tmpl_out" "vscode-standard" "--list-templates debe listar
 assert_contains "$list_tmpl_out" "ssh-keys" "--list-templates debe listar ssh-keys"
 
 # Test 2b: Invocación de --backup-all con 0 módulos activos de inicio (FR-TMPL-002)
-backup_zero_out=$("${PROJECT_ROOT}/backup_manager.sh" --backup-all 2>&1)
+tmp_empty_mods=$(mktemp -d)
+backup_zero_out=$(MODULES_DIR="$tmp_empty_mods" "${PROJECT_ROOT}/backup_manager.sh" --profile default --backup-all 2>&1)
 backup_zero_status=$?
+rm -rf "$tmp_empty_mods"
 assert_eq "0" "$backup_zero_status" "--backup-all con 0 módulos activos debe retornar 0"
 assert_contains "$backup_zero_out" "No hay módulos configurados para respaldar" "--backup-all debe mostrar aviso descriptivo amigable"
 assert_contains "$backup_zero_out" "--enable-template" "--backup-all debe sugerir usar --enable-template"

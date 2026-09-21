@@ -729,8 +729,11 @@ controller_handle_init_target() {
         fi
     fi
 
+    local clean_sub
+    clean_sub=$(device_model_sanitize_subdir "$subdir") || clean_sub=""
+    subdir="$clean_sub"
     if [[ -z "$subdir" ]]; then
-        ansi_view_error "Debe especificar la subcarpeta a inicializar (ej: --init-target Backups/Personal_PC)."
+        ansi_view_error "Debe especificar una subcarpeta válida a inicializar (ej: --init-target Backups/Personal_PC)."
         return 1
     fi
 
