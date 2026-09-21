@@ -1,8 +1,8 @@
 # Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
-> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hook pre-commit de 5 fases activo localmente y Workflows de GitHub Actions (`ci.yml` y `release.yml`) desplegados en `develop`.  
-> **Paso inmediato:** Validar y realizar commit en `dev/feature/backup-profiles` para consolidar el **Hito 12**, integrar en `develop` e iniciar el **Hito 13** (Almacenamiento Remoto SSH/SFTP/Rsync).
+> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hito 12 Base consolidado en commit `1ba2f20` en la rama `dev/feature/backup-profiles`. Sub-Hito 12.1 finalizado y verificado (298/298 pruebas unitarias al 100% y SAST limpio). Listo para commit independiente.  
+> **Paso inmediato:** Autorización de commit para Sub-Hito 12.1 y proceder con el **Sub-Hito 12.2** (Almacenamiento por Perfil, Perfil Default y Onboarding).
 
 ---
 
@@ -59,20 +59,47 @@
     - [x] Sincronización con GitHub: Repositorio remoto `FSolaje/KeepMyConfig`, subida de ramas `main`, `develop` y tag `v0.1.0-alpha.1`. Release publicada en GitHub.
     - [x] Hook de Calidad Pre-Commit de 5 barreras en `.git/hooks/pre-commit`.
     - [x] Automatización GitHub Actions: Workflows `ci.yml` y `release.yml`.
-12. **Sistema de Perfiles de Backup & Scoped Modules (`dev/feature/backup-profiles`):**
-    - [x] **Documentos SDD:** `spec.md`, `plan.md` y `tasks.md` aprobados en `specs/backup_profiles/`.
+12. **Sistema de Perfiles de Backup Base (`dev/feature/backup-profiles`):**
+    - [x] **Documentos SDD:** `spec.md`, `plan.md` y `tasks.md` en `specs/backup_profiles/`.
     - [x] **Modelo `profile_model.sh`:** CRUD de perfiles, validación de IDs, persistencia atómica de `ACTIVE_PROFILE` en `config.conf`.
     - [x] **Resolución en Cascada:** Módulos de perfil (`profiles/<perfil>/modules.d/`) prevalecen sobre módulos globales (`modules.d/`) y soporte de recetas exclusivas.
     - [x] **Deduplicación:** Listado unificado `profile_model_list_modules`.
     - [x] **Vinculación a Destinos:** Soporte de `TARGET_SUBDIR` específico por perfil.
     - [x] **Integración CLI y TUI:** Flags `--profile`, `--list-profiles`, `--set-active-profile`, `--create-profile`, y Opción 9 en menú TUI de `whiptail`.
     - [x] **Unificación de Identidad `KeepMyConfig`:** Actualización de banners, títulos, cabeceras, `README.md` y `MANUAL_USUARIO.md`.
-    - [x] **Batería de Pruebas Unitarias:** 9 suites de pruebas unitarias al 100% de éxito (incluyendo 41 tests de `profile_model` y 48 de `controller`).
+    - [x] **Batería de Pruebas Unitarias:** 9 suites de pruebas unitarias al 100% de éxito (249 tests en verde).
     - [x] **Escáner SAST:** 0 alertas en 77 archivos auditados.
+    - [x] **Commit de Consolidación:** Registrado bajo Conventional Commits (`1ba2f20`).
+13. **Módulos con Ámbito y Sanitización de Rutas (Sub-Hito 12.1):**
+    - [x] **Documentos SDD:** `specs/scoped_modules_sanitization/` (`spec.md`, `plan.md`, `tasks.md`).
+    - [x] **Sanitización de Rutas en `module_model.sh`:** Función `module_model_sanitize_path` para eliminación de `$HOME`, `~`, `/home/<user>/`, barras redundantes y bloqueo de `..`.
+    - [x] **Sanitización de Destinos en `profile_model.sh`:** Función `profile_model_sanitize_target_subdir` para prevención de rutas absolutas locales en `TARGET_SUBDIR`.
+    - [x] **Selector de Ámbito en TUI (`app_controller.sh`):** Pregunta al usuario si el módulo es Global o Exclusivo del perfil activo al crearlo (Opción 7), y muestra etiquetas `[Global]` o `[Perfil: <id>]` en listados y borrados.
+    - [x] **Ampliación de Pruebas Unitarias:** 49 nuevas pruebas añadidas (total: 298 pruebas al 100% de éxito).
+    - [x] **Escáner SAST:** 0 alertas en 80 archivos auditados.
 
 ---
 
 ## Hoja de Ruta Inmediata y Futuras Funcionalidades (Roadmap):
+
+### Sub-Hito 12.1: Módulos con Ámbito y Sanitización de Rutas (Completado y Verificado)
+- [x] Documentos SDD aprobados por el usuario (`specs/scoped_modules_sanitization/`).
+- [x] Implementar `module_model_sanitize_path` en `lib/models/module_model.sh` (limpieza automática de `$HOME/`, `~/`, `/home/<user>/`).
+- [x] Implementar selector de ámbito en el asistente TUI de creación de módulos (`modules.d/` vs `profiles/<activo>/modules.d/`).
+- [x] Sanitización de barras iniciales y `$HOME` en `TARGET_SUBDIR`.
+- [x] Suites de pruebas unitarias y de integración (298 tests passing).
+- [ ] Commit independiente del Sub-Hito 12.1 (pendiente de orden humana).
+
+### Sub-Hito 12.2: Almacenamiento por Perfil, Perfil Default y Onboarding (Próximo paso)
+- [ ] Plantilla neutra en `config/config.conf` (`INITIAL_SETUP_DONE="false"`).
+- [ ] Asistente interactivo de primera ejecución (Onboarding Wizard en TUI) con aviso acordado y carpeta local `$HOME/Backups/KeepMyConfig` por defecto.
+- [ ] Opción `REMEMBER_LAST_PROFILE=true/false` para arrancar con el perfil de la última sesión.
+- [ ] Directorio físico permanente `profiles/default/profile.conf` y auto-recreación de emergencia.
+- [ ] Desacoplamiento de directivas de almacenamiento por perfil (herencia de `STORAGE_*` si están vacíos o sobrescritura si están definidos).
+- [ ] Commit independiente del Sub-Hito 12.2.
+
+### Sub-Hito 12.3 (Roadmap): Asistente de Configuración Guiado por Consola CLI
+- [ ] Modo interactivo paso a paso por terminal estándar (`--setup` / CLI Wizard) sin dependencia de `whiptail`, ideal para servidores headless y sesiones SSH mínimas.
 
 ### Hito 13: Almacenamiento Remoto (SSH, SFTP, Rsync)
 - [ ] **Ampliación de `STORAGE_ID_TYPE`:** Añadir soportes `SSH`, `SFTP` y `RSYNC`.
@@ -80,4 +107,5 @@
 - [ ] **Validación Remota del Marcador:** Verificación de `.backup_storage_marker` en destino remoto mediante canal seguro.
 - [ ] **Transferencia Eficiente:** Estrategia de sincronización o montaje (FUSE `sshfs` o canalización `rsync`/tuberías `ssh`).
 - [ ] **Asociación con Perfiles:** Posibilidad de que cada perfil defina si su destino es un SSD físico, ruta local o servidor remoto.
+
 

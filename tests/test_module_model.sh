@@ -187,6 +187,66 @@ assert_exit_code "$MOD_OK" $? "add_tag_to_catalog debe registrar una nueva etiqu
 grep -qs "^docker:Entornos de contenedores Docker" "$MOCK_TAGS_FILE"
 assert_equals "0" "$?" "La nueva etiqueta debe estar registrada en default_tags.conf"
 
+# ------------------------------------------------------------------------------
+# Test 10: Sanitización de Rutas (module_model_sanitize_path)
+# ------------------------------------------------------------------------------
+SAN_HOME=$(module_model_sanitize_path "\$HOME/Documentos/Pruebas_Macros")
+assert_exit_code "$MOD_OK" $? "sanitize_path con \$HOME/ debe retornar MOD_OK"
+assert_equals "Documentos/Pruebas_Macros" "$SAN_HOME" "sanitize_path debe limpiar el prefijo \$HOME/"
+
+SAN_BRACES=$(module_model_sanitize_path "\${HOME}/.config/app/settings.json")
+assert_exit_code "$MOD_OK" $? "sanitize_path con \${HOME}/ debe retornar MOD_OK"
+assert_equals ".config/app/settings.json" "$SAN_BRACES" "sanitize_path debe limpiar el prefijo \${HOME}/"
+
+SAN_TILDE=$(module_model_sanitize_path "~/Descargas/ficheros/")
+assert_exit_code "$MOD_OK" $? "sanitize_path con ~/ y barra final debe retornar MOD_OK"
+assert_equals "Descargas/ficheros" "$SAN_TILDE" "sanitize_path debe limpiar ~/ y barra final"
+
+SAN_USER_HOME=$(module_model_sanitize_path "/home/usuario/workspace/proyectos")
+assert_exit_code "$MOD_OK" $? "sanitize_path con /home/<user>/ debe retornar MOD_OK"
+assert_equals "workspace/proyectos" "$SAN_USER_HOME" "sanitize_path debe limpiar /home/<user>/"
+
+SAN_SLASHES=$(module_model_sanitize_path "///rutas//con///barras///")
+assert_exit_code "$MOD_OK" $? "sanitize_path con múltiples barras debe retornar MOD_OK"
+assert_equals "rutas/con/barras" "$SAN_SLASHES" "sanitize_path debe normalizar barras múltiples"
+
+SAN_CLEAN=$(module_model_sanitize_path ".config/Code/User/settings.json")
+assert_exit_code "$MOD_OK" $? "sanitize_path con ruta relativa limpia debe retornar MOD_OK"
+assert_equals ".config/Code/User/settings.json" "$SAN_CLEAN" "sanitize_path debe preservar rutas relativas limpias"
+
+module_model_sanitize_path "../etc/passwd" >/dev/null 2>&1
+assert_exit_code "$MOD_ERR_CONFIG" $? "sanitize_path con subida de directorio (..) debe retornar MOD_ERR_CONFIG"
+
+module_model_sanitize_path "datos/../privado" >/dev/null 2>&1
+assert_exit_code "$MOD_ERR_CONFIG" $? "sanitize_path con salto intermedio /../ debe retornar MOD_ERR_CONFIG"
+
+module_model_sanitize_path "\$HOME" >/dev/null 2>&1
+assert_exit_code "$MOD_ERR_CONFIG" $? "sanitize_path con solo \$HOME debe retornar MOD_ERR_CONFIG"
+
+module_model_sanitize_path "~" >/dev/null 2>&1
+assert_exit_code "$MOD_ERR_CONFIG" $? "sanitize_path con solo ~ debe retornar MOD_ERR_CONFIG"
+
+module_model_sanitize_path "/" >/dev/null 2>&1
+assert_exit_code "$MOD_ERR_CONFIG" $? "sanitize_path con raíz / debe retornar MOD_ERR_CONFIG"
+
+module_model_sanitize_path "" >/dev/null 2>&1
+assert_exit_code "$MOD_ERR_CONFIG" $? "sanitize_path con cadena vacía debe retornar MOD_ERR_CONFIG"
+
+# ------------------------------------------------------------------------------
+# Test 11: Guardado con Sanitización Automática en module_model_save
+# ------------------------------------------------------------------------------
+RAW_PATHS="\$HOME/Documentos/Prueba1|~/Descargas/Prueba2|/home/user/.local/share"
+module_model_save "sanitized-mod" "Sanitized Module" "test" "$RAW_PATHS" "false" "false" "" "$TEMP_TEST_DIR"
+assert_exit_code "$MOD_OK" $? "module_model_save con rutas a sanear debe retornar MOD_OK"
+
+MOD_CONF_CONTENT=$(cat "$TEMP_TEST_DIR/sanitized-mod.conf")
+[[ "$MOD_CONF_CONTENT" =~ \"Documentos/Prueba1\" ]]
+assert_equals "0" "$?" "module_model_save debe almacenar Documentos/Prueba1 sanitizado"
+[[ "$MOD_CONF_CONTENT" =~ \"Descargas/Prueba2\" ]]
+assert_equals "0" "$?" "module_model_save debe almacenar Descargas/Prueba2 sanitizado"
+[[ "$MOD_CONF_CONTENT" =~ \".local/share\" ]]
+assert_equals "0" "$?" "module_model_save debe almacenar .local/share sanitizado"
+
 # Limpieza
 rm -rf "$TEMP_TEST_DIR"
 
