@@ -1,8 +1,8 @@
 # Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
-> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hito 12 Base consolidado en commit `1ba2f20` y Sub-Hito 12.1 en `a5e5ea3` en la rama `dev/feature/backup-profiles`. Sub-Hito 12.2 finalizado y verificado (318/318 pruebas unitarias al 100%, documentación sincronizada y SAST listo).  
-> **Paso inmediato:** Autorización de commit para Sub-Hito 12.2 y proceder con el **Sub-Hito 12.3** (Almacenamiento por Perfil, Perfil Default y Onboarding).
+> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hito 12 Base consolidado en commit `1ba2f20` y Sub-Hito 12.1 en `a5e5ea3` en la rama `dev/feature/backup-profiles`. Sub-Hitos 12.2 y 12.3 finalizados, testeados al 100% (368/368 pruebas unitarias), documentación pública sincronizada y SAST limpio.  
+> **Paso inmediato:** Autorización humana de commit para el **Sub-Hito 12.3** (`feat!(storage): ruta universal de backup, destino por perfil y asistente de onboarding`) y proceder con el **Sub-Hito 12.4** (Sistema de Empaquetado y Distribución Automatizada para Releases).
 
 ---
 
@@ -89,6 +89,14 @@
       - Flags CLI `--list-templates`, `--enable-template` y `--export-template`.
     - [x] **Documentación Actualizada:** `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md` actualizados según Regla Mandatoria 10 de `AGENT.md`.
     - [x] **Batería de Pruebas:** 318 pruebas unitarias superadas al 100% (72 pruebas de controlador).
+15. **Ruta Universal de Backup, Destino por Perfil y Onboarding (Sub-Hito 12.3):**
+    - [x] **Documentos SDD:** `specs/universal_storage_and_onboarding/` (`spec.md`, `plan.md`, `tasks.md`).
+    - [x] **Modelo de Dispositivo y Almacenamiento Universal (`device_model.sh`):** Función `device_model_resolve_destination` (soporte `~`, `$HOME`, `${HOME}`, rutas relativas y absolutas, y `@media/<LABEL>/...`), detección de soportes externos `device_model_detect_external_drives`, actualización atómica `device_model_update_config_destination` y validación jerárquica sin fuga de variables en `device_model_validate_storage`.
+    - [x] **Perfil Default Físico y Convención Zero-Config (`profile_model.sh`):** Creación física de `profiles/default/profile.conf`, auto-reparación preventiva (*auto-healing*) en `profile_model_init_default` y resolución de destino Zero-Config por perfil `<BACKUP_DESTINATION>/<id_perfil>`.
+    - [x] **Onboarding Wizard y Control de Sesión (`app_controller.sh`):** Configuración inicial con `INITIAL_SETUP_DONE="false"`, detección de discos y opción local `$HOME/Backups/KeepMyConfig`, despliegue automático del marcador de seguridad `.backup_storage_marker`, preferencia de persistencia de sesión `REMEMBER_LAST_PROFILE=true/false` y flag CLI `--setup`.
+    - [x] **Documentación Actualizada:** Sincronización mandatoria de `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md` (con registro de `### Breaking Changes`).
+    - [x] **Batería de Pruebas Unitarias:** 368 pruebas unitarias al 100% de éxito (53 device, 78 profile, 78 controller).
+    - [x] **Auditoría de Seguridad SAST:** Escáner limpio con 0 alertas en 100 archivos.
 
 ---
 
@@ -102,22 +110,23 @@
 - [x] Suites de pruebas unitarias y de integración (298 tests passing).
 - [x] Commit independiente del Sub-Hito 12.1 consolidado (`a5e5ea3`).
 
-### Sub-Hito 12.2: Biblioteca de Plantillas (`templates.d/`), Activación y Desactivación en Perfiles (Completado y Listo para Commit)
+### Sub-Hito 12.2: Biblioteca de Plantillas (`templates.d/`), Activación y Desactivación en Perfiles (Completado y Consolidado)
 - [x] Creación del catálogo `templates.d/` con recetas estándar listas para usar (Firefox, IntelliJ, Git, VSCode, SSH, Bash, etc.).
 - [x] Estado inicial limpio de primera ejecución: 0 módulos activos por defecto; catálogo disponible para activación selectiva.
 - [x] Soporte de directiva `DISABLED_MODULES=("mod1" "mod2")` en `profile.conf` para desactivar módulos globales en perfiles particulares.
 - [x] Adaptación de la resolución en cascada en `profile_model.sh` para filtrar exclusiones por perfil.
 - [x] Asistente TUI/CLI para activar módulos desde la biblioteca de plantillas y gestionar exclusiones en perfiles.
 - [x] Suites de pruebas unitarias y de integración (318 tests passing al 100%).
-- [ ] Commit independiente del Sub-Hito 12.2.
 
-### Sub-Hito 12.3: Almacenamiento por Perfil, Perfil Default y Onboarding
-- [ ] Plantilla neutra en `config/config.conf` (`INITIAL_SETUP_DONE="false"`).
-- [ ] Asistente interactivo de primera ejecución (Onboarding Wizard en TUI) con aviso acordado y carpeta local `$HOME/Backups/KeepMyConfig` por defecto.
-- [ ] Opción `REMEMBER_LAST_PROFILE=true/false` para arrancar con el perfil de la última sesión.
-- [ ] Directorio físico permanente `profiles/default/profile.conf` y auto-recreación de emergencia.
-- [ ] Desacoplamiento de directivas de almacenamiento por perfil (herencia de `STORAGE_*` si están vacíos o sobrescritura si están definidos).
-- [ ] Commit independiente del Sub-Hito 12.3.
+### Sub-Hito 12.3: Ruta Universal de Backup, Destino por Perfil y Onboarding (Completado y Listo para Commit)
+- [x] Ruta universal unificada en `config/config.conf` (`BACKUP_DESTINATION="~/Backups/KeepMyConfig"`).
+- [x] Estado de primera ejecución (`INITIAL_SETUP_DONE="false"`) y Asistente de Onboarding interactivo (TUI / CLI `--setup`).
+- [x] Detección automática de discos externos conectados y despliegue seguro de `.backup_storage_marker`.
+- [x] Convención Zero-Config para perfiles de backup (`<BACKUP_DESTINATION>/<id_perfil>`).
+- [x] Directorio físico permanente `profiles/default/profile.conf` y auto-reparación preventiva (*auto-healing*).
+- [x] Opción `REMEMBER_LAST_PROFILE=true/false` para arrancar con el perfil de la última sesión.
+- [x] Suites de pruebas unitarias completas (368 tests passing al 100%) y escáner SAST limpio.
+- [ ] Autorización y Commit independiente del Sub-Hito 12.3.
 
 ### Sub-Hito 12.4: Sistema de Empaquetado y Distribución Automatizada para Releases
 - [ ] Definición de Manifiesto de Distribución con Lista Blanca estricta (exclusión de `.agents/`, `specs/`, `tests/`, `user_data/`, etc.).

@@ -285,66 +285,263 @@ device_model_sanitize_subdir() {
 }
 
 # ------------------------------------------------------------------------------
+# Función: device_model_resolve_destination
+# Descripción: Resuelve y normaliza la ruta canónica de BACKUP_DESTINATION.
+#              Interpreta prefijos ~, $HOME, rutas relativas al home, rutas
+#              absolutas y notación semántica @media/<LABEL>/<subdir>.
+# Parámetros:
+#   $1 - Ruta o directiva a resolver (ej: BACKUP_DESTINATION)
+#   $2 - (Opcional) TARGET_USER_HOME para expandir ~, por defecto $TARGET_USER_HOME o $HOME
+# Salida stdout:
+#   Ruta absoluta canónica resuelta.
+# Retorno:
+#   0 en éxito, DEV_ERR_CONFIG si está vacía o inválida, DEV_ERR_NOT_FOUND si @media no se monta.
+# ------------------------------------------------------------------------------
+device_model_resolve_destination() {
+    local raw_dest="${1:-}"
+    local user_home="${2:-${TARGET_USER_HOME:-${HOME}}}"
+
+    if [[ -z "$raw_dest" ]]; then
+        return "$DEV_ERR_CONFIG"
+    fi
+
+    # Limpiar comillas o espacios circundantes
+    raw_dest="${raw_dest#\"}"
+    raw_dest="${raw_dest%\"}"
+    raw_dest="${raw_dest#\'}"
+    raw_dest="${raw_dest%\'}"
+    raw_dest="$(echo "$raw_dest" | xargs 2>/dev/null || echo "$raw_dest")"
+    [[ -n "$raw_dest" ]] || return "$DEV_ERR_CONFIG"
+
+    # Caso 1: Notación semántica @media/<LABEL>/<subdir> o @media/<LABEL>
+    if [[ "$raw_dest" =~ ^@media/([^/]+)(/.*)?$ ]]; then
+        local label="${BASH_REMATCH[1]}"
+        local sub="${BASH_REMATCH[2]:-}"
+        local mountpoint
+        mountpoint=$(device_model_find_mount "LABEL" "$label")
+        if [[ -z "$mountpoint" || ! -d "$mountpoint" ]]; then
+            return "$DEV_ERR_NOT_FOUND"
+        fi
+        raw_dest="${mountpoint}${sub}"
+    # Caso 2: Expansión de ~, $HOME, ${HOME}
+    elif [[ "$raw_dest" =~ ^~(/.*)?$ ]]; then
+        raw_dest="${user_home}${BASH_REMATCH[1]:-}"
+    elif [[ "$raw_dest" =~ ^\$HOME(/.*)?$ ]]; then
+        raw_dest="${user_home}${BASH_REMATCH[1]:-}"
+    elif [[ "$raw_dest" =~ ^\$\{HOME\}(/.*)?$ ]]; then
+        raw_dest="${user_home}${BASH_REMATCH[1]:-}"
+    # Caso 3: Ruta relativa (sin / inicial) -> resolver respecto a $user_home
+    elif [[ "$raw_dest" != /* ]]; then
+        raw_dest="${user_home}/${raw_dest}"
+    fi
+
+    # Normalización de barras: reducir duplicadas
+    local clean
+    clean=$(echo "$raw_dest" | sed -E 's#/{2,}#/#g')
+    # Eliminar barra final salvo si es la raíz '/'
+    if [[ "$clean" != "/" ]]; then
+        clean="${clean%/}"
+    fi
+
+    # Bloquear directory traversal con '..'
+    if [[ "$clean" =~ (^|/)\.\.(/|$) ]]; then
+        return "$DEV_ERR_CONFIG"
+    fi
+
+    echo "$clean"
+    return "$DEV_OK"
+}
+
+# ------------------------------------------------------------------------------
+# Función: device_model_detect_external_drives
+# Descripción: Audita puntos de montaje bajo /media/$USER/ y /run/media/$USER/,
+#              o particiones externas detectables con lsblk, devolviendo
+#              información formateada para selección interactiva o inspección.
+# Salida stdout:
+#   Una línea por disco: LABEL|MOUNTPOINT|SPACE_FREE_HUMAN
+# Retorno:
+#   0 si se completó la inspección.
+# ------------------------------------------------------------------------------
+device_model_detect_external_drives() {
+    local cur_user="${USER:-$(whoami)}"
+    local media_dirs=("/media/$cur_user" "/run/media/$cur_user")
+    local seen_mounts=()
+
+    # 1. Explorar rutas canónicas de medios extraíbles de escritorio
+    for m_base in "${media_dirs[@]}"; do
+        [[ -d "$m_base" ]] || continue
+        for d in "$m_base"/*; do
+            [[ -d "$d" ]] || continue
+            local mnt="$d"
+            if mountpoint -q "$mnt" 2>/dev/null || grep -qs " $mnt " /proc/mounts; then
+                local lbl
+                lbl=$(basename "$mnt")
+                local real_lbl
+                real_lbl=$(lsblk -rno LABEL "$mnt" 2>/dev/null | head -n 1)
+                [[ -n "$real_lbl" ]] && lbl="$real_lbl"
+
+                local space_human="Desc"
+                space_human=$(df -Ph "$mnt" 2>/dev/null | tail -n 1 | awk '{print $4}')
+
+                echo "${lbl}|${mnt}|${space_human}"
+                seen_mounts+=("$mnt")
+            fi
+        done
+    done
+
+    # 2. Explorar mediante lsblk otras unidades montadas que no sean del sistema ni snap
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        local mnt lbl fstype
+        mnt=$(echo "$line" | awk '{print $1}')
+        lbl=$(echo "$line" | awk '{print $2}')
+        fstype=$(echo "$line" | awk '{print $3}')
+
+        [[ "$fstype" == "squashfs" ]] && continue
+        [[ "$mnt" =~ ^/snap ]] && continue
+        [[ "$mnt" =~ ^/(|boot|swap|etc|proc|sys|dev)$ ]] && continue
+        [[ "$mnt" == "/home" ]] && continue
+        [[ -n "$mnt" && -d "$mnt" ]] || continue
+
+        # Evitar duplicados ya detectados
+        local already_seen=0
+        for s in "${seen_mounts[@]}"; do
+            if [[ "$s" == "$mnt" ]]; then
+                already_seen=1
+                break
+            fi
+        done
+        [[ $already_seen -eq 1 ]] && continue
+
+        [[ -z "$lbl" ]] && lbl=$(basename "$mnt")
+        local space_human
+        space_human=$(df -Ph "$mnt" 2>/dev/null | tail -n 1 | awk '{print $4}')
+        echo "${lbl}|${mnt}|${space_human}"
+        seen_mounts+=("$mnt")
+    done < <(lsblk -rno MOUNTPOINT,LABEL,FSTYPE 2>/dev/null)
+
+    return "$DEV_OK"
+}
+
+# ------------------------------------------------------------------------------
 # Función: device_model_validate_storage
 # Descripción: Ejecuta la validación completa según un archivo de configuración.
+#              Soporta la directiva universal BACKUP_DESTINATION con resolución
+#              jerárquica y auto-creación atómica de subcarpetas de perfil.
 # Parámetros:
 #   $1 - Ruta al archivo config.conf (o usa variables de entorno ya cargadas)
+#   $2 - (Opcional) Sobrescritura de destino o subdirectorio de perfil
 # Salida stdout:
 #   Salida estructurada clave=valor con el diagnóstico completo.
 # Códigos de retorno:
-#   0 - Disco verificado y listo
+#   0 - Destino verificado y listo
 #   1 - Error de configuración
-#   2 - Dispositivo no encontrado
+#   2 - Dispositivo o ruta no encontrado
 #   3 - Dispositivo no montado
 #   4 - Falta marcador de seguridad .backup_storage_marker
 #   5 - Destino no escribible
 # ------------------------------------------------------------------------------
 device_model_validate_storage() {
     local config_file="${1:-}"
-    local subdir_override="${2:-}"
+    local dest_or_subdir_override="${2:-}"
+
+    local BACKUP_DESTINATION="${BACKUP_DESTINATION:-}"
+    local STORAGE_ID_TYPE="${STORAGE_ID_TYPE:-}"
+    local STORAGE_ID_VALUE="${STORAGE_ID_VALUE:-}"
+    local STORAGE_SUBDIR="${STORAGE_SUBDIR:-}"
+    local STORAGE_STATIC_FALLBACK="${STORAGE_STATIC_FALLBACK:-}"
 
     # Si se pasa un archivo de configuración existente, cargarlo
     if [[ -n "$config_file" && -f "$config_file" ]]; then
+        BACKUP_DESTINATION=""
+        STORAGE_ID_TYPE=""
+        STORAGE_ID_VALUE=""
+        STORAGE_SUBDIR=""
+        STORAGE_STATIC_FALLBACK=""
         # shellcheck disable=SC1090
         source "$config_file"
     fi
 
-    local id_type="${STORAGE_ID_TYPE:-LABEL}"
-    local id_value="${STORAGE_ID_VALUE:-DISCO_BACKUP}"
-    local fallback="${STORAGE_STATIC_FALLBACK:-}"
-    local raw_subdir="${subdir_override:-${STORAGE_SUBDIR:-Backups/Lliurex25}}"
-    local subdir
-    subdir=$(device_model_sanitize_subdir "$raw_subdir") || subdir=""
     local marker_name="${STORAGE_MARKER_FILE:-.backup_storage_marker}"
+    local backup_dir=""
 
-    # 1. Encontrar punto de montaje
-    local mountpoint
-    mountpoint=$(device_model_find_mount "$id_type" "$id_value" "$fallback")
-    local find_status=$?
-
-    if [[ $find_status -ne 0 || -z "$mountpoint" ]]; then
-        echo "STATUS=DEVICE_NOT_FOUND"
-        echo "ERROR_CODE=$DEV_ERR_NOT_FOUND"
-        echo "MESSAGE=Dispositivo '$id_value' ($id_type) no encontrado en el sistema."
-        return "$DEV_ERR_NOT_FOUND"
+    # Fallback transparente para configs que aún tengan directivas legadas
+    local base_dest="${BACKUP_DESTINATION:-}"
+    if [[ -z "$base_dest" && -n "${STORAGE_ID_VALUE:-}" ]]; then
+        local leg_type="${STORAGE_ID_TYPE:-LABEL}"
+        local leg_val="${STORAGE_ID_VALUE}"
+        local leg_fb="${STORAGE_STATIC_FALLBACK:-}"
+        local leg_mnt
+        leg_mnt=$(device_model_find_mount "$leg_type" "$leg_val" "$leg_fb")
+        if [[ -n "$leg_mnt" ]]; then
+            base_dest="${leg_mnt}"
+            if [[ -z "$dest_or_subdir_override" ]]; then
+                dest_or_subdir_override="${STORAGE_SUBDIR:-}"
+            fi
+        else
+            echo "STATUS=DEVICE_NOT_FOUND"
+            echo "ERROR_CODE=$DEV_ERR_NOT_FOUND"
+            echo "MESSAGE=Dispositivo '$leg_val' ($leg_type) no encontrado en el sistema."
+            return "$DEV_ERR_NOT_FOUND"
+        fi
     fi
 
-    # 2. Verificar que el punto de montaje está activo (salvo para LOCAL_PATH)
-    if [[ "$id_type" != "LOCAL_PATH" ]]; then
-        if ! device_model_is_mounted "$mountpoint"; then
+    local storage_root=""
+    if [[ -n "${STORAGE_ID_VALUE:-}" ]]; then
+        storage_root=$(device_model_resolve_destination "$STORAGE_ID_VALUE" 2>/dev/null || true)
+    elif [[ -n "${BACKUP_DESTINATION:-}" ]]; then
+        storage_root=$(device_model_resolve_destination "$BACKUP_DESTINATION" 2>/dev/null || true)
+    fi
+
+    # 1. Determinar y resolver ruta destino
+    if [[ -n "$dest_or_subdir_override" ]]; then
+        if [[ "$dest_or_subdir_override" =~ ^(/|~|\$HOME|\$\{HOME\}|@media/) ]]; then
+            backup_dir=$(device_model_resolve_destination "$dest_or_subdir_override") || return "$?"
+        else
+            local clean_sub
+            clean_sub=$(device_model_sanitize_subdir "$dest_or_subdir_override") || clean_sub=""
+            if [[ -n "$base_dest" ]]; then
+                local base_resolved
+                base_resolved=$(device_model_resolve_destination "$base_dest") || return "$?"
+                [[ -z "$storage_root" ]] && storage_root="$base_resolved"
+                if [[ -n "$clean_sub" && "$clean_sub" != "." ]]; then
+                    backup_dir="$base_resolved/$clean_sub"
+                else
+                    backup_dir="$base_resolved"
+                fi
+            else
+                backup_dir=$(device_model_resolve_destination "$clean_sub") || return "$?"
+            fi
+        fi
+    else
+        [[ -n "$base_dest" ]] || return "$DEV_ERR_CONFIG"
+        backup_dir=$(device_model_resolve_destination "$base_dest") || return "$?"
+        [[ -z "$storage_root" ]] && storage_root="$backup_dir"
+    fi
+
+    # 2. Verificar que si apunta a un soporte extraíble montado en /media o /run/media esté activo
+    if [[ "$backup_dir" =~ ^/(media|run/media)/[^/]+/([^/]+) ]]; then
+        local drive_mount="/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}"
+        if ! device_model_is_mounted "$drive_mount"; then
             echo "STATUS=DEVICE_NOT_MOUNTED"
             echo "ERROR_CODE=$DEV_ERR_NOT_MOUNTED"
-            echo "MOUNTPOINT=$mountpoint"
-            echo "MESSAGE=La ruta '$mountpoint' no corresponde a un punto de montaje activo."
+            echo "MOUNTPOINT=$drive_mount"
+            echo "MESSAGE=La unidad externa '$drive_mount' no está conectada o montada."
             return "$DEV_ERR_NOT_MOUNTED"
         fi
     fi
 
-    # 3. Construir ruta de backup completa
-    local backup_dir="$mountpoint"
-    if [[ -n "$subdir" && "$subdir" != "." ]]; then
-        backup_dir="$mountpoint/$subdir"
+    # 3. Encontrar punto de montaje del sistema de archivos
+    local probe="$backup_dir"
+    while [[ -n "$probe" && ! -d "$probe" && "$probe" != "/" ]]; do
+        probe="$(dirname "$probe")"
+    done
+    local mountpoint
+    mountpoint=$(findmnt -T "$probe" -no TARGET 2>/dev/null)
+    if [[ -z "$mountpoint" ]]; then
+        mountpoint=$(df -P "$probe" 2>/dev/null | tail -n 1 | awk '{print $6}')
     fi
+    [[ -z "$mountpoint" ]] && mountpoint="/"
 
     # 4. Verificar marcador de seguridad con resolución jerárquica
     local marker_path=""
@@ -352,20 +549,43 @@ device_model_validate_storage() {
 
     if marker_path=$(device_model_check_marker "$backup_dir" "$marker_name"); then
         storage_verified=true
-    elif marker_path=$(device_model_check_marker "$mountpoint" "$marker_name"); then
-        storage_verified=true
-        # Si el almacenamiento base es válido y backup_dir no tiene marcador pero el medio es escribible, auto-crear e inicializar
-        if [[ ! -f "$backup_dir/$marker_name" && -w "$mountpoint" ]]; then
-            mkdir -p "$backup_dir" 2>/dev/null || true
-            device_model_init_storage_marker "$backup_dir" "$marker_path" 2>/dev/null || true
+    else
+        # Comprobar directorios ascendentes hasta mountpoint o raíz
+        local check_dir
+        check_dir="$(dirname "$backup_dir")"
+        while [[ -n "$check_dir" && "$check_dir" != "/" && "$check_dir" != "." ]]; do
+            if marker_path=$(device_model_check_marker "$check_dir" "$marker_name"); then
+                storage_verified=true
+                break
+            fi
+            [[ "$check_dir" == "$mountpoint" ]] && break
+            check_dir="$(dirname "$check_dir")"
+        done
+
+        # Si se verificó un directorio ascendente, auto-crear backup_dir y marcador si es escribible
+        if [[ "$storage_verified" == "true" ]]; then
+            if mkdir -p "$backup_dir" 2>/dev/null && [[ -w "$backup_dir" ]]; then
+                device_model_init_storage_marker "$backup_dir" "$marker_path" 2>/dev/null || true
+            fi
         fi
-    elif device_model_list_targets "$mountpoint" "$marker_name" >/dev/null 2>&1; then
-        # Hay al menos un destino previo en este almacenamiento: el medio es legítimo
-        storage_verified=true
-        if [[ -w "$mountpoint" ]]; then
-            device_model_init_storage_marker "$mountpoint" "" 2>/dev/null || true
-            mkdir -p "$backup_dir" 2>/dev/null || true
-            device_model_init_storage_marker "$backup_dir" "$mountpoint/$marker_name" 2>/dev/null || true
+    fi
+
+    # Si aún no se verifica, comprobar si hay algún destino previo en storage_root o en mountpoint
+    if [[ "$storage_verified" != "true" ]]; then
+        local check_targets_dir="$storage_root"
+        if [[ -z "$check_targets_dir" || ! -d "$check_targets_dir" ]]; then
+            check_targets_dir="$mountpoint"
+        fi
+        if device_model_list_targets "$check_targets_dir" "$marker_name" >/dev/null 2>&1; then
+            storage_verified=true
+            if mkdir -p "$backup_dir" 2>/dev/null && [[ -w "$backup_dir" ]]; then
+                device_model_init_storage_marker "$backup_dir" "" 2>/dev/null || true
+            fi
+        elif [[ "$mountpoint" != "$check_targets_dir" && "$mountpoint" != "/" && "$mountpoint" != "/home" ]] && device_model_list_targets "$mountpoint" "$marker_name" >/dev/null 2>&1; then
+            storage_verified=true
+            if mkdir -p "$backup_dir" 2>/dev/null && [[ -w "$backup_dir" ]]; then
+                device_model_init_storage_marker "$backup_dir" "" 2>/dev/null || true
+            fi
         fi
     fi
 
@@ -374,7 +594,7 @@ device_model_validate_storage() {
         echo "ERROR_CODE=$DEV_ERR_NO_MARKER"
         echo "MOUNTPOINT=$mountpoint"
         echo "BACKUP_DIR=$backup_dir"
-        echo "MESSAGE=Marcador de seguridad '$marker_name' no encontrado en '$backup_dir' ni en '$mountpoint'."
+        echo "MESSAGE=Marcador de seguridad '$marker_name' no encontrado en '$backup_dir' ni en su almacenamiento base."
         return "$DEV_ERR_NO_MARKER"
     fi
 
@@ -397,7 +617,7 @@ device_model_validate_storage() {
 
     # 6. Obtener espacio disponible
     local space_info
-    space_info=$(device_model_get_space "$mountpoint")
+    space_info=$(device_model_get_space "$probe")
 
     # 7. Diagnóstico satisfactorio
     echo "STATUS=READY"
@@ -512,6 +732,34 @@ device_model_update_config_subdir() {
     else
         cp "$config_file" "$temp_cfg"
         echo "STORAGE_SUBDIR=\"$new_subdir\"" >> "$temp_cfg"
+    fi
+
+    mv -f "$temp_cfg" "$config_file"
+    return "$DEV_OK"
+}
+
+# ------------------------------------------------------------------------------
+# Función: device_model_update_config_destination
+# Descripción: Actualiza atómicamente la variable BACKUP_DESTINATION en config.conf.
+# Parámetros:
+#   $1 - Ruta al archivo config.conf
+#   $2 - Nuevo valor de BACKUP_DESTINATION (ej: ~/Backups/KeepMyConfig)
+# Retorno:
+#   0 en éxito, >0 en caso de fallo.
+# ------------------------------------------------------------------------------
+device_model_update_config_destination() {
+    local config_file="${1:-}"
+    local new_dest="${2:-}"
+
+    [[ -n "$config_file" && -f "$config_file" ]] || return "$DEV_ERR_CONFIG"
+    [[ -n "$new_dest" ]] || return "$DEV_ERR_CONFIG"
+
+    local temp_cfg="${config_file}.tmp.$$"
+    if grep -q '^BACKUP_DESTINATION=' "$config_file"; then
+        sed "s|^BACKUP_DESTINATION=.*|BACKUP_DESTINATION=\"$new_dest\"|" "$config_file" > "$temp_cfg"
+    else
+        cp "$config_file" "$temp_cfg"
+        echo "BACKUP_DESTINATION=\"$new_dest\"" >> "$temp_cfg"
     fi
 
     mv -f "$temp_cfg" "$config_file"

@@ -75,8 +75,41 @@ profile_model_list() {
 }
 
 # ------------------------------------------------------------------------------
+# Función: profile_model_init_default
+# Descripción: Asegura la existencia física de profiles/default/profile.conf
+#              regenerándolo con valores canónicos si fue eliminado (auto-healing).
+# Parámetros:
+#   $1 - (Opcional) Directorio de perfiles alternativo
+# Retorno:
+#   PROFILE_OK en éxito, PROFILE_ERR_IO en fallo.
+# ------------------------------------------------------------------------------
+profile_model_init_default() {
+    local profiles_dir="${1:-${PROFILES_DIR:-$_PROFILE_MODEL_DEFAULT_DIR}}"
+    local def_dir="$profiles_dir/default"
+    local def_conf="$def_dir/profile.conf"
+
+    if [[ ! -f "$def_conf" ]]; then
+        mkdir -p "$def_dir" 2>/dev/null || return "$PROFILE_ERR_IO"
+        cat <<'EOF' > "$def_conf"
+# ==============================================================================
+# KeepMyConfig - Perfil Predeterminado (Global)
+# ==============================================================================
+PROFILE_ID="default"
+PROFILE_NAME="Perfil Global / Predeterminado"
+PROFILE_DESCRIPTION="Entorno general base compartido por todos los perfiles"
+TARGET_SUBDIR=""
+DISABLED_MODULES=()
+EOF
+        chmod 644 "$def_conf" 2>/dev/null || true
+    fi
+
+    return "$PROFILE_OK"
+}
+
+# ------------------------------------------------------------------------------
 # Función: profile_model_get
 # Descripción: Parsea y valida los metadatos de un perfil en una subshell aislada.
+#              Auto-regenera profiles/default/profile.conf si fue eliminado.
 # Parámetros:
 #   $1 - ID del perfil
 #   $2 - (Opcional) Directorio de perfiles alternativo
@@ -94,14 +127,19 @@ profile_model_get() {
 
     if [[ "$profile_id" == "default" ]]; then
         local def_conf="$profiles_dir/default/profile.conf"
+        # Auto-healing preventivo si falta en disco
+        if [[ ! -f "$def_conf" ]]; then
+            profile_model_init_default "$profiles_dir" 2>/dev/null || true
+        fi
+
         if [[ -f "$def_conf" && -r "$def_conf" ]]; then
             (
                 unset PROFILE_ID PROFILE_NAME PROFILE_DESCRIPTION TARGET_SUBDIR DISABLED_MODULES
                 # shellcheck disable=SC1090
                 source "$def_conf" 2>/dev/null || exit "$PROFILE_ERR_SYNTAX"
                 echo "ID=${PROFILE_ID:-default}"
-                echo "NAME=${PROFILE_NAME:-Perfil por Defecto}"
-                echo "DESCRIPTION=${PROFILE_DESCRIPTION:-Entorno base global de KeepMyConfig}"
+                echo "NAME=${PROFILE_NAME:-Perfil Global / Predeterminado}"
+                echo "DESCRIPTION=${PROFILE_DESCRIPTION:-Entorno general base compartido por todos los perfiles}"
                 echo "TARGET_SUBDIR=${TARGET_SUBDIR:-}"
                 local disabled_joined=""
                 if [[ "$(declare -p DISABLED_MODULES 2>/dev/null)" =~ "declare -a" ]]; then
@@ -113,8 +151,8 @@ profile_model_get() {
             return $?
         else
             echo "ID=default"
-            echo "NAME=Perfil por Defecto"
-            echo "DESCRIPTION=Entorno base global de KeepMyConfig"
+            echo "NAME=Perfil Global / Predeterminado"
+            echo "DESCRIPTION=Entorno general base compartido por todos los perfiles"
             echo "TARGET_SUBDIR="
             echo "DISABLED_MODULES="
             return "$PROFILE_OK"
@@ -200,6 +238,67 @@ profile_model_sanitize_target_subdir() {
     fi
 
     echo "$clean"
+    return "$PROFILE_OK"
+}
+
+# ------------------------------------------------------------------------------
+# Función: profile_model_get_destination
+# Descripción: Resuelve el subdirectorio o ruta efectiva de backup para un perfil
+#              siguiendo el principio de convención sobre configuración (Zero-Config):
+#              - Si perfil es 'default': destino base (o TARGET_SUBDIR si se define)
+#              - Si perfil específico:
+#                * Si TARGET_SUBDIR está definido: base / TARGET_SUBDIR
+#                * Si TARGET_SUBDIR está vacío: base / <profile_id>
+# Parámetros:
+#   $1 - ID del perfil
+#   $2 - (Opcional) BACKUP_DESTINATION base
+#   $3 - (Opcional) Directorio de perfiles alternativo
+# Salida stdout:
+#   Ruta de destino o subdirectorio efectivo
+# Retorno:
+#   PROFILE_OK en éxito, código de error si el perfil es inválido
+# ------------------------------------------------------------------------------
+profile_model_get_destination() {
+    local profile_id="${1:-}"
+    local base_dest="${2:-}"
+    local profiles_dir="${3:-${PROFILES_DIR:-$_PROFILE_MODEL_DEFAULT_DIR}}"
+
+    [[ -n "$profile_id" ]] || return "$PROFILE_ERR_PARAM"
+    profile_model_validate_id "$profile_id" || return "$PROFILE_ERR_INVALID_ID"
+
+    local p_info
+    p_info=$(profile_model_get "$profile_id" "$profiles_dir") || return "$?"
+    local p_sub
+    p_sub=$(echo "$p_info" | grep '^TARGET_SUBDIR=' | cut -d'=' -f2-)
+    p_sub=$(profile_model_sanitize_target_subdir "$p_sub") || p_sub=""
+
+    local effective_sub=""
+    if [[ "$profile_id" == "default" ]]; then
+        if [[ -n "$p_sub" && "$p_sub" != "." ]]; then
+            effective_sub="$p_sub"
+        else
+            effective_sub=""
+        fi
+    else
+        if [[ -n "$p_sub" && "$p_sub" != "." ]]; then
+            effective_sub="$p_sub"
+        else
+            effective_sub="$profile_id"
+        fi
+    fi
+
+    if [[ -n "$base_dest" ]]; then
+        local resolved_base
+        resolved_base=$(device_model_resolve_destination "$base_dest" 2>/dev/null || echo "$base_dest")
+        if [[ -n "$effective_sub" ]]; then
+            echo "${resolved_base%/}/$effective_sub"
+        else
+            echo "${resolved_base%/}"
+        fi
+    else
+        echo "$effective_sub"
+    fi
+
     return "$PROFILE_OK"
 }
 

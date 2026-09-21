@@ -51,6 +51,7 @@ assert_contains "$help_out" "--list-profiles" "--help debe documentar la opción
 assert_contains "$help_out" "--list-templates" "--help debe documentar la opción --list-templates"
 assert_contains "$help_out" "--enable-template" "--help debe documentar la opción --enable-template"
 assert_contains "$help_out" "--export-template" "--help debe documentar la opción --export-template"
+assert_contains "$help_out" "--setup" "--help debe documentar la opción --setup"
 
 # Test 2: Invocación de --list-templates
 list_tmpl_out=$("${PROJECT_ROOT}/backup_manager.sh" --list-templates 2>&1)
@@ -217,6 +218,19 @@ assert_contains "$set_active_out" "Backups/Servidor_DAW" "set_active_target debe
 grep -q '^STORAGE_SUBDIR="Backups/Servidor_DAW"' "$MOCK_CONFIG"
 assert_eq "0" "$?" "MOCK_CONFIG debe contener el nuevo STORAGE_SUBDIR"
 
+# Test 11b: controller_handle_deploy_marker despliega marcador en destino
+mock_deploy_dest="$SANDBOX_DIR/DeployDestTest"
+deploy_out=$(controller_handle_deploy_marker "$mock_deploy_dest" "false")
+deploy_status=$?
+assert_eq "0" "$deploy_status" "controller_handle_deploy_marker debe retornar 0"
+if [[ -f "$mock_deploy_dest/.backup_storage_marker" && -d "$mock_deploy_dest/archives" && -d "$mock_deploy_dest/logs" ]]; then
+    echo "  [PASS] controller_handle_deploy_marker desplegó correctamente estructura y marcador"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo "  [FAIL] controller_handle_deploy_marker no desplegó marcador o estructura" >&2
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+
 # Test 12: TARGET_SUBDIR_OVERRIDE con backup
 TARGET_SUBDIR_OVERRIDE="Backups/Personal_PC"
 ctrl_override_bdir=$(_controller_get_backup_dir)
@@ -338,6 +352,35 @@ assert_eq "1" "$([[ -f "$MOCK_PROFILES_DIR/docente/modules.d/firefox.conf" ]] &&
 export_out=$(controller_handle_export_template "docente-excl" "false" "plantilla-docente")
 assert_eq "0" "$?" "export_template de docente-excl debe retornar 0"
 assert_eq "1" "$([[ -f "$SANDBOX_DIR/templates.d/plantilla-docente.conf" ]] && echo 1 || echo 0)" "plantilla-docente.conf debe existir en templates.d"
+
+# Test 26: controller_handle_set_backup_destination actualiza BACKUP_DESTINATION
+set_dest_status=0
+controller_handle_set_backup_destination "$MOCK_STORAGE/NuevosBackups" "false" || set_dest_status=$?
+assert_eq "0" "$set_dest_status" "set_backup_destination debe retornar 0"
+grep -q '^BACKUP_DESTINATION="'"$MOCK_STORAGE"'/NuevosBackups"' "$MOCK_CONFIG"
+assert_eq "0" "$?" "MOCK_CONFIG debe reflejar el nuevo BACKUP_DESTINATION"
+
+# Test 27: Asistente Onboarding en modo CLI inicializa destino, marcador y preferencias
+ONBOARD_CONFIG="${SANDBOX_DIR}/onboard_config.conf"
+cat << EOF > "$ONBOARD_CONFIG"
+INITIAL_SETUP_DONE="false"
+REMEMBER_LAST_PROFILE="true"
+ACTIVE_PROFILE="default"
+BACKUP_DESTINATION="~/Backups/KeepMyConfig"
+EOF
+
+CONTROLLER_CONFIG_FILE="$ONBOARD_CONFIG"
+# Simular entradas de usuario: '1' para opción por defecto y 's' para recordar perfil
+printf "1\ns\n" | controller_handle_onboarding_wizard "false" >/dev/null 2>&1
+onboard_exit=$?
+assert_eq "0" "$onboard_exit" "controller_handle_onboarding_wizard en CLI debe retornar 0"
+grep -q '^INITIAL_SETUP_DONE="true"' "$ONBOARD_CONFIG"
+assert_eq "0" "$?" "Onboarding debe marcar INITIAL_SETUP_DONE=true"
+grep -q '^REMEMBER_LAST_PROFILE="true"' "$ONBOARD_CONFIG"
+assert_eq "0" "$?" "Onboarding debe registrar REMEMBER_LAST_PROFILE=true"
+
+# Restaurar configuración de prueba
+CONTROLLER_CONFIG_FILE="$MOCK_CONFIG"
 
 
 echo "==============================================================="

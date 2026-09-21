@@ -86,7 +86,7 @@ assert_exit_code "$PROFILE_OK" $? "profile_model_get 'default' debe retornar PRO
 def_id=$(echo "$def_out" | grep '^ID=' | cut -d'=' -f2)
 def_name=$(echo "$def_out" | grep '^NAME=' | cut -d'=' -f2)
 assert_equals "default" "$def_id" "El ID por defecto debe ser 'default'"
-assert_equals "Perfil por Defecto" "$def_name" "El nombre por defecto debe coincidir"
+assert_equals "Perfil Global / Predeterminado" "$def_name" "El nombre por defecto debe coincidir"
 
 # ------------------------------------------------------------------------------
 # Test 3: Creación de perfiles (profile_model_create)
@@ -314,6 +314,40 @@ assert_equals "0" "$(echo "$work_disabled_after" | grep -qx 'global-app' && echo
 
 mod_list_work_restored=$(profile_model_list_modules "work" "$SANDBOX_DIR")
 assert_equals "1" "$(echo "$mod_list_work_restored" | grep -qx 'global-app' && echo 1 || echo 0)" "list_modules 'work' vuelve a incluir global-app"
+
+# ------------------------------------------------------------------------------
+# Test 18: profile_model_init_default y Auto-Healing
+# ------------------------------------------------------------------------------
+# Eliminar deliberadamente default/profile.conf
+rm -f "$SANDBOX_PROFILES/default/profile.conf"
+assert_equals "0" "$([ -f "$SANDBOX_PROFILES/default/profile.conf" ] && echo 1 || echo 0)" "default/profile.conf debe estar eliminado"
+
+# Invocar profile_model_get 'default' -> debe auto-regenerarse
+def_heal_out=$(profile_model_get "default" "$SANDBOX_PROFILES")
+assert_exit_code "$PROFILE_OK" $? "profile_model_get 'default' tras borrado debe retornar PROFILE_OK"
+assert_equals "1" "$([ -f "$SANDBOX_PROFILES/default/profile.conf" ] && echo 1 || echo 0)" "default/profile.conf debe regenerarse automáticamente (auto-healing)"
+
+# ------------------------------------------------------------------------------
+# Test 19: profile_model_get_destination (Zero-Config por Perfil)
+# ------------------------------------------------------------------------------
+# Caso A: Perfil default sin TARGET_SUBDIR -> destino base directo
+dest_default=$(profile_model_get_destination "default" "/tmp/test_backup_dest" "$SANDBOX_PROFILES")
+assert_equals "/tmp/test_backup_dest" "$dest_default" "Perfil default debe resolver a BACKUP_DESTINATION directo"
+
+# Caso B: Perfil sin TARGET_SUBDIR -> convención base / <id_perfil>
+profile_model_create "auto-zero" "Zero Config" "Sin subdirectorio" "" "$SANDBOX_PROFILES"
+dest_zero=$(profile_model_get_destination "auto-zero" "/tmp/test_backup_dest" "$SANDBOX_PROFILES")
+assert_equals "/tmp/test_backup_dest/auto-zero" "$dest_zero" "Perfil sin TARGET_SUBDIR debe resolver a BACKUP_DESTINATION/<id_perfil>"
+
+# Caso C: Perfil con TARGET_SUBDIR explícito -> base / TARGET_SUBDIR
+dest_work=$(profile_model_get_destination "work" "/tmp/test_backup_dest" "$SANDBOX_PROFILES")
+assert_equals "/tmp/test_backup_dest/Backups/Workstation" "$dest_work" "Perfil con TARGET_SUBDIR debe respetar la ruta configurada"
+
+# Caso D: Sin base_dest proporcionado -> retorna subdirectorio relativo
+sub_zero_rel=$(profile_model_get_destination "auto-zero" "" "$SANDBOX_PROFILES")
+assert_equals "auto-zero" "$sub_zero_rel" "Sin base_dest, get_destination debe retornar id_perfil relativo"
+sub_def_rel=$(profile_model_get_destination "default" "" "$SANDBOX_PROFILES")
+assert_equals "" "$sub_def_rel" "Sin base_dest, default debe retornar cadena vacía"
 
 # ==============================================================================
 # Resumen

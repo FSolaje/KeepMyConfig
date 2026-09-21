@@ -7,7 +7,28 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Breaking Changes
+- **Ruta Universal de Almacenamiento (`BACKUP_DESTINATION`):**
+  - Se eliminan de forma definitiva las directivas fragmentadas `STORAGE_ID_TYPE`, `STORAGE_ID_VALUE`, `STORAGE_SUBDIR` y `STORAGE_STATIC_FALLBACK` en `config/config.conf`.
+  - La ubicación del almacenamiento se define ahora exclusivamente a través de la directiva `BACKUP_DESTINATION`.
+  - **Convención Zero-Config por Perfil:** Todo perfil secundario guarda de forma automática sus copias en el subdirectorio `<BACKUP_DESTINATION>/<id_perfil>` sin necesidad de parametrización manual, mientras que el perfil `default` preserva la raíz de `<BACKUP_DESTINATION>`.
+
 ### Added
+- **Ruta Universal de Almacenamiento y Notación Semántica (`device_model.sh`):**
+  - Soporte unificado en `device_model_resolve_destination` para expansión de rutas locales (`~`, `$HOME`, `${HOME}`), rutas relativas y rutas externas montadas.
+  - Soporte de notación semántica de conveniencia `@media/<LABEL>/...` para enlazar discos externos por su etiqueta sin depender de la ruta fija asignada por el entorno de escritorio.
+  - Detección automática de soportes extraíbles en `device_model_detect_external_drives` escaneando `/media/$USER/*`, `/run/media/$USER/*` y particiones no del sistema en `lsblk`.
+  - Actualización atómica de destino con `device_model_update_config_destination`.
+- **Asistente de Configuración Inicial (Onboarding Wizard) y Flag `--setup` (`app_controller.sh`):**
+  - Flujo de primera ejecución activado automáticamente si `INITIAL_SETUP_DONE="false"`.
+  - Detección inteligente de discos externos montados y recomendación por defecto de ruta local segura (`~/Backups/KeepMyConfig`).
+  - Creación automática de la estructura de carpetas y despliegue del marcador de seguridad `.backup_storage_marker`.
+  - Pregunta de persistencia de sesión: selección de arranque recordando el último perfil activo (`REMEMBER_LAST_PROFILE="true"`) o iniciando siempre en `default` (`"false"`).
+  - Nuevo parámetro de consola `--setup` para ejecutar o reconfigurar el almacenamiento y preferencias en cualquier momento.
+  - Submenú de almacenamiento renovado en la Opción 8 de la TUI: cambio de ruta universal y relanzamiento del asistente de onboarding.
+- **Perfil Físico Predeterminado y Auto-Healing (`profile_model.sh`):**
+  - Existencia permanente del archivo físico `profiles/default/profile.conf`.
+  - Mecanismo de auto-recuperación transparente (*auto-healing*) en `profile_model_init_default` que recrea el archivo con valores canónicos ante borrados accidentales.
 - **Automatización CI/CD con GitHub Actions:**
   - Workflow de CI (`.github/workflows/ci.yml`) con verificación sintáctica de Bash (`bash -n`) y ejecución de pruebas unitarias en `ubuntu-latest` para pushes y pull requests a `main` y `develop`.
   - Workflow de Release (`.github/workflows/release.yml`) para creación automática de Releases en GitHub ante pushes de tags (`v*`), con detección de pre-releases (`-alpha`, `-beta`, `-rc`), generación de notas de versión y empaquetado de distribución `.tar.gz`.
