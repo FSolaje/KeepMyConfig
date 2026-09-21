@@ -236,6 +236,68 @@ rm -rf "$HIER_STORAGE" "$HIER_CFG"
 # Limpieza de temporales LOCAL_PATH
 rm -rf "$LOCAL_TARGET_DIR" "$LOCAL_CFG"
 
+# Test 20: device_model_resolve_destination normaliza rutas universales
+res_tilde=$(device_model_resolve_destination "~/Backups/KMCTest" "/home/usuario")
+assert_equals "/home/usuario/Backups/KMCTest" "$res_tilde" "resolve_destination debe expandir ~"
+
+res_home=$(device_model_resolve_destination "\$HOME/Backups/KMCTest" "/home/usuario")
+assert_equals "/home/usuario/Backups/KMCTest" "$res_home" "resolve_destination debe expandir \$HOME"
+
+res_rel=$(device_model_resolve_destination "Backups/KMCTest" "/home/usuario")
+assert_equals "/home/usuario/Backups/KMCTest" "$res_rel" "resolve_destination debe resolver ruta relativa respecto a HOME"
+
+res_abs=$(device_model_resolve_destination "/tmp/backups_directo" "/home/usuario")
+assert_equals "/tmp/backups_directo" "$res_abs" "resolve_destination debe respetar rutas absolutas"
+
+set +e
+device_model_resolve_destination "../escape" "/home/usuario" >/dev/null 2>&1
+res_trav_code=$?
+set -e
+assert_equals "1" "$res_trav_code" "resolve_destination debe rechazar directory traversal con '..'"
+
+# Test 21: device_model_detect_external_drives ejecuta con DEV_OK
+device_model_detect_external_drives >/dev/null 2>&1
+det_exit=$?
+assert_exit_code "$DEV_OK" "$det_exit" "detect_external_drives debe retornar DEV_OK"
+
+# Test 22: device_model_update_config_destination actualiza BACKUP_DESTINATION
+UNIV_CFG="/tmp/test_univ_cfg_$$.conf"
+cat <<EOF > "$UNIV_CFG"
+ACTIVE_PROFILE="default"
+BACKUP_DESTINATION="~/Backups/Inicial"
+EOF
+
+device_model_update_config_destination "$UNIV_CFG" "~/Backups/Actualizado"
+upd_dest_exit=$?
+assert_exit_code "$DEV_OK" "$upd_dest_exit" "update_config_destination debe retornar DEV_OK"
+grep -q '^BACKUP_DESTINATION="~/Backups/Actualizado"' "$UNIV_CFG"
+assert_equals "0" "$?" "config.conf debe contener el nuevo BACKUP_DESTINATION"
+
+# Test 23: device_model_validate_storage con BACKUP_DESTINATION nativo
+UNIV_DIR="/tmp/test_univ_storage_$$"
+mkdir -p "$UNIV_DIR"
+touch "$UNIV_DIR/.backup_storage_marker"
+
+cat <<EOF > "$UNIV_CFG"
+ACTIVE_PROFILE="default"
+BACKUP_DESTINATION="$UNIV_DIR"
+EOF
+
+UNIV_VAL_OUT=$(device_model_validate_storage "$UNIV_CFG")
+UNIV_VAL_EXIT=$?
+assert_exit_code "$DEV_OK" "$UNIV_VAL_EXIT" "validate_storage con BACKUP_DESTINATION nativo debe retornar DEV_OK"
+[[ "$UNIV_VAL_OUT" =~ STATUS=READY ]]
+assert_equals "0" "$?" "validate_storage con BACKUP_DESTINATION debe retornar STATUS=READY"
+
+# Test 24: validate_storage con BACKUP_DESTINATION y subcarpeta de perfil auto-creada
+UNIV_VAL_PROF_OUT=$(device_model_validate_storage "$UNIV_CFG" "PerfilDocente")
+UNIV_VAL_PROF_EXIT=$?
+assert_exit_code "$DEV_OK" "$UNIV_VAL_PROF_EXIT" "validate_storage con subdirectorio de perfil debe retornar DEV_OK"
+[[ -f "$UNIV_DIR/PerfilDocente/.backup_storage_marker" ]]
+assert_equals "0" "$?" "validate_storage debe desplegar el marcador en el destino de perfil"
+
+rm -rf "$UNIV_DIR" "$UNIV_CFG"
+
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
 if [[ $TESTS_FAILED -eq 0 ]]; then

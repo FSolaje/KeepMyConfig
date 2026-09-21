@@ -112,15 +112,7 @@ _controller_get_backup_dir() {
     if [[ -z "$effective_subdir" ]]; then
         local act_prof
         act_prof=$(_controller_get_active_profile)
-        if [[ "$act_prof" != "default" ]]; then
-            local p_info
-            p_info=$(profile_model_get "$act_prof" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null || true)
-            local p_sub
-            p_sub=$(echo "$p_info" | grep '^TARGET_SUBDIR=' | cut -d'=' -f2-)
-            if [[ -n "$p_sub" ]]; then
-                effective_subdir="$p_sub"
-            fi
-        fi
+        effective_subdir=$(profile_model_get_destination "$act_prof" "" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null || true)
     fi
 
     val_out=$(device_model_validate_storage "$(_controller_get_config_file)" "$effective_subdir") || status=$?
@@ -181,20 +173,6 @@ controller_handle_backup_all() {
     local is_tui="${1:-false}"
     local purge_override="${2:-auto}"
 
-    local backup_dir=""
-    local ret=0
-
-    backup_dir=$(_controller_get_backup_dir) || ret=$?
-    if (( ret != 0 )); then
-        local err_txt="No se detectó el SSD externo de backup o falta el archivo marcador .backup_storage_marker."
-        if [[ "$is_tui" == "true" ]]; then
-            whiptail_view_error "Error de Almacenamiento" "$err_txt"
-        else
-            ansi_view_error "$err_txt"
-        fi
-        return 2
-    fi
-
     # Verificar módulos activos en el perfil
     local active_mods=()
     local m
@@ -211,6 +189,20 @@ controller_handle_backup_all() {
             ansi_view_info "No hay módulos configurados para respaldar en el perfil '$act_prof'. Active módulos desde la biblioteca de plantillas con '--list-templates' y '--enable-template <id>'."
         fi
         return 0
+    fi
+
+    local backup_dir=""
+    local ret=0
+
+    backup_dir=$(_controller_get_backup_dir) || ret=$?
+    if (( ret != 0 )); then
+        local err_txt="No se detectó el destino de backup o falta el archivo marcador .backup_storage_marker."
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Error de Almacenamiento" "$err_txt"
+        else
+            ansi_view_error "$err_txt"
+        fi
+        return 2
     fi
 
     # Verificar si hay módulos sensibles en el perfil activo
@@ -678,17 +670,15 @@ _controller_show_device_diagnostics() {
     space_avail="${space_avail:-Desconocido}"
     space_total="${space_total:-Desconocido}"
 
-    local id_type="${STORAGE_ID_TYPE:-LABEL}"
-    local id_val="${STORAGE_ID_VALUE:-Desconocido}"
+    local bdest="${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}"
 
     if [[ "$is_tui" == "true" ]]; then
         local diag_txt="ESTADO DEL DISPOSITIVO / ALMACENAMIENTO:\n\n"
         diag_txt+="• Estado Global    : $status\n"
-        diag_txt+="• Tipo de Búsqueda : $id_type\n"
-        diag_txt+="• Identificador    : $id_val\n"
+        diag_txt+="• Destino Config   : $bdest\n"
         diag_txt+="• Punto de Montaje : ${mount_point:-No encontrado}\n"
         diag_txt+="• Directorio Backup: ${backup_dir:-N/A}\n"
-        diag_txt+="• Marcador SSD     : ${marker_path:-FALTA .backup_storage_marker}\n"
+        diag_txt+="• Marcador Destino : ${marker_path:-FALTA .backup_storage_marker}\n"
         diag_txt+="• Espacio Libre    : ${space_avail} de ${space_total}\n"
         diag_txt+="• Home a Respaldar : $TARGET_USER_HOME"
 
@@ -700,8 +690,7 @@ _controller_show_device_diagnostics() {
     else
         ansi_view_header "DIAGNÓSTICO DEL ALMACENAMIENTO DE BACKUP"
         ansi_view_key_value "ESTADO GLOBAL" "$status"
-        ansi_view_key_value "TIPO DE ID" "$id_type"
-        ansi_view_key_value "VALOR ID" "$id_val"
+        ansi_view_key_value "DESTINO CONFIG" "$bdest"
         ansi_view_key_value "PUNTO DE MONTAJE" "${mount_point:-No detectado}"
         ansi_view_key_value "DIRECTORIO BACKUP" "${backup_dir:-N/A}"
         ansi_view_key_value "MARCADOR SEGURIDAD" "${marker_path:-FALTA .backup_storage_marker}"
@@ -712,7 +701,47 @@ _controller_show_device_diagnostics() {
     return "$ret"
 }
 
-# Inicialización de Destino de Almacenamiento
+# Desplegar marcador de seguridad y estructura en el destino de backup
+controller_handle_deploy_marker() {
+    local target_dir="${1:-}"
+    local is_tui="${2:-false}"
+    local base_dir="${CONTROLLER_BASE_DIR:-}"
+
+    if [[ -z "$target_dir" ]]; then
+        local cfg_file="$(_controller_get_config_file)"
+        # shellcheck disable=SC1090
+        source "$cfg_file" 2>/dev/null || true
+        target_dir=$(device_model_resolve_destination "${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}")
+    else
+        target_dir=$(device_model_resolve_destination "$target_dir")
+    fi
+
+    local marker_src="${base_dir}/markers/.backup_storage_marker"
+    if [[ ! -f "$marker_src" ]]; then
+        local alt_marker
+        alt_marker=$(find "$base_dir" -maxdepth 3 -name ".backup_storage_marker" 2>/dev/null | head -n 1)
+        [[ -n "$alt_marker" && -f "$alt_marker" ]] && marker_src="$alt_marker"
+    fi
+
+    if mkdir -p "$target_dir/archives" "$target_dir/logs" 2>/dev/null && \
+       cp -f "$marker_src" "$target_dir/.backup_storage_marker" 2>/dev/null; then
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_msgbox "Marcador Desplegado" "Estructura y marcador .backup_storage_marker desplegados con éxito en:\n\n$target_dir"
+        else
+            ansi_view_success "Estructura y marcador desplegados con éxito en: $target_dir"
+        fi
+        return 0
+    else
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Error de Permisos" "No se pudo desplegar el marcador en '$target_dir'. Compruebe permisos de escritura."
+        else
+            ansi_view_error "No se pudo desplegar el marcador en '$target_dir'. Compruebe permisos de escritura."
+        fi
+        return 1
+    fi
+}
+
+# Inicialización de Destino de Almacenamiento (compatibilidad CLI)
 controller_handle_init_target() {
     local subdir="${1:-}"
     local set_default="${2:-false}"
@@ -737,10 +766,15 @@ controller_handle_init_target() {
         return 1
     fi
 
-    local storage_root
-    storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE:-LABEL}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+    local storage_root=""
+    if [[ -n "${STORAGE_ID_TYPE:-}" ]]; then
+        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+    fi
     if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
-        local err_msg="No se pudo localizar el almacenamiento configurado (${STORAGE_ID_TYPE:-LABEL}=${STORAGE_ID_VALUE:-DISCO_BACKUP})."
+        storage_root=$(device_model_resolve_destination "${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}")
+    fi
+    if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
+        local err_msg="No se pudo localizar el almacenamiento configurado."
         if [[ "$is_tui" == "true" ]]; then
             whiptail_view_error "Almacenamiento No Detectado" "$err_msg"
         else
@@ -783,10 +817,15 @@ controller_handle_init_target() {
 controller_handle_list_targets() {
     local is_tui="${1:-false}"
 
-    local storage_root
-    storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE:-LABEL}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+    local storage_root=""
+    if [[ -n "${STORAGE_ID_TYPE:-}" ]]; then
+        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+    fi
     if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
-        local err_msg="No se pudo localizar el almacenamiento configurado (${STORAGE_ID_TYPE:-LABEL}=${STORAGE_ID_VALUE:-DISCO_BACKUP})."
+        storage_root=$(device_model_resolve_destination "${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}")
+    fi
+    if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
+        local err_msg="No se pudo localizar el almacenamiento configurado."
         if [[ "$is_tui" == "true" ]]; then
             whiptail_view_error "Almacenamiento No Detectado" "$err_msg"
         else
@@ -838,8 +877,13 @@ controller_handle_set_active_target() {
     local target="${1:-}"
     local is_tui="${2:-false}"
 
-    local storage_root
-    storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE:-LABEL}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+    local storage_root=""
+    if [[ -n "${STORAGE_ID_TYPE:-}" ]]; then
+        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+    fi
+    if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
+        storage_root=$(device_model_resolve_destination "${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}")
+    fi
 
     if [[ "$is_tui" == "true" && -z "$target" ]]; then
         if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
@@ -898,6 +942,155 @@ controller_handle_set_active_target() {
     return 0
 }
 
+# Asistente interactivo de primera ejecución / onboarding
+controller_handle_onboarding_wizard() {
+    local is_tui="${1:-true}"
+    local cfg_file="$(_controller_get_config_file)"
+
+    if [[ "$is_tui" == "true" ]]; then
+        local welcome_msg="¡Bienvenido a KeepMyConfig!\n\n"
+        welcome_msg+="Un gestor modular de copias de seguridad y recuperación para Lliurex 25 / Ubuntu 24.04.\n\n"
+        welcome_msg+="• 100% libre de privilegios 'root': opera con los permisos de su usuario.\n"
+        welcome_msg+="• Cifrado robusto GPG AES-256 para módulos sensibles y purga segura con shred.\n"
+        welcome_msg+="• Compatible con unidades USB/SSD extraíbles y carpetas locales.\n\n"
+        welcome_msg+="A continuación configuraremos el destino de almacenamiento de sus copias de seguridad."
+        whiptail_view_msgbox "Bienvenido a KeepMyConfig" "$welcome_msg" || return 1
+
+        local detected
+        detected=$(device_model_detect_external_drives 2>/dev/null || true)
+        local menu_items=()
+        menu_items+=("1" "Carpeta Local: ~/Backups/KeepMyConfig (Predeterminado)")
+
+        local opt_idx=2
+        local -a opt_paths=()
+        opt_paths[1]="~/Backups/KeepMyConfig"
+
+        while IFS='|' read -r lbl mnt free; do
+            [[ -n "$lbl" && -n "$mnt" ]] || continue
+            menu_items+=("$opt_idx" "Disco Externo: $lbl ($free libres) en $mnt")
+            opt_paths["$opt_idx"]="$mnt/Backups/KeepMyConfig"
+            ((opt_idx++))
+        done <<< "$detected"
+
+        menu_items+=("$opt_idx" "Ruta Personalizada (Ingresar ruta manual)")
+        local manual_idx="$opt_idx"
+
+        local sel
+        sel=$(whiptail_view_menu "Configuración Inicial - Destino de Backup" "Seleccione dónde desea almacenar sus copias de seguridad:" "${menu_items[@]}") || return 1
+
+        local chosen_dest=""
+        if [[ "$sel" == "$manual_idx" ]]; then
+            chosen_dest=$(whiptail_view_input "Ruta Personalizada de Backup" "Ingrese la ruta del directorio para las copias (ej: ~/Backups o /media/...):" "~/Backups/KeepMyConfig") || return 1
+        else
+            chosen_dest="${opt_paths[$sel]:-~/Backups/KeepMyConfig}"
+        fi
+        [[ -n "$chosen_dest" ]] || chosen_dest="~/Backups/KeepMyConfig"
+
+        local resolved_dest
+        resolved_dest=$(device_model_resolve_destination "$chosen_dest") || resolved_dest="$HOME/Backups/KeepMyConfig"
+        mkdir -p "$resolved_dest" 2>/dev/null || true
+        device_model_init_storage_marker "$resolved_dest" "${CONTROLLER_BASE_DIR}/markers/.backup_storage_marker" 2>/dev/null || true
+        device_model_update_config_destination "$cfg_file" "$chosen_dest" 2>/dev/null || true
+
+        local remember_pref="true"
+        if whiptail_view_yesno "Preferencia de Perfil al Iniciar" "¿Desea que KeepMyConfig recuerde el último perfil utilizado en cada sesión?\n\n• Sí: Conserva el último perfil activo al volver a abrir la aplicación.\n• No: Inicia siempre en el perfil predeterminado 'default' (Recomendado para equipos compartidos o de aula)."; then
+            remember_pref="true"
+        else
+            remember_pref="false"
+        fi
+
+        sed -i "s|^REMEMBER_LAST_PROFILE=.*|REMEMBER_LAST_PROFILE=\"$remember_pref\"|" "$cfg_file" 2>/dev/null || true
+        sed -i "s|^INITIAL_SETUP_DONE=.*|INITIAL_SETUP_DONE=\"true\"|" "$cfg_file" 2>/dev/null || true
+
+        whiptail_view_msgbox "Configuración Completada" "¡Configuración inicial completada con éxito!\n\n• Destino configurado: $chosen_dest\n• Ruta física resuelta: $resolved_dest\n• Marcador de seguridad: Desplegado y verificado.\n• Recordar último perfil: $remember_pref\n\nPresione Aceptar para continuar."
+        return 0
+    else
+        ansi_view_header "ASISTENTE DE CONFIGURACIÓN INICIAL (CLI)"
+        echo "KeepMyConfig requiere definir la ruta de destino para sus copias de seguridad."
+        echo ""
+        echo "Opciones detectadas:"
+        echo "  [1] Carpeta Local: ~/Backups/KeepMyConfig (Predeterminado)"
+
+        local detected
+        detected=$(device_model_detect_external_drives 2>/dev/null || true)
+        local opt_idx=2
+        local -a opt_paths=()
+        opt_paths[1]="~/Backups/KeepMyConfig"
+
+        while IFS='|' read -r lbl mnt free; do
+            [[ -n "$lbl" && -n "$mnt" ]] || continue
+            echo "  [$opt_idx] Disco Externo: $lbl ($free libres) en $mnt"
+            opt_paths["$opt_idx"]="$mnt/Backups/KeepMyConfig"
+            ((opt_idx++))
+        done <<< "$detected"
+        echo "  [$opt_idx] Ingresar ruta personalizada manualmente"
+        local manual_idx="$opt_idx"
+        echo ""
+
+        local sel
+        read -r -p "Seleccione una opción [1]: " sel || true
+        sel="${sel:-1}"
+
+        local chosen_dest=""
+        if [[ "$sel" == "$manual_idx" ]]; then
+            read -r -p "Ingrese la ruta de destino: " chosen_dest || true
+        else
+            chosen_dest="${opt_paths[$sel]:-~/Backups/KeepMyConfig}"
+        fi
+        [[ -n "$chosen_dest" ]] || chosen_dest="~/Backups/KeepMyConfig"
+
+        local resolved_dest
+        resolved_dest=$(device_model_resolve_destination "$chosen_dest") || resolved_dest="$HOME/Backups/KeepMyConfig"
+        mkdir -p "$resolved_dest" 2>/dev/null || true
+        device_model_init_storage_marker "$resolved_dest" "${CONTROLLER_BASE_DIR}/markers/.backup_storage_marker" 2>/dev/null || true
+        device_model_update_config_destination "$cfg_file" "$chosen_dest" 2>/dev/null || true
+
+        echo ""
+        local rem_ans
+        read -r -p "¿Recordar el último perfil utilizado en cada sesión? (s/N): " rem_ans || true
+        local remember_pref="false"
+        if [[ "$rem_ans" =~ ^[sSyY] ]]; then
+            remember_pref="true"
+        fi
+
+        sed -i "s|^REMEMBER_LAST_PROFILE=.*|REMEMBER_LAST_PROFILE=\"$remember_pref\"|" "$cfg_file" 2>/dev/null || true
+        sed -i "s|^INITIAL_SETUP_DONE=.*|INITIAL_SETUP_DONE=\"true\"|" "$cfg_file" 2>/dev/null || true
+
+        ansi_view_success "Configuración completada exitosamente."
+        ansi_view_key_value "Destino Configurado" "$chosen_dest"
+        ansi_view_key_value "Ruta Resuelta" "$resolved_dest"
+        ansi_view_key_value "Recordar Perfil" "$remember_pref"
+        return 0
+    fi
+}
+
+controller_handle_set_backup_destination() {
+    local new_dest="${1:-}"
+    local is_tui="${2:-false}"
+    local cfg_file="$(_controller_get_config_file)"
+
+    if [[ "$is_tui" == "true" ]]; then
+        local cur_dest="${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}"
+        new_dest=$(whiptail_view_input "Destino de Backup" "Introduzca la nueva ruta de destino para las copias:" "$cur_dest") || return 0
+        [[ -n "$new_dest" ]] || return 0
+        local resolved
+        resolved=$(device_model_resolve_destination "$new_dest") || {
+            whiptail_view_error "Error de Destino" "La ruta especificada no es válida o no está montada."
+            return 1
+        }
+        mkdir -p "$resolved" 2>/dev/null || true
+        device_model_init_storage_marker "$resolved" "${CONTROLLER_BASE_DIR}/markers/.backup_storage_marker" 2>/dev/null || true
+        device_model_update_config_destination "$cfg_file" "$new_dest"
+        BACKUP_DESTINATION="$new_dest"
+        whiptail_view_msgbox "Destino Actualizado" "El destino de backup se ha actualizado a:\n$new_dest\n\nRuta física: $resolved"
+        return 0
+    else
+        [[ -n "$new_dest" ]] || return 1
+        device_model_update_config_destination "$cfg_file" "$new_dest"
+        return $?
+    fi
+}
+
 # 7. Diagnóstico y Gestión de Almacenamiento y Destinos
 controller_handle_device_check() {
     local is_tui="${1:-false}"
@@ -911,16 +1104,16 @@ controller_handle_device_check() {
         local choice
         choice=$(whiptail_view_menu "Gestión y Diagnóstico de Almacenamiento" "Seleccione una operación:" \
             "1" "Ver diagnóstico de almacenamiento y espacio libre" \
-            "2" "Listar carpetas de equipo en el almacenamiento" \
-            "3" "Cambiar carpeta de equipo activa (STORAGE_SUBDIR)" \
-            "4" "Inicializar nueva carpeta de equipo en el almacenamiento" \
+            "2" "Cambiar ruta de destino de backup (BACKUP_DESTINATION)" \
+            "3" "Asistente de configuración guiada (Onboarding)" \
+            "4" "Desplegar marcador de seguridad en destino actual" \
             "0" "Volver al Menú Principal") || return 0
 
         case "$choice" in
             1) _controller_show_device_diagnostics "true" ;;
-            2) controller_handle_list_targets "true" ;;
-            3) controller_handle_set_active_target "" "true" ;;
-            4) controller_handle_init_target "" "false" "true" ;;
+            2) controller_handle_set_backup_destination "" "true" ;;
+            3) controller_handle_onboarding_wizard "true" ;;
+            4) controller_handle_deploy_marker "" "true" ;;
             0) return 0 ;;
         esac
     done
@@ -1724,6 +1917,21 @@ controller_run_tui() {
         return 10
     fi
 
+    # Política de arranque: si REMEMBER_LAST_PROFILE es "false", arrancar siempre en 'default'
+    local rem_prof="${REMEMBER_LAST_PROFILE:-true}"
+    if [[ "$rem_prof" == "false" ]]; then
+        profile_model_set_active "default" "$(_controller_get_config_file)" 2>/dev/null || true
+    fi
+
+    # Comprobación de Onboarding Wizard en primera ejecución
+    local setup_done="${INITIAL_SETUP_DONE:-false}"
+    if [[ "$setup_done" == "false" ]]; then
+        controller_handle_onboarding_wizard "true"
+        # Recargar configuración tras el asistente
+        # shellcheck disable=SC1090
+        source "$(_controller_get_config_file)" 2>/dev/null || true
+    fi
+
     while true; do
         local act_prof
         act_prof=$(_controller_get_active_profile)
@@ -1778,6 +1986,7 @@ controller_run_cli() {
                 echo ""
                 echo "Diagnóstico y Gestión de Destinos:"
                 echo "  --check-device                                 Verificar detección de almacenamiento y marcador."
+                echo "  --setup                                        Asistente interactivo de configuración inicial."
                 echo "  --init-target <subdir> [--set-default]         Inicializar carpeta de equipo en el almacenamiento."
                 echo "  --list-targets                                 Listar destinos/carpetas con marcador en almacenamiento."
                 echo "  --set-active-target <subdir>                   Fijar subdirectorio activo en config/config.conf."
@@ -1841,6 +2050,10 @@ controller_run_cli() {
                 ;;
             --check-device)
                 action="check-device"
+                shift
+                ;;
+            --setup)
+                action="setup"
                 shift
                 ;;
             --init-target)
@@ -1934,6 +2147,9 @@ controller_run_cli() {
             ;;
         check-device)
             controller_handle_device_check "false"
+            ;;
+        setup)
+            controller_handle_onboarding_wizard "false"
             ;;
         init-target)
             local target_sub="${param_val:-${TARGET_SUBDIR_OVERRIDE:-}}"
