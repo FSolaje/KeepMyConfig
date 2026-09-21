@@ -1,8 +1,12 @@
 # Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
-> **Estado actual:** Versión Alfa **`v0.1.0-alpha.1`** completada, verificada y etiquetada en Git. Hitos 1 al 11 superados al 100%. Rama activa `develop` (árbol limpio y pruebas unitarias al 100%).  
-> **Paso inmediato para la próxima sesión:** Iniciar el **Hito 12** (Sistema de "Perfiles de Backup") creando la rama `dev/feature/backup-profiles`, redactar sus documentos SDD (`specs/backup_profiles/`) y actualizar los títulos a `KeepMyConfig`.
+> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hook pre-commit de 5 fases activo localmente y Workflows de GitHub Actions (`ci.yml` y `release.yml`) desplegados en `develop`.  
+> **Paso inmediato:** Iniciar el **Hito 12** (Sistema de "Perfiles de Backup") creando la rama `dev/feature/backup-profiles`, redactar sus documentos SDD (`specs/backup_profiles/`) y actualizar los títulos a `KeepMyConfig`.
+
+---
+
+## Hitos Completados:
 
 1. **Validación del Documento de Especificación:**
    - [x] Revisión del archivo `ESPECIFICACION.md` completada y aprobada con la inclusión de `PURGE_AFTER_BACKUP=true/false` para control atómico de purga segura con `shred -u`.
@@ -58,6 +62,9 @@
 - [x] **Definición de estándar SemVer:** Estructurar el versionado con prefijo `v` (`vMAJOR.MINOR.PATCH-PRERELEASE`) compatible con GitHub Releases.
 - [x] **Generación de Tag Anotado:** Creación del tag `v0.1.0-alpha.1` en Git para congelar el hito funcional del MVP base (MVC, GPG, Shred, TUI/CLI, Multi-target, Local Path).
 - [x] **Documentación de Publicación:** Registrar en `MANUAL_USUARIO.md` o documentación del repositorio el procedimiento de publicación de releases y pre-releases en GitHub.
+- [x] **Sincronización con GitHub:** Creación del repositorio remoto `FSolaje/KeepMyConfig`, subida de ramas `main`, `develop` y tag `v0.1.0-alpha.1`. Publicación de la Release en GitHub.
+- [x] **Hook de Calidad Pre-Commit:** Despliegue de `.git/hooks/pre-commit` con 5 barreras (conflictos, archivos pesados/secretos, sintaxis `bash -n`, SAST y tests unitarios).
+- [x] **Automatización GitHub Actions:** Creación de workflows `.github/workflows/ci.yml` (tests continuos) y `.github/workflows/release.yml` (publicación automática de releases y distribución `.tar.gz`).
 
 ### Hito 12: Sistema de "Perfiles de Backup" (Backup Profiles & Scoped Modules)
 - [ ] **Modelo de Perfiles:** Definición del perfil activo (`ACTIVE_PROFILE` en configuración y flag CLI `--profile <nombre>`).
