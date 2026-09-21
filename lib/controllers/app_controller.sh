@@ -1,17 +1,51 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Archivo: lib/controllers/app_controller.sh
-# Descripción: Controlador principal y orquestador MVC de BackupConfig.
+# Descripción: Controlador principal y orquestador MVC de KeepMyConfig.
 # ==============================================================================
 
 # Variables de entorno y contexto
 CONTROLLER_BASE_DIR=""
 CONTROLLER_INITIALIZED=0
 TARGET_SUBDIR_OVERRIDE=""
+ACTIVE_PROFILE_OVERRIDE=""
 CONTROLLER_CONFIG_FILE=""
 
 _controller_get_config_file() {
     echo "${CONTROLLER_CONFIG_FILE:-${CONTROLLER_BASE_DIR}/config/config.conf}"
+}
+
+_controller_get_active_profile() {
+    if [[ -n "$ACTIVE_PROFILE_OVERRIDE" ]]; then
+        echo "$ACTIVE_PROFILE_OVERRIDE"
+    else
+        profile_model_get_active "$(_controller_get_config_file)"
+    fi
+}
+
+_controller_get_module_dir() {
+    local mod_id="$1"
+    local act_prof
+    act_prof=$(_controller_get_active_profile)
+    local resolved_path
+    if resolved_path=$(profile_model_resolve_module "$mod_id" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null); then
+        dirname "$resolved_path"
+    else
+        echo "${CONTROLLER_BASE_DIR}/modules.d"
+    fi
+}
+
+_controller_get_module_info() {
+    local mod_id="$1"
+    local mod_dir
+    mod_dir=$(_controller_get_module_dir "$mod_id")
+    module_model_get "$mod_id" "$mod_dir"
+}
+
+_controller_list_modules() {
+    local act_prof
+    act_prof=$(_controller_get_active_profile)
+    profile_model_list_modules "$act_prof" "$CONTROLLER_BASE_DIR"
 }
 
 # Inicialización del entorno, configuración, modelos y vistas
@@ -45,6 +79,8 @@ controller_init() {
     # shellcheck disable=SC1091
     source "${CONTROLLER_BASE_DIR}/lib/models/device_model.sh"
     # shellcheck disable=SC1091
+    source "${CONTROLLER_BASE_DIR}/lib/models/profile_model.sh"
+    # shellcheck disable=SC1091
     source "${CONTROLLER_BASE_DIR}/lib/models/module_model.sh"
     # shellcheck disable=SC1091
     source "${CONTROLLER_BASE_DIR}/lib/models/crypto_model.sh"
@@ -71,7 +107,23 @@ controller_init() {
 _controller_get_backup_dir() {
     local val_out=""
     local status=0
-    val_out=$(device_model_validate_storage "$(_controller_get_config_file)" "${TARGET_SUBDIR_OVERRIDE:-}") || status=$?
+    local effective_subdir="${TARGET_SUBDIR_OVERRIDE:-}"
+
+    if [[ -z "$effective_subdir" ]]; then
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+        if [[ "$act_prof" != "default" ]]; then
+            local p_info
+            p_info=$(profile_model_get "$act_prof" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null || true)
+            local p_sub
+            p_sub=$(echo "$p_info" | grep '^TARGET_SUBDIR=' | cut -d'=' -f2-)
+            if [[ -n "$p_sub" ]]; then
+                effective_subdir="$p_sub"
+            fi
+        fi
+    fi
+
+    val_out=$(device_model_validate_storage "$(_controller_get_config_file)" "$effective_subdir") || status=$?
     if (( status != 0 )); then
         return "$status"
     fi
@@ -143,12 +195,19 @@ controller_handle_backup_all() {
         return 2
     fi
 
-    # Verificar si hay módulos sensibles
-    local sensitive_mods
-    sensitive_mods=$(module_model_filter_by_sensitivity "true") || true
-    local passphrase=""
+    # Verificar si hay módulos sensibles en el perfil activo
+    local has_sensitive="false"
+    for m in $(_controller_list_modules); do
+        local minfo
+        minfo=$(_controller_get_module_info "$m") || continue
+        if echo "$minfo" | grep -q 'IS_SENSITIVE=true'; then
+            has_sensitive="true"
+            break
+        fi
+    done
 
-    if [[ -n "$sensitive_mods" ]]; then
+    local passphrase=""
+    if [[ "$has_sensitive" == "true" ]]; then
         if [[ "$is_tui" == "true" ]]; then
             passphrase=$(whiptail_view_password_confirm "Cifrado de Módulos Sensibles" "Introduzca la contraseña GPG AES-256 para proteger sus datos:") || return 1
         else
@@ -163,16 +222,36 @@ controller_handle_backup_all() {
     if [[ "$is_tui" == "false" ]]; then
         ansi_view_header "INICIANDO RESPALDO COMPLETO"
         ansi_view_info "Destino del respaldo: $backup_dir"
+        ansi_view_info "Perfil activo: $(_controller_get_active_profile)"
     fi
 
-    local report
-    report=$(backup_model_run_all "$backup_dir" "$TARGET_USER_HOME" "$passphrase" "$purge_override")
-    ret=$?
+    local act_prof
+    act_prof=$(_controller_get_active_profile)
+    local report=""
+
+    if [[ "$act_prof" == "default" ]]; then
+        report=$(backup_model_run_all "$backup_dir" "$TARGET_USER_HOME" "$passphrase" "$purge_override")
+        ret=$?
+    else
+        local total_err=0
+        local force_p="false"
+        local no_p="false"
+        [[ "$purge_override" == "true" ]] && force_p="true"
+        [[ "$purge_override" == "false" ]] && no_p="true"
+        for m in $(_controller_list_modules); do
+            local m_dir
+            m_dir=$(_controller_get_module_dir "$m")
+            local m_out
+            local m_ret=0
+            m_out=$(backup_model_run "$m" "$backup_dir" "$TARGET_USER_HOME" "$passphrase" "$force_p" "$no_p" "$m_dir") || m_ret=$?
+            report+="$m_out"$'\n'
+            (( m_ret != 0 )) && ((total_err++))
+        done
+        (( total_err == 0 )) && ret=0 || ret=1
+    fi
 
     # Analizar purga post-backup en módulos sensibles
-    local all_mods
-    all_mods=$(module_model_list) || true
-    for m in $all_mods; do
+    for m in $(_controller_list_modules); do
         _controller_check_sensitive_purge_warning "$m" "$is_tui"
     done
 
@@ -216,18 +295,31 @@ controller_handle_backup_tag() {
         return 2
     fi
 
-    # Verificar si la etiqueta contiene módulos sensibles
-    local tag_mods
-    tag_mods=$(module_model_filter_by_tag "$tag") || true
+    # Identificar módulos de la etiqueta dentro del perfil activo
+    local tag_mods=()
     local has_sensitive="false"
-    for m in $tag_mods; do
+    for m in $(_controller_list_modules); do
         local minfo
-        minfo=$(module_model_get "$m") || continue
-        if echo "$minfo" | grep -q 'IS_SENSITIVE=true'; then
-            has_sensitive="true"
-            break
-        fi
+        minfo=$(_controller_get_module_info "$m") || continue
+        local tags_str
+        tags_str=$(echo "$minfo" | grep '^TAGS=' | cut -d'=' -f2-)
+        IFS=',' read -r -a t_arr <<< "$tags_str"
+        for t in "${t_arr[@]}"; do
+            if [[ "$t" == "$tag" ]]; then
+                tag_mods+=("$m")
+                if echo "$minfo" | grep -q 'IS_SENSITIVE=true'; then
+                    has_sensitive="true"
+                fi
+                break
+            fi
+        done
     done
+
+    if [[ ${#tag_mods[@]} -eq 0 ]]; then
+        local err_txt="No se encontraron módulos asociados a la etiqueta '$tag' en el perfil activo."
+        [[ "$is_tui" == "true" ]] && whiptail_view_error "Etiqueta Vacía" "$err_txt" || ansi_view_error "$err_txt"
+        return 2
+    fi
 
     local passphrase=""
     if [[ "$has_sensitive" == "true" ]]; then
@@ -238,11 +330,32 @@ controller_handle_backup_tag() {
         fi
     fi
 
-    local report
-    report=$(backup_model_run_by_tag "$tag" "$backup_dir" "$TARGET_USER_HOME" "$passphrase" "$purge_override")
-    ret=$?
+    local act_prof
+    act_prof=$(_controller_get_active_profile)
+    local report=""
 
-    for m in $tag_mods; do
+    if [[ "$act_prof" == "default" ]]; then
+        report=$(backup_model_run_by_tag "$tag" "$backup_dir" "$TARGET_USER_HOME" "$passphrase" "$purge_override")
+        ret=$?
+    else
+        local total_err=0
+        local force_p="false"
+        local no_p="false"
+        [[ "$purge_override" == "true" ]] && force_p="true"
+        [[ "$purge_override" == "false" ]] && no_p="true"
+        for m in "${tag_mods[@]}"; do
+            local m_dir
+            m_dir=$(_controller_get_module_dir "$m")
+            local m_out
+            local m_ret=0
+            m_out=$(backup_model_run "$m" "$backup_dir" "$TARGET_USER_HOME" "$passphrase" "$force_p" "$no_p" "$m_dir") || m_ret=$?
+            report+="$m_out"$'\n'
+            (( m_ret != 0 )) && ((total_err++))
+        done
+        (( total_err == 0 )) && ret=0 || ret=1
+    fi
+
+    for m in "${tag_mods[@]}"; do
         _controller_check_sensitive_purge_warning "$m" "$is_tui"
     done
 
@@ -265,11 +378,11 @@ controller_handle_backup_module() {
     if [[ -z "$module_id" ]]; then
         if [[ "$is_tui" == "true" ]]; then
             local all_mods
-            all_mods=$(module_model_list) || true
+            all_mods=$(_controller_list_modules) || true
             local mod_items=()
             for m in $all_mods; do
                 local minfo
-                minfo=$(module_model_get "$m") || continue
+                minfo=$(_controller_get_module_info "$m") || continue
                 local mname
                 mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
                 mod_items+=("$m" "$mname" "OFF")
@@ -291,7 +404,7 @@ controller_handle_backup_module() {
     fi
 
     local minfo
-    minfo=$(module_model_get "$module_id") || {
+    minfo=$(_controller_get_module_info "$module_id") || {
         local err_txt="El módulo '$module_id' no existe o está corrupto."
         [[ "$is_tui" == "true" ]] && whiptail_view_error "Módulo Inválido" "$err_txt" || ansi_view_error "$err_txt"
         return 3
@@ -314,8 +427,10 @@ controller_handle_backup_module() {
         no_purge="true"
     fi
 
+    local m_dir
+    m_dir=$(_controller_get_module_dir "$module_id")
     local report
-    report=$(backup_model_run "$module_id" "$backup_dir" "$TARGET_USER_HOME" "$passphrase" "$force_purge" "$no_purge" "$MODULES_DIR")
+    report=$(backup_model_run "$module_id" "$backup_dir" "$TARGET_USER_HOME" "$passphrase" "$force_purge" "$no_purge" "$m_dir")
     ret=$?
 
     _controller_check_sensitive_purge_warning "$module_id" "$is_tui"
@@ -382,11 +497,11 @@ controller_handle_restore_module() {
     if [[ -z "$module_id" ]]; then
         if [[ "$is_tui" == "true" ]]; then
             local all_mods
-            all_mods=$(module_model_list) || true
+            all_mods=$(_controller_list_modules) || true
             local mod_items=()
             for m in $all_mods; do
                 local minfo
-                minfo=$(module_model_get "$m") || continue
+                minfo=$(_controller_get_module_info "$m") || continue
                 local mname
                 mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
                 mod_items+=("$m" "$mname" "OFF")
@@ -414,9 +529,12 @@ controller_handle_restore_module() {
         timestamp=$(whiptail_view_menu "Histórico de Respaldos" "Seleccione la versión a restaurar:" "${ts_items[@]}") || return 1
     fi
 
+    local m_dir
+    m_dir=$(_controller_get_module_dir "$module_id")
+
     # Resolver si el archivo está cifrado
     local arch_info
-    arch_info=$(restore_model_find_archive "$module_id" "$backup_dir" "$timestamp" "$MODULES_DIR") || {
+    arch_info=$(restore_model_find_archive "$module_id" "$backup_dir" "$timestamp" "$m_dir") || {
         local err_txt="No se localizó el archivo de respaldo para '$module_id' en la fecha seleccionada."
         [[ "$is_tui" == "true" ]] && whiptail_view_error "Archivo Faltante" "$err_txt" || ansi_view_error "$err_txt"
         return 3
@@ -437,7 +555,7 @@ controller_handle_restore_module() {
     fi
 
     local report
-    report=$(restore_model_restore_module "$module_id" "$backup_dir" "$TARGET_USER_HOME" "$timestamp" "$passphrase" "$MODULES_DIR")
+    report=$(restore_model_restore_module "$module_id" "$backup_dir" "$TARGET_USER_HOME" "$timestamp" "$passphrase" "$m_dir")
     ret=$?
 
     if [[ "$is_tui" == "true" ]]; then
@@ -933,6 +1051,276 @@ controller_handle_modules_admin() {
 }
 
 # ==============================================================================
+# 9. Gestión de Perfiles de Backup
+# ==============================================================================
+
+controller_handle_list_profiles() {
+    local is_tui="${1:-false}"
+    local profiles_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}"
+    local profiles
+    profiles=$(profile_model_list "$profiles_dir") || true
+    local act_prof
+    act_prof=$(_controller_get_active_profile)
+
+    if [[ "$is_tui" == "true" ]]; then
+        local list_txt="Perfiles de Backup Registrados:\n\n"
+        while IFS= read -r p; do
+            [[ -n "$p" ]] || continue
+            local p_info
+            p_info=$(profile_model_get "$p" "$profiles_dir" 2>/dev/null || true)
+            local p_name p_desc p_sub
+            p_name=$(echo "$p_info" | grep '^NAME=' | cut -d'=' -f2-)
+            p_desc=$(echo "$p_info" | grep '^DESCRIPTION=' | cut -d'=' -f2-)
+            p_sub=$(echo "$p_info" | grep '^TARGET_SUBDIR=' | cut -d'=' -f2-)
+
+            local marker=" "
+            if [[ "$p" == "$act_prof" ]]; then
+                marker="*"
+            fi
+            list_txt+="[$marker] $p - ${p_name:-$p}\n"
+            [[ -n "$p_desc" ]] && list_txt+="    Descripción: $p_desc\n"
+            [[ -n "$p_sub" ]] && list_txt+="    Destino específico: $p_sub\n"
+            list_txt+="\n"
+        done <<< "$profiles"
+        whiptail_view_msgbox "Perfiles de Backup" "$list_txt"
+    else
+        ansi_view_header "PERFILES DE BACKUP CONFIGURADOS"
+        while IFS= read -r p; do
+            [[ -n "$p" ]] || continue
+            local p_info
+            p_info=$(profile_model_get "$p" "$profiles_dir" 2>/dev/null || true)
+            local p_name p_desc p_sub
+            p_name=$(echo "$p_info" | grep '^NAME=' | cut -d'=' -f2-)
+            p_desc=$(echo "$p_info" | grep '^DESCRIPTION=' | cut -d'=' -f2-)
+            p_sub=$(echo "$p_info" | grep '^TARGET_SUBDIR=' | cut -d'=' -f2-)
+
+            local active_tag=""
+            if [[ "$p" == "$act_prof" ]]; then
+                active_tag=" [ACTIVO]"
+            fi
+            local details="${p_name:-$p}$active_tag"
+            [[ -n "$p_sub" ]] && details+=" (Destino: $p_sub)"
+            ansi_view_key_value "$p" "$details"
+            if [[ -n "$p_desc" ]]; then
+                echo "    Descripción: $p_desc"
+            fi
+        done <<< "$profiles"
+    fi
+    return 0
+}
+
+controller_handle_set_active_profile() {
+    local profile_id="${1:-}"
+    local is_tui="${2:-false}"
+    local profiles_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}"
+
+    if [[ "$is_tui" == "true" && -z "$profile_id" ]]; then
+        local profiles
+        profiles=$(profile_model_list "$profiles_dir") || true
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+
+        local p_items=()
+        while IFS= read -r p; do
+            [[ -n "$p" ]] || continue
+            local p_info
+            p_info=$(profile_model_get "$p" "$profiles_dir" 2>/dev/null || true)
+            local p_name
+            p_name=$(echo "$p_info" | grep '^NAME=' | cut -d'=' -f2-)
+            local st="OFF"
+            [[ "$p" == "$act_prof" ]] && st="ON"
+            p_items+=("$p" "${p_name:-$p}" "$st")
+        done <<< "$profiles"
+
+        profile_id=$(whiptail_view_radiolist "Seleccionar Perfil Activo" "Elija el perfil de backup predeterminado:" "${p_items[@]}") || return 0
+        [[ -z "$profile_id" ]] && return 0
+    fi
+
+    if [[ -z "$profile_id" ]]; then
+        ansi_view_error "Debe especificar el identificador de perfil (ej: --set-active-profile default)."
+        return 1
+    fi
+
+    # Validar que el perfil exista
+    if ! profile_model_get "$profile_id" "$profiles_dir" >/dev/null 2>&1; then
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Perfil no encontrado" "El perfil '$profile_id' no existe o está corrupto."
+        else
+            ansi_view_error "El perfil '$profile_id' no existe o está corrupto."
+        fi
+        return "$PROFILE_ERR_NOT_FOUND"
+    fi
+
+    if profile_model_set_active "$profile_id" "$(_controller_get_config_file)"; then
+        ACTIVE_PROFILE_OVERRIDE=""
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_msgbox "Perfil Actualizado" "El perfil activo se ha establecido en:\n$profile_id"
+        else
+            ansi_view_success "Perfil activo actualizado en config.conf: ACTIVE_PROFILE=\"$profile_id\""
+        fi
+        return 0
+    else
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Error" "No se pudo actualizar el perfil activo en config.conf."
+        else
+            ansi_view_error "No se pudo actualizar el perfil activo en config.conf."
+        fi
+        return "$PROFILE_ERR_IO"
+    fi
+}
+
+controller_handle_create_profile() {
+    local profile_id="${1:-}"
+    local name="${2:-}"
+    local desc="${3:-}"
+    local target_subdir="${4:-}"
+    local is_tui="${5:-false}"
+    local profiles_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}"
+
+    if [[ "$is_tui" == "true" && -z "$profile_id" ]]; then
+        profile_id=$(whiptail_view_input "Nuevo Perfil" "Identificador único (alfanumérico, ej: docente, dev):") || return 0
+        [[ -z "$profile_id" ]] && return 0
+
+        name=$(whiptail_view_input "Nuevo Perfil" "Nombre descriptivo:" "$profile_id") || return 0
+        desc=$(whiptail_view_input "Nuevo Perfil" "Descripción del perfil:" "") || return 0
+        target_subdir=$(whiptail_view_input "Nuevo Perfil" "Subcarpeta de backup asociada (opcional, ej: Backups/Docente):" "") || return 0
+    fi
+
+    if [[ -z "$profile_id" ]]; then
+        ansi_view_error "Debe especificar un ID para el nuevo perfil."
+        return 1
+    fi
+
+    if ! profile_model_validate_id "$profile_id"; then
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "ID Inválido" "El identificador solo puede contener letras, números, guiones y guiones bajos."
+        else
+            ansi_view_error "El ID de perfil '$profile_id' no es válido (solo [a-zA-Z0-9_-])."
+        fi
+        return "$PROFILE_ERR_INVALID_ID"
+    fi
+
+    local status=0
+    profile_model_create "$profile_id" "$name" "$desc" "$target_subdir" "$profiles_dir" || status=$?
+    if (( status != 0 )); then
+        local err_msg="No se pudo crear el perfil."
+        if (( status == PROFILE_ERR_ALREADY_EXISTS )); then
+            err_msg="El perfil '$profile_id' ya existe."
+        fi
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Error al crear perfil" "$err_msg"
+        else
+            ansi_view_error "$err_msg"
+        fi
+        return "$status"
+    fi
+
+    if [[ "$is_tui" == "true" ]]; then
+        if whiptail_view_yesno "Perfil Creado" "El perfil '$profile_id' se ha creado correctamente.\n\n¿Desea establecerlo como perfil activo ahora?"; then
+            controller_handle_set_active_profile "$profile_id" "true"
+        fi
+    else
+        ansi_view_success "Perfil '$profile_id' creado correctamente en ${profiles_dir}/${profile_id}."
+    fi
+    return 0
+}
+
+controller_handle_profiles_admin() {
+    local is_tui="${1:-true}"
+    local profiles_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}"
+
+    if [[ "$is_tui" != "true" ]]; then
+        ansi_view_info "Para administrar perfiles use los subcomandos CLI: --list-profiles, --set-active-profile, --create-profile."
+        return 0
+    fi
+
+    while true; do
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+
+        local choice
+        choice=$(whiptail_view_menu "Gestión de Perfiles [Activo: $act_prof]" "Seleccione una acción:" \
+            "1" "Ver detalles del perfil activo" \
+            "2" "Cambiar perfil activo" \
+            "3" "Crear un nuevo perfil" \
+            "4" "Listar recetas y módulos del perfil activo" \
+            "5" "Eliminar un perfil" \
+            "0" "Volver al Menú Principal") || return 0
+
+        case "$choice" in
+            1)
+                local p_info
+                p_info=$(profile_model_get "$act_prof" "$profiles_dir" 2>/dev/null || true)
+                whiptail_view_msgbox "Detalles del Perfil '$act_prof'" "$p_info"
+                ;;
+            2)
+                controller_handle_set_active_profile "" "true"
+                ;;
+            3)
+                controller_handle_create_profile "" "" "" "" "true"
+                ;;
+            4)
+                local mods
+                mods=$(_controller_list_modules) || true
+                local mod_list_txt="Módulos visibles para el perfil '$act_prof':\n\n"
+                while IFS= read -r m; do
+                    [[ -n "$m" ]] || continue
+                    local scope="[Global]"
+                    if [[ "$act_prof" != "default" ]]; then
+                        if [[ -f "${profiles_dir}/${act_prof}/modules.d/${m}.conf" ]]; then
+                            if [[ -f "${CONTROLLER_BASE_DIR}/modules.d/${m}.conf" ]]; then
+                                scope="[Override]"
+                            else
+                                scope="[Exclusivo]"
+                            fi
+                        fi
+                    fi
+                    local minfo
+                    minfo=$(_controller_get_module_info "$m" 2>/dev/null || true)
+                    local mname
+                    mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
+                    mod_list_txt+="• $m : $mname $scope\n"
+                done <<< "$mods"
+                whiptail_view_msgbox "Módulos del Perfil '$act_prof'" "$mod_list_txt"
+                ;;
+            5)
+                local profiles
+                profiles=$(profile_model_list "$profiles_dir") || true
+                local del_items=()
+                while IFS= read -r p; do
+                    [[ -n "$p" ]] || continue
+                    if [[ "$p" != "default" && "$p" != "$act_prof" ]]; then
+                        del_items+=("$p" "Perfil: $p" "OFF")
+                    fi
+                done <<< "$profiles"
+
+                if [[ ${#del_items[@]} -eq 0 ]]; then
+                    whiptail_view_msgbox "Eliminar Perfil" "No hay otros perfiles disponibles para eliminar (no se puede eliminar 'default' ni el perfil actualmente activo)."
+                    continue
+                fi
+
+                local to_delete
+                to_delete=$(whiptail_view_radiolist "Eliminar Perfil" "Seleccione el perfil a borrar:" "${del_items[@]}") || continue
+                [[ -z "$to_delete" ]] && continue
+
+                if whiptail_view_yesno "Confirmar Eliminación" "¿Está completamente seguro de eliminar el perfil '$to_delete' y todas sus recetas específicas?\nEsta acción no se puede deshacer."; then
+                    local del_status=0
+                    profile_model_delete "$to_delete" "$profiles_dir" || del_status=$?
+                    if (( del_status == 0 )); then
+                        whiptail_view_msgbox "Perfil Eliminado" "El perfil '$to_delete' ha sido eliminado correctamente."
+                    else
+                        whiptail_view_error "Error" "No se pudo eliminar el perfil '$to_delete'."
+                    fi
+                fi
+                ;;
+            0)
+                return 0
+                ;;
+        esac
+    done
+}
+
+# ==============================================================================
 # Bucles Principales (TUI y CLI)
 # ==============================================================================
 
@@ -946,8 +1334,10 @@ controller_run_tui() {
     fi
 
     while true; do
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
         local choice
-        choice=$(whiptail_view_main_menu) || break
+        choice=$(whiptail_view_main_menu "$act_prof") || break
 
         case "$choice" in
             1) controller_handle_backup_all "true" "auto" ;;
@@ -958,6 +1348,7 @@ controller_run_tui() {
             6) controller_handle_restore_all "true" ;;
             7) controller_handle_modules_admin "true" ;;
             8) controller_handle_device_check "true" ;;
+            9) controller_handle_profiles_admin "true" ;;
             0) break ;;
             *) whiptail_view_error "Opción no reconocida" "La opción seleccionada no es válida." ;;
         esac
@@ -1002,6 +1393,14 @@ controller_run_cli() {
                 echo "  --target-subdir <subdir>                       Usar destino temporal para la operación actual."
                 echo "  --list-modules                                 Listar módulos configurados y su estado."
                 echo "  --list-tags                                    Listar catálogo de etiquetas activas."
+                echo ""
+                echo "Gestión de Perfiles de Backup:"
+                echo "  --profile <id>                                 Usar perfil temporal para la operación actual."
+                echo "  --list-profiles                                Listar todos los perfiles disponibles."
+                echo "  --set-active-profile <id>                      Fijar perfil activo en config/config.conf."
+                echo "  --create-profile <id>                          Crear un nuevo perfil de backup."
+                echo ""
+                echo "Ayuda:"
                 echo "  -h, --help                                     Mostrar este menú de ayuda."
                 return 0
                 ;;
@@ -1070,6 +1469,24 @@ controller_run_cli() {
                 param_val="${2:-}"
                 shift 2 || true
                 ;;
+            --profile)
+                ACTIVE_PROFILE_OVERRIDE="${2:-}"
+                shift 2 || true
+                ;;
+            --list-profiles)
+                action="list-profiles"
+                shift
+                ;;
+            --set-active-profile)
+                action="set-active-profile"
+                param_val="${2:-}"
+                shift 2 || true
+                ;;
+            --create-profile)
+                action="create-profile"
+                param_val="${2:-}"
+                shift 2 || true
+                ;;
             --list-modules)
                 action="list-modules"
                 shift
@@ -1119,18 +1536,39 @@ controller_run_cli() {
             local target_sub="${param_val:-${TARGET_SUBDIR_OVERRIDE:-}}"
             controller_handle_set_active_target "$target_sub" "false"
             ;;
+        list-profiles)
+            controller_handle_list_profiles "false"
+            ;;
+        set-active-profile)
+            controller_handle_set_active_profile "$param_val" "false"
+            ;;
+        create-profile)
+            controller_handle_create_profile "$param_val" "$param_val" "Perfil creado desde CLI" "" "false"
+            ;;
         list-modules)
-            ansi_view_header "MÓDULOS REGISTRADOS"
+            local act_prof
+            act_prof=$(_controller_get_active_profile)
+            ansi_view_header "MÓDULOS REGISTRADOS (Perfil: $act_prof)"
             local mods
-            mods=$(module_model_list) || true
+            mods=$(_controller_list_modules) || true
             for m in $mods; do
                 local minfo
-                minfo=$(module_model_get "$m") || continue
+                minfo=$(_controller_get_module_info "$m") || continue
                 local mname
                 mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
                 local msens
                 msens=$(echo "$minfo" | grep '^IS_SENSITIVE=' | cut -d'=' -f2- || echo "false")
-                ansi_view_key_value "$m" "$mname (Sensible: $msens)"
+                local scope="[Global]"
+                if [[ "$act_prof" != "default" ]]; then
+                    if [[ -f "${CONTROLLER_BASE_DIR}/profiles/${act_prof}/modules.d/${m}.conf" ]]; then
+                        if [[ -f "${CONTROLLER_BASE_DIR}/modules.d/${m}.conf" ]]; then
+                            scope="[Override]"
+                        else
+                            scope="[Exclusivo]"
+                        fi
+                    fi
+                fi
+                ansi_view_key_value "$m" "$mname $scope (Sensible: $msens)"
             done
             return 0
             ;;

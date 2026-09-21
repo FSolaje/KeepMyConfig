@@ -156,7 +156,11 @@ whiptail_view_password_confirm() {
 
 # Menú Principal del Gestor de Backup y Recuperación
 whiptail_view_main_menu() {
-    local title="SISTEMA DE BACKUP Y RECUPERACIÓN - LLIUREX 25"
+    local profile_name="${1:-}"
+    local title="KeepMyConfig - Gestor de Backup y Recuperación"
+    if [[ -n "$profile_name" ]]; then
+        title="KeepMyConfig [Perfil: $profile_name]"
+    fi
     local prompt="Seleccione la operación que desea realizar:"
     local choice=""
     local status=0
@@ -171,7 +175,8 @@ whiptail_view_main_menu() {
         "5" "[RESTORE]  Restauración Selectiva (Módulo / Histórico)" \
         "6" "[RESTORE]  Restauración Total" \
         "7" "[MODULES]  Administrar Módulos y Etiquetas" \
-        "8" "[CONFIG]   Gestión de Almacenamiento y Diagnóstico" \
+        "8" "[STORAGE]  Gestión de Almacenamiento y Diagnóstico" \
+        "9" "[PROFILES] Gestión de Perfiles de Backup" \
         "0" "[SALIR]    Salir del gestor" \
         3>&1 1>&2 2>&3)
     status=$?
