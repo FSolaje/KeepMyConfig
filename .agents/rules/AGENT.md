@@ -4,7 +4,7 @@ trigger: always_on
 
 # Directrices y Parámetros del Agente (AGENT.md)
 
-Este documento define las reglas de comportamiento, estándares de desarrollo, gobernanza Git y parámetros operativos para el agente de IA en el proyecto **BackupConfig**.
+Este documento define las reglas de comportamiento, estándares de desarrollo, gobernanza Git y parámetros operativos para el agente de IA en el proyecto **KeepMyConfig**.
 
 ---
 
@@ -185,4 +185,16 @@ Con cada commit o integración de rama en `develop` o `main`, se evaluará el im
    - Leer su contenido para retomar el contexto exacto antes de realizar cualquier acción.
 2. **Al finalizar un hito o sesión:**
    - Actualizar `PROXIMOS_PASOS.md` reflejando las tareas completadas, el estado del código y los pasos inmediatos siguientes.
+
+---
+
+## 10. Mantenimiento Mandatorio de la Documentación Pública (README.md y MANUAL_USUARIO.md)
+
+Tras el desarrollo, especificación e integración de cada nueva característica o funcionalidad (`feature`):
+1. **Actualización Obligatoria de `README.md`:**
+   - Reflejar cualquier cambio en las capacidades principales, tabla de características, requisitos o comandos del repositorio.
+2. **Actualización Obligatoria de `MANUAL_USUARIO.md`:**
+   - Documentar de forma detallada el flujo de usuario correspondiente a la nueva funcionalidad, incluyendo ejemplos de uso en TUI (menús, opciones de Whiptail) y CLI (nuevos flags o parámetros).
+3. **Criterio de Aceptación Pre-Commit:**
+   - Ninguna feature se considerará finalizada ni se solicitará autorización de commit al usuario sin que `README.md` y `MANUAL_USUARIO.md` estén plenamente sincronizados y actualizados con los cambios introducidos.
 

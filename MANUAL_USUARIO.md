@@ -264,9 +264,10 @@ El sistema verificará la presencia de `whiptail` y abrirá el menú principal d
 
 #### Opción 7: `[MODULES] Administrar Módulos y Etiquetas`
 - **¿Qué hace?:** Abre un subasistente interactivo que permite:
-  - **Inspeccionar módulos:** Ver las rutas, etiquetas y estado de purga de cualquier módulo.
-  - **Crear un nuevo módulo:** Asistente paso a paso que pide el identificador, rutas a respaldar, etiquetas y nivel de seguridad, generando automáticamente el archivo `.conf` en `modules.d/`.
-  - **Eliminar un módulo:** Da de baja un archivo de receta.
+  - **Inspeccionar módulos:** Ver las rutas, etiquetas, nivel de seguridad y estado de purga de cualquier módulo disponible para el perfil activo, etiquetado visualmente como `[Global]` o `[Perfil: <id>]`.
+  - **Crear un nuevo módulo con selector de ámbito:** Asistente paso a paso que solicita identificador, rutas a respaldar, etiquetas y nivel de seguridad. Si el perfil activo es distinto de `default`, permite elegir si el módulo se registra en el **Catálogo Global (`modules.d/`)** (visible en todos los perfiles) o como **Exclusivo del Perfil Activo (`profiles/<activo>/modules.d/`)**.
+  - **Sanitización automática de rutas:** Al ingresar rutas de ficheros (ej. `$HOME/Documentos`, `~/Descargas/`), el sistema normaliza automáticamente las rutas a formato relativo respecto a `$HOME`, eliminando barras redundantes y previniendo errores de empaquetado.
+  - **Eliminar un módulo:** Da de baja un archivo de receta de su ámbito correspondiente (`modules.d/` o `profiles/<activo>/modules.d/`).
   - **Añadir etiquetas:** Enriquecer el catálogo `config/default_tags.conf`.
 
 #### Opción 8: `[STORAGE] Gestión de Almacenamiento y Diagnóstico`
