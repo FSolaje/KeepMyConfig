@@ -7,6 +7,11 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Added
+- **Automatización CI/CD con GitHub Actions:**
+  - Workflow de CI (`.github/workflows/ci.yml`) con verificación sintáctica de Bash (`bash -n`) y ejecución de pruebas unitarias en `ubuntu-latest` para pushes y pull requests a `main` y `develop`.
+  - Workflow de Release (`.github/workflows/release.yml`) para creación automática de Releases en GitHub ante pushes de tags (`v*`), con detección de pre-releases (`-alpha`, `-beta`, `-rc`), generación de notas de versión y empaquetado de distribución `.tar.gz`.
+
 ### Planned
 - Sistema de "Perfiles de Backup" (Hito 12: perfiles de máquina con resolución en cascada, override y módulos exclusivos).
 - Soporte para almacenamiento remoto (Hito 13: SSH, SFTP y Rsync sin privilegios root).
