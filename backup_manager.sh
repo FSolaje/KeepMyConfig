@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# BackupConfig - Gestor de Respaldo y Recuperación Modular en Bash (MVC)
+# KeepMyConfig - Gestor de Respaldo y Recuperación Modular en Bash (MVC)
 # Entorno objetivo: Lliurex 25 / Ubuntu 24.04 (Sin privilegios de root)
 # ==============================================================================
 

@@ -1,52 +1,61 @@
-# Gestor de Backup y Recuperación Modular en Terminal (MVC en Bash)
+# KeepMyConfig - Gestor de Backup y Recuperación Modular en Terminal (MVC en Bash)
 
 Sistema modular y desacoplado de copias de seguridad e histórico para terminal, diseñado específicamente para entornos educativos y corporativos con permisos restringidos (sin `sudo`) como **Lliurex 25 (Ubuntu 24.04 LTS)**.
 
-Permite respaldar, cifrar, purgar y restaurar configuraciones del sistema y aplicaciones en un disco externo (SSD/USB) de forma atómica o por lotes, garantizando la persistencia de datos ante restauraciones periódicas del SAI.
+Permite respaldar, cifrar, purgar y restaurar configuraciones del sistema y aplicaciones en almacenamiento externo o universal (SSD/USB/`LOCAL_PATH`) de forma atómica o por lotes, garantizando la persistencia de datos ante restauraciones periódicas del SAI o congelación de discos.
 
 ---
 
 ## Características Principales
 
 - **Arquitectura MVC en Bash:**
-  - **Modelos (`lib/models/`):** Lógica pura de empaquetado, cálculo de sumas SHA-256, *diffs*, cifrado y validaciones.
-  - **Vistas (`lib/views/`):** Interfaz desacoplada basada en `whiptail` para menús, checklists, barras de progreso y peticiones de contraseñas.
+  - **Modelos (`lib/models/`):** Lógica pura de empaquetado, sumas SHA-256, *diffs*, cifrado GPG, perfiles y validaciones.
+  - **Vistas (`lib/views/`):** Interfaz desacoplada basada en `whiptail` para menús, checklists, barras de progreso y formateo ANSI.
   - **Controlador (`lib/controllers/`):** Enrutador de eventos que orquesta la ejecución tanto en modo interactivo (TUI) como desatendido (CLI Headless).
+- **Sistema de Perfiles de Backup & Scoped Modules (`profiles/`):**
+  - Soporte de múltiples perfiles de trabajo (ej. `docente`, `desarrollo`, `default`).
+  - Resolución jerárquica en cascada: módulos específicos del perfil tienen precedencia (*override*) sobre módulos globales.
+  - Soporte para módulos exclusivos por perfil y deduplicación automática.
+  - Vinculación opcional de carpetas de destino por perfil (`TARGET_SUBDIR`).
 - **Módulos Atómicos e Independientes (`modules.d/`):**
   - Cada aplicación o configuración es una receta independiente (`.conf`).
-  - Soporta separar aplicaciones complejas en perfiles no sensibles y sensibles (ej. `vscode-standard` vs `vscode-sensitive`).
+  - Desacoplamiento de aplicaciones complejas en perfiles estándar y sensibles (ej. `vscode-standard` vs `vscode-sensitive`).
 - **Sistema de Etiquetas Dinámicas:**
-  - Permite agrupar respaldos y restauraciones por etiquetas predefinidas (`dev`, `sensitive`, `system`, `office`) o personalizadas.
+  - Agrupación de respaldos y restauraciones por etiquetas (`dev`, `sensitive`, `system`, etc.).
 - **Gestión Efímera de Datos Sensibles (*Vault & Shred*):**
   - Cifrado simétrico robusto mediante **GPG (AES-256)**.
-  - Purga segura en disco local mediante `shred -u -z -n 3` tras verificar el respaldo en el SSD.
+  - Purga segura en disco local mediante `shred -u -z -n 3` tras verificar el respaldo.
   - Restauración instantánea de datos sensibles con una única orden al inicio de la jornada de trabajo.
-- **Seguridad de Dispositivo y Marcadores:**
-  - Validación de montaje del disco externo mediante `UUID`, `LABEL` o ruta estática.
-  - Comprobación de archivos testigo (`.backup_storage_marker`) para evitar escrituras en carpetas locales si el SSD no está montado.
+- **Seguridad de Dispositivo y Almacenamiento Universal:**
+  - Soporte para discos externos (`UUID`, `LABEL`) y almacenamiento local/red (`LOCAL_PATH`).
+  - Comprobación mandatoria de archivos testigo (`.backup_storage_marker`) contra escrituras fantasma.
 - **Histórico con Marcas de Tiempo y Auditoría:**
   - Nomenclatura uniforme: `AAAAMMDD_HHMMSS`.
-  - Generación de `manifest.log` con inventario de ficheros, hashes SHA-256 y detección de diferencias (*añadidos, modificados, eliminados*) respecto al respaldo precedente.
+  - Generación de `manifest.log` con inventario de ficheros, hashes SHA-256 y bitácora `backup_history.log`.
 - **100% Nativo en Linux:**
-  - Sin dependencias de compilación ni librerías de terceros (`bash`, `whiptail`, `tar`, `zstd`, `gpg`, `shred`, `rsync`).
+  - Sin dependencias de compilación ni librerías de terceros (`bash`, `whiptail`, `tar`, `zstd`, `gpg`, `shred`).
 
 ---
 
 ## Estructura del Proyecto
 
 ```text
-BackupConfig/
+KeepMyConfig/
 ├── backup_manager.sh        # Ejecutable principal (TUI / CLI)
 ├── config/
-│   ├── config.conf          # Configuración general (dispositivo, rutas)
+│   ├── config.conf          # Configuración general (dispositivo, rutas, perfil activo)
 │   └── default_tags.conf    # Catálogo de etiquetas
-├── modules.d/               # Recetas individuales de backup (.conf)
+├── modules.d/               # Recetas individuales globales de backup (.conf)
+├── profiles/                # Perfiles específicos y módulos con ámbito (scoped modules)
 ├── lib/
-│   ├── models/              # Lógica de negocio (device, module, backup, restore, crypto)
+│   ├── models/              # Lógica de negocio (device, profile, module, backup, restore, crypto)
 │   ├── views/               # Interfaz TUI (whiptail) y formateo ANSI
 │   └── controllers/         # Controlador de aplicación y enrutador CLI
 ├── markers/                 # Archivos testigo (.backup_storage_marker)
-├── ESPECIFICACION.md        # Documento formal de especificación técnica (SDD)
+├── specs/                   # Especificaciones guiadas por requerimientos (SDD)
+├── tests/                   # Suites de pruebas unitarias automatizadas
+├── MANUAL_USUARIO.md        # Manual exhaustivo de usuario y administración
+├── CHANGELOG.md             # Registro de cambios siguiendo SemVer
 ├── README.md                # Documentación del proyecto
 └── .gitignore               # Exclusiones de control de versiones
 ```

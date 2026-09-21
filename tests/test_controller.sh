@@ -46,6 +46,10 @@ help_out=$("${PROJECT_ROOT}/backup_manager.sh" --help 2>&1)
 assert_contains "$help_out" "GESTOR DE BACKUP Y RECUPERACIÓN" "--help debe mostrar encabezado descriptivo"
 assert_contains "$help_out" "--backup-all" "--help debe documentar la opción --backup-all"
 assert_contains "$help_out" "--restore-sensitive" "--help debe documentar la opción --restore-sensitive"
+assert_contains "$help_out" "--profile" "--help debe documentar la opción --profile"
+assert_contains "$help_out" "--list-profiles" "--help debe documentar la opción --list-profiles"
+assert_contains "$help_out" "--set-active-profile" "--help debe documentar la opción --set-active-profile"
+assert_contains "$help_out" "--create-profile" "--help debe documentar la opción --create-profile"
 
 # Test 2: Invocación de --list-modules
 list_mods_out=$("${PROJECT_ROOT}/backup_manager.sh" --list-modules 2>&1)
@@ -216,6 +220,58 @@ assert_contains "$saved_mod_info" "IS_SENSITIVE=true" "IS_SENSITIVE debe ser tru
 assert_contains "$saved_mod_info" "PURGE_AFTER_BACKUP=true" "PURGE_AFTER_BACKUP debe ser true"
 assert_contains "$saved_mod_info" "PATHS=Documentos/Pruebas_Macros" "La ruta debe registrarse correctamente"
 
+# Test 14: controller_handle_create_profile crea perfil en sandbox
+MOCK_PROFILES_DIR="${SANDBOX_DIR}/profiles"
+mkdir -p "$MOCK_PROFILES_DIR"
+PROFILES_DIR="$MOCK_PROFILES_DIR"
+create_prof_out=$(controller_handle_create_profile "docente" "Perfil Docente" "Entorno educativo" "Backups/Docente" "false")
+create_prof_status=$?
+assert_eq "0" "$create_prof_status" "controller_handle_create_profile debe retornar 0"
+assert_contains "$create_prof_out" "docente" "Debe confirmar creación de docente"
+
+if [[ -f "$MOCK_PROFILES_DIR/docente/profile.conf" && -d "$MOCK_PROFILES_DIR/docente/modules.d" ]]; then
+    echo "  [PASS] Directorio y profile.conf creados en el sandbox"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo "  [FAIL] No se creó el archivo profile.conf del nuevo perfil" >&2
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+
+# Test 15: controller_handle_list_profiles lista default y docente
+list_prof_out=$(controller_handle_list_profiles "false")
+list_prof_status=$?
+assert_eq "0" "$list_prof_status" "controller_handle_list_profiles debe retornar 0"
+assert_contains "$list_prof_out" "default" "Listado debe contener perfil default"
+assert_contains "$list_prof_out" "docente" "Listado debe contener perfil docente"
+
+# Test 16: controller_handle_set_active_profile actualiza ACTIVE_PROFILE
+set_prof_out=$(controller_handle_set_active_profile "docente" "false")
+set_prof_status=$?
+assert_eq "0" "$set_prof_status" "controller_handle_set_active_profile debe retornar 0"
+assert_contains "$set_prof_out" "docente" "Debe confirmar activación de docente"
+grep -q '^ACTIVE_PROFILE="docente"' "$MOCK_CONFIG"
+assert_eq "0" "$?" "MOCK_CONFIG debe reflejar ACTIVE_PROFILE=docente"
+
+# Test 17: Módulo exclusivo del perfil docente resuelto en cascada
+cat << 'EOF' > "$MOCK_PROFILES_DIR/docente/modules.d/custom-eval.conf"
+MODULE_ID="custom-eval"
+MODULE_NAME="Plantillas de Evaluación"
+MODULE_TAGS=("docente" "eval")
+MODULE_PATHS=(".config/eval_templates")
+IS_SENSITIVE=false
+PURGE_AFTER_BACKUP=false
+POST_RESTORE_HOOK=""
+EOF
+
+active_mods=$(_controller_list_modules)
+assert_contains "$active_mods" "custom-eval" "_controller_list_modules debe incluir módulo exclusivo custom-eval"
+assert_contains "$active_mods" "test-app" "_controller_list_modules debe mantener visible el módulo global test-app"
+
+# Test 18: Invocación CLI backup_manager.sh --list-profiles
+cli_list_prof=$("${PROJECT_ROOT}/backup_manager.sh" --list-profiles 2>&1)
+assert_contains "$cli_list_prof" "PERFILES DE BACKUP CONFIGURADOS" "backup_manager.sh --list-profiles debe mostrar encabezado"
+assert_contains "$cli_list_prof" "default" "backup_manager.sh --list-profiles debe listar default"
+
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
 
@@ -225,3 +281,4 @@ if (( TESTS_FAILED > 0 )); then
 fi
 
 echo "RESULTADO: TODAS LAS PRUEBAS UNITARIAS DEL CONTROLADOR HAN PASADO."
+

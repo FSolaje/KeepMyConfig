@@ -11,9 +11,24 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - **Automatización CI/CD con GitHub Actions:**
   - Workflow de CI (`.github/workflows/ci.yml`) con verificación sintáctica de Bash (`bash -n`) y ejecución de pruebas unitarias en `ubuntu-latest` para pushes y pull requests a `main` y `develop`.
   - Workflow de Release (`.github/workflows/release.yml`) para creación automática de Releases en GitHub ante pushes de tags (`v*`), con detección de pre-releases (`-alpha`, `-beta`, `-rc`), generación de notas de versión y empaquetado de distribución `.tar.gz`.
+- **Sistema de Perfiles de Backup & Scoped Modules (Hito 12):**
+  - **Modelo `profile_model.sh`:** Lógica pura de negocio para gestión CRUD de perfiles de backup (`profile_model_create`, `profile_model_get`, `profile_model_delete`, `profile_model_list`).
+  - **Resolución en Cascada y Scoped Modules:** Resolución jerárquica de recetas (`profiles/<perfil>/modules.d/` prevalece sobre `modules.d/` global), permitiendo sobrescritura (*override*) y módulos exclusivos con aislamiento estricto.
+  - **Deduplicación Automática:** Listado unificado de módulos (`profile_model_list_modules`) con deduplicación y ordenación alfabética.
+  - **Vinculación Perfil-Destino:** Posibilidad de asociar un `TARGET_SUBDIR` específico a cada perfil (ej. `Backups/Docente` o `Backups/Desarrollo`).
+  - **Persistencia Atómica de Perfil Activo:** Manejo de `ACTIVE_PROFILE` en `config/config.conf` vía `profile_model_set_active` y `profile_model_get_active`.
+  - **Integración en Controlador y CLI:**
+    - Flags `--profile <id>` para sobrescritura de sesión en cualquier comando.
+    - Flags `--list-profiles`, `--set-active-profile <id>` y `--create-profile <id>`.
+    - Indicador de ámbito (`[Global]`, `[Override]`, `[Exclusivo]`) en `--list-modules`.
+  - **Integración TUI con Whiptail:**
+    - Opción 9 en menú principal: *[PROFILES] Gestión de Perfiles de Backup*.
+    - Visualización del perfil activo en el título del menú principal (`KeepMyConfig [Perfil: <id>]`).
+    - Submenú completo para inspección, cambio de perfil activo, creación asistida, visualización de módulos con estado y borrado seguro de perfiles.
+  - **Suite de Pruebas Unitarias:** 41 pruebas específicas en `tests/test_profile_model.sh` y 18 pruebas adicionales de integración en `tests/test_controller.sh`.
+  - **Rebranding a KeepMyConfig:** Unificación de identidad y nombres en títulos de consola, diálogos de interfaz, cabeceras y scripts.
 
 ### Planned
-- Sistema de "Perfiles de Backup" (Hito 12: perfiles de máquina con resolución en cascada, override y módulos exclusivos).
 - Soporte para almacenamiento remoto (Hito 13: SSH, SFTP y Rsync sin privilegios root).
 
 ## [0.1.0-alpha.1] - 2026-09-20

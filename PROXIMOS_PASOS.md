@@ -2,7 +2,7 @@
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
 > **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hook pre-commit de 5 fases activo localmente y Workflows de GitHub Actions (`ci.yml` y `release.yml`) desplegados en `develop`.  
-> **Paso inmediato:** Iniciar el **Hito 12** (Sistema de "Perfiles de Backup") creando la rama `dev/feature/backup-profiles`, redactar sus documentos SDD (`specs/backup_profiles/`) y actualizar los títulos a `KeepMyConfig`.
+> **Paso inmediato:** Validar y realizar commit en `dev/feature/backup-profiles` para consolidar el **Hito 12**, integrar en `develop` e iniciar el **Hito 13** (Almacenamiento Remoto SSH/SFTP/Rsync).
 
 ---
 
@@ -53,29 +53,26 @@
     - [x] Nueva prueba unitaria añadida en `tests/test_controller.sh` (Test 13).
     - [x] 8/8 suites de pruebas superadas y escáner SAST limpio.
     - [x] Integración en rama `develop` completada.
+11. **Política de Versionado SemVer y Lanzamiento Alfa (`v0.1.0-alpha.1`):**
+    - [x] Definición de estándar SemVer compatible con GitHub Releases.
+    - [x] Generación de Tag Anotado `v0.1.0-alpha.1` en Git.
+    - [x] Sincronización con GitHub: Repositorio remoto `FSolaje/KeepMyConfig`, subida de ramas `main`, `develop` y tag `v0.1.0-alpha.1`. Release publicada en GitHub.
+    - [x] Hook de Calidad Pre-Commit de 5 barreras en `.git/hooks/pre-commit`.
+    - [x] Automatización GitHub Actions: Workflows `ci.yml` y `release.yml`.
+12. **Sistema de Perfiles de Backup & Scoped Modules (`dev/feature/backup-profiles`):**
+    - [x] **Documentos SDD:** `spec.md`, `plan.md` y `tasks.md` aprobados en `specs/backup_profiles/`.
+    - [x] **Modelo `profile_model.sh`:** CRUD de perfiles, validación de IDs, persistencia atómica de `ACTIVE_PROFILE` en `config.conf`.
+    - [x] **Resolución en Cascada:** Módulos de perfil (`profiles/<perfil>/modules.d/`) prevalecen sobre módulos globales (`modules.d/`) y soporte de recetas exclusivas.
+    - [x] **Deduplicación:** Listado unificado `profile_model_list_modules`.
+    - [x] **Vinculación a Destinos:** Soporte de `TARGET_SUBDIR` específico por perfil.
+    - [x] **Integración CLI y TUI:** Flags `--profile`, `--list-profiles`, `--set-active-profile`, `--create-profile`, y Opción 9 en menú TUI de `whiptail`.
+    - [x] **Unificación de Identidad `KeepMyConfig`:** Actualización de banners, títulos, cabeceras, `README.md` y `MANUAL_USUARIO.md`.
+    - [x] **Batería de Pruebas Unitarias:** 9 suites de pruebas unitarias al 100% de éxito (incluyendo 41 tests de `profile_model` y 48 de `controller`).
+    - [x] **Escáner SAST:** 0 alertas en 77 archivos auditados.
 
 ---
 
 ## Hoja de Ruta Inmediata y Futuras Funcionalidades (Roadmap):
-
-### Hito 11: Política de Versionado SemVer y Lanzamiento Alfa (`v0.1.0-alpha.1`)
-- [x] **Definición de estándar SemVer:** Estructurar el versionado con prefijo `v` (`vMAJOR.MINOR.PATCH-PRERELEASE`) compatible con GitHub Releases.
-- [x] **Generación de Tag Anotado:** Creación del tag `v0.1.0-alpha.1` en Git para congelar el hito funcional del MVP base (MVC, GPG, Shred, TUI/CLI, Multi-target, Local Path).
-- [x] **Documentación de Publicación:** Registrar en `MANUAL_USUARIO.md` o documentación del repositorio el procedimiento de publicación de releases y pre-releases en GitHub.
-- [x] **Sincronización con GitHub:** Creación del repositorio remoto `FSolaje/KeepMyConfig`, subida de ramas `main`, `develop` y tag `v0.1.0-alpha.1`. Publicación de la Release en GitHub.
-- [x] **Hook de Calidad Pre-Commit:** Despliegue de `.git/hooks/pre-commit` con 5 barreras (conflictos, archivos pesados/secretos, sintaxis `bash -n`, SAST y tests unitarios).
-- [x] **Automatización GitHub Actions:** Creación de workflows `.github/workflows/ci.yml` (tests continuos) y `.github/workflows/release.yml` (publicación automática de releases y distribución `.tar.gz`).
-
-### Hito 12: Sistema de "Perfiles de Backup" (Backup Profiles & Scoped Modules)
-- [ ] **Modelo de Perfiles:** Definición del perfil activo (`ACTIVE_PROFILE` en configuración y flag CLI `--profile <nombre>`).
-- [ ] **Jerarquía y Precedencia de Módulos:**
-  - Módulos globales en `modules.d/` (disponibles para todos los entornos).
-  - Módulos específicos en `profiles/<perfil>/modules.d/`:
-    - *Sobrescritura (Override):* Si coincide el ID/nombre con uno global, se ejecuta la versión del perfil.
-    - *Exclusivos:* Si un módulo sólo pertenece a un perfil, no aparece ni se ejecuta en perfiles ajenos.
-- [ ] **Vinculación Perfil-Destino:** Cada perfil puede asociar su propio `TARGET_SUBDIR` (ej. `Backups/Lliurex25` vs `Backups/Personal_PC`).
-- [ ] **Interfaz TUI/CLI:** Selector de perfil activo en TUI y soporte `--profile` en línea de comandos.
-- [ ] **Pruebas Unitarias:** Suites de test para validar la resolución en cascada, precedencia y aislamiento de recetas.
 
 ### Hito 13: Almacenamiento Remoto (SSH, SFTP, Rsync)
 - [ ] **Ampliación de `STORAGE_ID_TYPE`:** Añadir soportes `SSH`, `SFTP` y `RSYNC`.
@@ -83,3 +80,4 @@
 - [ ] **Validación Remota del Marcador:** Verificación de `.backup_storage_marker` en destino remoto mediante canal seguro.
 - [ ] **Transferencia Eficiente:** Estrategia de sincronización o montaje (FUSE `sshfs` o canalización `rsync`/tuberías `ssh`).
 - [ ] **Asociación con Perfiles:** Posibilidad de que cada perfil defina si su destino es un SSD físico, ruta local o servidor remoto.
+

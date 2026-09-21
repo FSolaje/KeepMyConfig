@@ -1,4 +1,4 @@
-# Manual de Usuario y Administración: BackupConfig
+# Manual de Usuario y Administración: KeepMyConfig
 
 > **Versión:** 0.1.0-alpha.1  
 > **Sistema Operativo Objetivo:** Lliurex 25 / Ubuntu 24.04 LTS  
@@ -21,7 +21,7 @@
 3. [Capítulo 3: Guía de Uso - Interfaz Interactiva TUI (`whiptail`)](#capítulo-3-guía-de-uso---interfaz-interactiva-tui-whiptail)
    - [3.1 Inicio de la Interfaz Gráfica de Terminal](#31-inicio-de-la-interfaz-gráfica-de-terminal)
    - [3.2 Esquema del Menú Principal](#32-esquema-del-menú-principal)
-   - [3.3 Recorrido Detallado por las 8 Opciones](#33-recorrido-detallado-por-las-8-opciones)
+   - [3.3 Recorrido Detallado por las 9 Opciones](#33-recorrido-detallado-por-las-9-opciones)
    - [3.4 El Flujo "Vault & Shred" y Advertencias de Seguridad](#34-el-flujo-vault--shred-y-advertencias-de-seguridad)
 4. [Capítulo 4: Guía de Uso - Interfaz de Comandos CLI (Headless / Cron)](#capítulo-4-guía-de-uso---interfaz-de-comandos-cli-headless--cron)
    - [4.1 Sintaxis General y Modos de Operación](#41-sintaxis-general-y-modos-de-operación)
@@ -29,11 +29,12 @@
    - [4.3 Automatización Desatendida con `PASSPHRASE`](#43-automatización-desatendida-con-passphrase)
    - [4.4 Integración con Tareas Programadas (`cron`)](#44-integración-con-tareas-programadas-cron)
    - [4.5 Tabla de Códigos de Salida UNIX](#45-tabla-de-códigos-de-salida-unix)
-5. [Capítulo 5: Creación de Módulos y Recetas (`modules.d/*.conf`)](#capítulo-5-creación-de-módulos-y-recetas-modulesdconf)
+5. [Capítulo 5: Creación de Módulos, Recetas y Perfiles](#capítulo-5-creación-de-módulos-recetas-y-perfiles)
    - [5.1 Estructura Declarativa de una Receta](#51-estructura-declarativa-de-una-receta)
    - [5.2 Directivas Soportadas](#52-directivas-soportadas)
    - [5.3 Ejemplos Oficiales de Producción](#53-ejemplos-oficiales-de-producción)
    - [5.4 Hooks Post-Restauración (`POST_RESTORE_HOOK`)](#54-hooks-post-restauración-post_restore_hook)
+   - [5.5 Sistema de Perfiles de Backup y Scoped Modules](#55-sistema-de-perfiles-de-backup-y-scoped-modules)
 6. [Capítulo 6: Auditoría, Logs y Resolución de Problemas (Troubleshooting)](#capítulo-6-auditoría-logs-y-resolución-de-problemas-troubleshooting)
    - [6.1 Árbol de Directorios en la Unidad Externa](#61-árbol-de-directorios-en-la-unidad-externa)
    - [6.2 Registro Histórico y Manifiestos de Integridad](#62-registro-histórico-y-manifiestos-de-integridad)
@@ -56,7 +57,7 @@ En entornos educativos basados en **Lliurex 25 / Ubuntu 24.04 LTS** (como aulas 
 - Credenciales temporales, claves SSH para repositorios Git y tokens de acceso.
 - Configuraciones de shell (`.bashrc`, `.bash_aliases`, scripts personales en `~/bin`).
 
-**BackupConfig** ha sido diseñado para resolver este problema permitiendo a docentes y alumnos:
+**KeepMyConfig** ha sido diseñado para resolver este problema permitiendo a docentes y alumnos:
 1. Respaldar selectivamente sus herramientas y configuraciones a una unidad externa (SSD o pendrive USB).
 2. Proteger con cifrado militar (GPG AES-256) cualquier dato privado o llave de seguridad.
 3. Purgar del ordenador del aula los datos sensibles mediante borrado seguro irrecuperable (`shred -u`), eliminando el riesgo de que otros alumnos o usuarios accedan a sus credenciales.
@@ -210,28 +211,29 @@ El sistema verificará la presencia de `whiptail` y abrirá el menú principal d
 ### 3.2 Esquema del Menú Principal
 
 ```text
-┌────────────────────────── GESTOR DE BACKUP Y RECUPERACIÓN ──────────────────────────┐
-│                                                                                     │
-│ Bienvenido al gestor integral de copias y recuperación modular en Bash.             │
-│ Seleccione una operación:                                                           │
-│                                                                                     │
-│    1 [BACKUP] Realizar Backup Completo                                              │
-│    2 [BACKUP] Realizar Backup por Etiquetas (Tags)                                  │
-│    3 [BACKUP] Realizar Backup por Módulo Individual                                 │
-│    4 [RESTORE] Restauración Rápida de Datos Sensibles                               │
-│    5 [RESTORE] Restauración Selectiva (Módulo / Histórico AAAAMMDD_HHMMSS)          │
-│    6 [RESTORE] Restauración Total                                                   │
-│    7 [MODULES] Administrar Módulos y Etiquetas (Asistente TUI)                      │
-│    8 [CONFIG] Gestión de Almacenamiento y Diagnóstico                               │
-│    0 Salir                                                                          │
-│                                                                                     │
-│                             <Aceptar>      <Cancelar>                               │
-└─────────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────── KeepMyConfig [Perfil: default] ──────────────────────┐
+│                                                                             │
+│ Bienvenido al gestor integral de copias y recuperación modular en Bash.     │
+│ Seleccione la operación que desea realizar:                                 │
+│                                                                             │
+│    1 [BACKUP]   Realizar Backup Completo                                    │
+│    2 [BACKUP]   Realizar Backup por Etiquetas (Tags)                        │
+│    3 [BACKUP]   Realizar Backup por Módulo Individual                       │
+│    4 [RESTORE]  Restauración Rápida de Datos Sensibles                      │
+│    5 [RESTORE]  Restauración Selectiva (Módulo / Histórico AAAAMMDD_HHMMSS) │
+│    6 [RESTORE]  Restauración Total                                          │
+│    7 [MODULES]  Administrar Módulos y Etiquetas                             │
+│    8 [STORAGE]  Gestión de Almacenamiento y Diagnóstico                     │
+│    9 [PROFILES] Gestión de Perfiles de Backup                               │
+│    0 [SALIR]    Salir del gestor                                            │
+│                                                                             │
+│                             <Aceptar>      <Cancelar>                       │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### 3.3 Recorrido Detallado por las 8 Opciones
+### 3.3 Recorrido Detallado por las 9 Opciones
 
 #### Opción 1: `[BACKUP] Realizar Backup Completo`
 - **¿Qué hace?:** Escanea todos los archivos de configuración registrados en `modules.d/*.conf`. Empaqueta, comprime y almacena cada módulo en la carpeta `archives/` del SSD externo.
@@ -267,12 +269,20 @@ El sistema verificará la presencia de `whiptail` y abrirá el menú principal d
   - **Eliminar un módulo:** Da de baja un archivo de receta.
   - **Añadir etiquetas:** Enriquecer el catálogo `config/default_tags.conf`.
 
-#### Opción 8: `[CONFIG] Gestión de Almacenamiento y Diagnóstico`
-- **¿Qué hace?:** Abre un submenú para controlar el almacenamiento y los perfiles de máquina:
+#### Opción 8: `[STORAGE] Gestión de Almacenamiento y Diagnóstico`
+- **¿Qué hace?:** Abre un submenú para controlar el almacenamiento y los destinos:
   1. **Ver diagnóstico de almacenamiento y espacio libre:** Audita la conexión, valida el marcador `.backup_storage_marker` y muestra el espacio disponible.
   2. **Listar carpetas de equipo en el almacenamiento:** Muestra todas las carpetas con marcador identificando cuál es la activa actualmente.
   3. **Cambiar carpeta de equipo activa (`STORAGE_SUBDIR`):** Permite conmutar interactivamente el destino predeterminado en `config/config.conf`.
   4. **Inicializar nueva carpeta de equipo en el almacenamiento:** Asistente que crea la estructura completa (`archives/`, `logs/`) y el marcador de seguridad (sugiriendo `Backups/$(hostname)`).
+
+#### Opción 9: `[PROFILES] Gestión de Perfiles de Backup`
+- **¿Qué hace?:** Abre el gestor modular de perfiles (`profiles/`):
+  1. **Ver detalles del perfil activo:** Inspecciona identificador, nombre, descripción y subdirectorio específico asignado.
+  2. **Cambiar perfil activo:** Conmuta el perfil en `config/config.conf` de manera atómica mediante un selector interactivo.
+  3. **Crear un nuevo perfil:** Asistente paso a paso para definir un nuevo entorno (`ID`, nombre, descripción y carpeta destino asociada).
+  4. **Listar recetas y módulos del perfil activo:** Muestra la lista deduplicada de módulos indicando su alcance exacto: `[Global]`, `[Override]` o `[Exclusivo]`.
+  5. **Eliminar un perfil:** Borrado seguro de un perfil y sus módulos específicos (con protección para impedir borrar `default` o el perfil en uso).
 
 ---
 
@@ -330,7 +340,11 @@ La interfaz de línea de comandos está optimizada para scripts bash, tareas pro
 | `--list-targets`| *Ninguno* | Lista todos los destinos y subcarpetas con marcador en el soporte. |
 | `--set-active-target` | `<subdir>` | Establece el subdirectorio activo en `config/config.conf`. |
 | `--target-subdir` | `<subdir>` | Redirige temporalmente la operación actual a ese subdirectorio. |
-| `--list-modules` | *Ninguno* | Imprime en consola todos los módulos registrados y su confidencialidad. |
+| `--profile` | `<id>` | Aplica un perfil específico de forma temporal para la operación actual. |
+| `--list-profiles` | *Ninguno* | Lista todos los perfiles de backup configurados en el sistema. |
+| `--set-active-profile` | `<id>` | Establece el perfil activo de forma persistente en `config/config.conf`. |
+| `--create-profile` | `<id>` | Crea un nuevo perfil de backup y su estructura de módulos. |
+| `--list-modules` | *Ninguno* | Imprime en consola todos los módulos registrados y su confidencialidad/ámbito. |
 | `--list-tags` | *Ninguno* | Imprime el catálogo de etiquetas disponibles. |
 | `-h, --help` | *Ninguno* | Muestra la ayuda rápida de sintaxis CLI. |
 
@@ -487,6 +501,51 @@ POST_RESTORE_HOOK() {
 > Ciertas aplicaciones (como el cliente OpenSSH o GnuPG) rechazan funcionar si los ficheros de configuración tienen permisos excesivos (ejemplo: lectura para grupo o terceros).
 > 
 > Use la función `POST_RESTORE_HOOK()` para aplicar automáticamente `chmod` o regenerar enlaces simbólicos tras la restauración. El hook recibe `$1` como la ruta base del `$HOME` de restauración.
+
+---
+
+### 5.5 Sistema de Perfiles de Backup y Scoped Modules
+
+KeepMyConfig incluye un sistema de perfiles que permite aislar entornos de trabajo (por ejemplo: `docente`, `desarrollo`, `administracion`) adaptando qué recetas se procesan y a qué carpeta de almacenamiento se destinan.
+
+#### Estructura de un Perfil (`profiles/<perfil_id>/`)
+Cada perfil reside en un subdirectorio propio dentro de `profiles/`:
+```text
+profiles/
+├── default/                  # Perfil base conceptual
+└── docente/
+    ├── profile.conf          # Metadatos y destino específico
+    └── modules.d/            # Módulos propios del perfil
+        ├── custom-eval.conf  # Módulo exclusivo (solo visible en 'docente')
+        └── bash-env.conf     # Módulo sobrescrito (Override sobre el global)
+```
+
+#### Fichero de Metadatos (`profile.conf`)
+```ini
+PROFILE_ID="docente"
+PROFILE_NAME="Perfil Docente"
+PROFILE_DESCRIPTION="Entorno educativo para docencia de FP"
+TARGET_SUBDIR="Backups/Docente"
+```
+
+#### Resolución en Cascada de Módulos
+Cuando se ejecuta una operación bajo un perfil activo:
+1. **Sobrescritura (*Override*):** Si existe `profiles/<perfil>/modules.d/<modulo>.conf`, prevalece sobre la versión global `modules.d/<modulo>.conf`.
+2. **Módulo Exclusivo:** Si un módulo solo existe dentro de `profiles/<perfil>/modules.d/`, solo será visible y ejecutable cuando ese perfil esté activo.
+3. **Módulo Global:** Las recetas definidas en `modules.d/` están siempre disponibles como base para todos los perfiles salvo que sean sobrescritas.
+4. **Deduplicación:** Las operaciones colectivas (`--backup-all`, `--list-modules`) presentan una vista unificada sin duplicados, indicando el ámbito `[Global]`, `[Override]` o `[Exclusivo]`.
+
+#### Uso desde CLI
+```bash
+# Crear un nuevo perfil
+./backup_manager.sh --create-profile docente
+
+# Establecerlo como predeterminado
+./backup_manager.sh --set-active-profile docente
+
+# Ejecutar una operación puntual bajo un perfil temporal
+./backup_manager.sh --profile dev --backup-all
+```
 
 ---
 
