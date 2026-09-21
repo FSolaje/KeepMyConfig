@@ -35,6 +35,7 @@
    - [5.3 Ejemplos Oficiales de Producción](#53-ejemplos-oficiales-de-producción)
    - [5.4 Hooks Post-Restauración (`POST_RESTORE_HOOK`)](#54-hooks-post-restauración-post_restore_hook)
    - [5.5 Sistema de Perfiles de Backup y Scoped Modules](#55-sistema-de-perfiles-de-backup-y-scoped-modules)
+   - [5.6 Biblioteca de Plantillas (`templates.d/`) y Exclusiones en Perfiles](#56-biblioteca-de-plantillas-templatesd-y-exclusiones-en-perfiles)
 6. [Capítulo 6: Auditoría, Logs y Resolución de Problemas (Troubleshooting)](#capítulo-6-auditoría-logs-y-resolución-de-problemas-troubleshooting)
    - [6.1 Árbol de Directorios en la Unidad Externa](#61-árbol-de-directorios-en-la-unidad-externa)
    - [6.2 Registro Histórico y Manifiestos de Integridad](#62-registro-histórico-y-manifiestos-de-integridad)
@@ -262,10 +263,13 @@ El sistema verificará la presencia de `whiptail` y abrirá el menú principal d
 #### Opción 6: `[RESTORE] Restauración Total`
 - **¿Qué hace?:** Reconstruye completamente el entorno del usuario, procesando secuencialmente el snapshot más reciente de todos los módulos registrados en el almacenamiento.
 
-#### Opción 7: `[MODULES] Administrar Módulos y Etiquetas`
+#### Opción 7: `[MODULES] Administrar Módulos, Plantillas y Etiquetas`
 - **¿Qué hace?:** Abre un subasistente interactivo que permite:
   - **Inspeccionar módulos:** Ver las rutas, etiquetas, nivel de seguridad y estado de purga de cualquier módulo disponible para el perfil activo, etiquetado visualmente como `[Global]` o `[Perfil: <id>]`.
+  - **Activar módulo desde plantilla:** Explora la biblioteca `templates.d/` con recetas preconfiguradas listas para usar (Firefox, VSCode, Git, SSH, IntelliJ, etc.), permitiendo instanciarlas en el catálogo global o en el perfil activo.
   - **Crear un nuevo módulo con selector de ámbito:** Asistente paso a paso que solicita identificador, rutas a respaldar, etiquetas y nivel de seguridad. Si el perfil activo es distinto de `default`, permite elegir si el módulo se registra en el **Catálogo Global (`modules.d/`)** (visible en todos los perfiles) o como **Exclusivo del Perfil Activo (`profiles/<activo>/modules.d/`)**.
+  - **Crear nueva plantilla en la biblioteca:** Asistente interactivo para redactar una receta directamente en la biblioteca reutilizable `templates.d/`.
+  - **Exportar módulo activo a la biblioteca de plantillas:** Permite promover cualquier receta activa validada del usuario al catálogo general `templates.d/`.
   - **Sanitización automática de rutas:** Al ingresar rutas de ficheros (ej. `$HOME/Documentos`, `~/Descargas/`), el sistema normaliza automáticamente las rutas a formato relativo respecto a `$HOME`, eliminando barras redundantes y previniendo errores de empaquetado.
   - **Eliminar un módulo:** Da de baja un archivo de receta de su ámbito correspondiente (`modules.d/` o `profiles/<activo>/modules.d/`).
   - **Añadir etiquetas:** Enriquecer el catálogo `config/default_tags.conf`.
@@ -283,7 +287,8 @@ El sistema verificará la presencia de `whiptail` y abrirá el menú principal d
   2. **Cambiar perfil activo:** Conmuta el perfil en `config/config.conf` de manera atómica mediante un selector interactivo.
   3. **Crear un nuevo perfil:** Asistente paso a paso para definir un nuevo entorno (`ID`, nombre, descripción y carpeta destino asociada).
   4. **Listar recetas y módulos del perfil activo:** Muestra la lista deduplicada de módulos indicando su alcance exacto: `[Global]`, `[Override]` o `[Exclusivo]`.
-  5. **Eliminar un perfil:** Borrado seguro de un perfil y sus módulos específicos (con protección para impedir borrar `default` o el perfil en uso).
+  5. **Gestionar exclusiones de módulos globales (`DISABLED_MODULES`):** Para perfiles particulares, abre una checklist interactiva que permite desactivar selectivamente módulos globales para que no se ejecuten en ese perfil.
+  6. **Eliminar un perfil:** Borrado seguro de un perfil y sus módulos específicos (con protección para impedir borrar `default` o el perfil en uso).
 
 ---
 
@@ -345,6 +350,9 @@ La interfaz de línea de comandos está optimizada para scripts bash, tareas pro
 | `--list-profiles` | *Ninguno* | Lista todos los perfiles de backup configurados en el sistema. |
 | `--set-active-profile` | `<id>` | Establece el perfil activo de forma persistente en `config/config.conf`. |
 | `--create-profile` | `<id>` | Crea un nuevo perfil de backup y su estructura de módulos. |
+| `--list-templates` | *Ninguno* | Lista todas las recetas predefinidas en la biblioteca de plantillas (`templates.d/`). |
+| `--enable-template` | `<id>` | Activa la plantilla indicada en el perfil activo (o global si es default). |
+| `--export-template` | `<id>` | Exporta y promueve un módulo activo como nueva plantilla en la biblioteca. |
 | `--list-modules` | *Ninguno* | Imprime en consola todos los módulos registrados y su confidencialidad/ámbito. |
 | `--list-tags` | *Ninguno* | Imprime el catálogo de etiquetas disponibles. |
 | `-h, --help` | *Ninguno* | Muestra la ayuda rápida de sintaxis CLI. |
@@ -527,14 +535,17 @@ PROFILE_ID="docente"
 PROFILE_NAME="Perfil Docente"
 PROFILE_DESCRIPTION="Entorno educativo para docencia de FP"
 TARGET_SUBDIR="Backups/Docente"
+# Módulos globales excluidos específicamente en este perfil:
+DISABLED_MODULES=("firefox" "thunderbird")
 ```
 
 #### Resolución en Cascada de Módulos
 Cuando se ejecuta una operación bajo un perfil activo:
-1. **Sobrescritura (*Override*):** Si existe `profiles/<perfil>/modules.d/<modulo>.conf`, prevalece sobre la versión global `modules.d/<modulo>.conf`.
-2. **Módulo Exclusivo:** Si un módulo solo existe dentro de `profiles/<perfil>/modules.d/`, solo será visible y ejecutable cuando ese perfil esté activo.
-3. **Módulo Global:** Las recetas definidas en `modules.d/` están siempre disponibles como base para todos los perfiles salvo que sean sobrescritas.
-4. **Deduplicación:** Las operaciones colectivas (`--backup-all`, `--list-modules`) presentan una vista unificada sin duplicados, indicando el ámbito `[Global]`, `[Override]` o `[Exclusivo]`.
+1. **Exclusión de Módulos Globales:** Si un módulo global está listado en `DISABLED_MODULES` dentro del `profile.conf` del perfil activo, es omitido automáticamente de los listados y de las operaciones de respaldo colectivas (`--backup-all`, `--backup-tag`).
+2. **Sobrescritura (*Override*):** Si existe `profiles/<perfil>/modules.d/<modulo>.conf`, prevalece sobre la versión global `modules.d/<modulo>.conf`.
+3. **Módulo Exclusivo:** Si un módulo solo existe dentro de `profiles/<perfil>/modules.d/`, solo será visible y ejecutable cuando ese perfil esté activo.
+4. **Módulo Global:** Las recetas definidas en `modules.d/` están siempre disponibles como base para todos los perfiles salvo que sean sobrescritas o excluidas.
+5. **Deduplicación:** Las operaciones colectivas (`--backup-all`, `--list-modules`) presentan una vista unificada sin duplicados, indicando el ámbito `[Global]`, `[Override]` o `[Exclusivo]`.
 
 #### Uso desde CLI
 ```bash
@@ -547,6 +558,90 @@ Cuando se ejecuta una operación bajo un perfil activo:
 # Ejecutar una operación puntual bajo un perfil temporal
 ./backup_manager.sh --profile dev --backup-all
 ```
+
+---
+
+### 5.6 Biblioteca de Plantillas (`templates.d/`) y Exclusiones en Perfiles
+
+#### Principio de Estado Inicial Limpio
+Por diseño, una nueva instalación de **KeepMyConfig** arranca sin ningún módulo activo en `modules.d/`. Esto previene respaldos accidentales indeseados antes de que el usuario haya seleccionado conscientemente qué aplicaciones desea proteger. Si se invoca `--backup-all` sin módulos configurados, la herramienta no falla ni arroja un error crítico; en su lugar, despliega una guía amigable indicando cómo activar recetas desde la biblioteca de plantillas.
+
+#### Catálogo Oficial de Recetas Predefinidas (`templates.d/`)
+El directorio `templates.d/` incluye plantillas listas para su activación inmediata:
+
+| Receta de Plantilla | ID | Descripción | Sensible / Purga | Etiquetas |
+| :--- | :--- | :--- | :---: | :--- |
+| `bash-env.conf` | `bash-env` | Entorno Bash (`.bashrc`, `.bash_aliases`, `~/.local/bin`) | No / No | `system`, `shell`, `dev` |
+| `firefox.conf` | `firefox` | Marcadores y perfiles de Mozilla Firefox | No / No | `browser`, `web`, `user` |
+| `git-config.conf` | `git-config` | Configuración global Git (`.gitconfig`, `.gitignore_global`) | No / No | `git`, `dev`, `tools` |
+| `intellij.conf` | `intellij` | Preferencias y configuraciones de IDEs JetBrains / IntelliJ | No / No | `ide`, `dev`, `jetbrains` |
+| `libreoffice.conf` | `libreoffice` | Perfiles de usuario y plantillas de LibreOffice | No / No | `office`, `desktop`, `docs` |
+| `ssh-keys.conf` | `ssh-keys` | Llaves privadas/públicas SSH y config (`~/.ssh/`) | **Sí / Sí** | `security`, `ssh`, `keys`, `sensitive` |
+| `thunderbird.conf` | `thunderbird` | Perfiles de correo de Mozilla Thunderbird | No / No | `mail`, `desktop`, `user` |
+| `vscode-sensitive.conf` | `vscode-sensitive` | Credenciales, tokens y auth de Visual Studio Code | **Sí / Sí** | `editor`, `vscode`, `sensitive` |
+| `vscode-standard.conf` | `vscode-standard` | Ajustes, atajos y snippets de Visual Studio Code | No / No | `editor`, `vscode`, `dev` |
+| `template-skeleton.conf` | N/A | Esqueleto canónico exhaustivamente comentado para crear nuevas recetas | N/A | N/A |
+
+#### Esqueleto Canónico (`template-skeleton.conf`)
+Para desarrolladores o administradores de aula que deseen crear nuevas recetas, se incluye `templates.d/template-skeleton.conf`:
+```bash
+# Identificador único (minúsculas, números y guiones)
+MODULE_ID="mi-herramienta"
+
+# Nombre legible para interfaces TUI/CLI
+MODULE_NAME="Mi Herramienta de Trabajo"
+
+# Etiquetas para agrupación por lotes (--backup-tag)
+MODULE_TAGS=("dev" "tools")
+
+# Rutas relativas al $HOME del usuario (NUNCA incluir /home/<user> ni $HOME)
+MODULE_PATHS=(
+    ".config/mi-herramienta/config.json"
+    ".mi-herramienta/plugins"
+)
+
+# Confidencialidad: true si requiere cifrado GPG AES-256
+IS_SENSITIVE=false
+
+# Purga segura: true si debe eliminarse con 'shred -u' del equipo de origen tras respaldar
+PURGE_AFTER_BACKUP=false
+
+# Hook opcional en Bash tras la restauración (ej. restablecer permisos)
+POST_RESTORE_HOOK=""
+```
+
+#### Activación de Plantillas en TUI y CLI
+
+**Desde la TUI (Interfaz Interactiva):**
+1. Acceda a la **Opción 7: `[MODULES] Administrar Módulos, Plantillas y Etiquetas`**.
+2. Seleccione la acción **`Activar módulo desde plantilla`**.
+3. El sistema listará todas las plantillas disponibles con sus descripciones y nivel de seguridad.
+4. Elija la plantilla deseada.
+5. Si el perfil activo es distinto de `default`, el sistema le preguntará si desea activarla a nivel **Global** (visible para todos los perfiles) o **Exclusivo del Perfil Activo**.
+
+**Desde la CLI (Línea de Comandos):**
+```bash
+# 1. Explorar el catálogo de plantillas
+./backup_manager.sh --list-templates
+
+# 2. Activar una plantilla en el catálogo global (cuando el perfil es default)
+./backup_manager.sh --enable-template firefox
+
+# 3. Activar una plantilla para un perfil específico (ej. docente)
+./backup_manager.sh --profile docente --enable-template git-config
+
+# 4. Promover un módulo activo personalizado a la biblioteca de plantillas
+./backup_manager.sh --export-template mi-modulo-personal
+```
+
+#### Gestión de Exclusiones en Perfiles (`DISABLED_MODULES`)
+
+Cuando un módulo global (como `firefox` o `thunderbird`) no sea necesario o no deba respaldarse en un perfil especializado (por ejemplo, en un perfil de sólo código o de administración):
+1. Inicie la TUI y vaya a la **Opción 9: `[PROFILES] Gestión de Perfiles de Backup`**.
+2. Seleccione la opción **`5) Gestionar exclusiones de módulos globales`**.
+3. Marque en la checklist interactiva qué módulos globales deben quedar desactivados en el perfil actual.
+4. El sistema guardará la directiva `DISABLED_MODULES=("...")` en el `profile.conf` del perfil.
+5. Al invocar backups bajo ese perfil, los módulos excluidos serán ignorados de forma transparente.
 
 ---
 

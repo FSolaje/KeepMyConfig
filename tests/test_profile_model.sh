@@ -265,9 +265,60 @@ PROF_DATA=$(profile_model_get "sanitized-prof" "$SANDBOX_PROFILES")
 [[ "$PROF_DATA" =~ TARGET_SUBDIR=Backups_Sanitized ]]
 assert_equals "0" "$?" "profile_model_create debe almacenar TARGET_SUBDIR saneado"
 
+# ------------------------------------------------------------------------------
+# Test 12: Exclusiones de Módulos Globales (DISABLED_MODULES - FR-TMPL-004)
+# ------------------------------------------------------------------------------
+# Comprobar que inicialmente no tiene módulos excluidos
+init_disabled=$(profile_model_get_disabled_modules "work" "$SANDBOX_PROFILES")
+assert_equals "" "$init_disabled" "Inicialmente work no debe tener módulos excluidos"
+
+# Excluir 'global-app' en el perfil 'work'
+profile_model_disable_module "work" "global-app" "$SANDBOX_PROFILES"
+assert_exit_code "$PROFILE_OK" $? "disable_module 'global-app' debe retornar PROFILE_OK"
+
+work_disabled=$(profile_model_get_disabled_modules "work" "$SANDBOX_PROFILES")
+assert_equals "1" "$(echo "$work_disabled" | grep -qx 'global-app' && echo 1 || echo 0)" "global-app debe figurar en get_disabled_modules"
+
+# profile_model_get debe reflejar DISABLED_MODULES
+work_meta_dis=$(profile_model_get "work" "$SANDBOX_PROFILES")
+[[ "$work_meta_dis" =~ DISABLED_MODULES=global-app ]]
+assert_equals "0" "$?" "profile_model_get debe incluir DISABLED_MODULES=global-app"
+
+# list_modules en 'work' NO debe incluir 'global-app' ahora
+mod_list_work_filtered=$(profile_model_list_modules "work" "$SANDBOX_DIR")
+assert_equals "0" "$(echo "$mod_list_work_filtered" | grep -qx 'global-app' && echo 1 || echo 0)" "list_modules 'work' no debe incluir el módulo excluido global-app"
+# Pero debe seguir incluyendo shared-app y work-vpn
+assert_equals "1" "$(echo "$mod_list_work_filtered" | grep -qx 'shared-app' && echo 1 || echo 0)" "list_modules 'work' debe mantener shared-app"
+assert_equals "1" "$(echo "$mod_list_work_filtered" | grep -qx 'work-vpn' && echo 1 || echo 0)" "list_modules 'work' debe mantener work-vpn"
+
+# resolve_module en 'global-app' para 'work' debe fallar
+profile_model_resolve_module "global-app" "work" "$SANDBOX_DIR" >/dev/null 2>&1
+assert_exit_code "$PROFILE_ERR_NOT_FOUND" $? "resolve_module en módulo excluido debe retornar PROFILE_ERR_NOT_FOUND"
+
+# En perfil 'default', 'global-app' debe seguir estando visible y resoluble
+mod_list_def_check=$(profile_model_list_modules "default" "$SANDBOX_DIR")
+assert_equals "1" "$(echo "$mod_list_def_check" | grep -qx 'global-app' && echo 1 || echo 0)" "global-app debe seguir en default"
+res_def_check=$(profile_model_resolve_module "global-app" "default" "$SANDBOX_DIR")
+assert_exit_code "$PROFILE_OK" $? "resolve_module 'global-app' en default debe retornar PROFILE_OK"
+
+# Intentar deshabilitar en 'default' debe fallar
+profile_model_disable_module "default" "global-app" "$SANDBOX_PROFILES" >/dev/null 2>&1
+assert_exit_code "$PROFILE_ERR_CANNOT_DELETE" $? "disable_module en default debe retornar PROFILE_ERR_CANNOT_DELETE"
+
+# Re-habilitar 'global-app' en 'work'
+profile_model_enable_module "work" "global-app" "$SANDBOX_PROFILES"
+assert_exit_code "$PROFILE_OK" $? "enable_module debe retornar PROFILE_OK"
+
+work_disabled_after=$(profile_model_get_disabled_modules "work" "$SANDBOX_PROFILES")
+assert_equals "0" "$(echo "$work_disabled_after" | grep -qx 'global-app' && echo 1 || echo 0)" "global-app no debe figurar tras ser rehabilitado"
+
+mod_list_work_restored=$(profile_model_list_modules "work" "$SANDBOX_DIR")
+assert_equals "1" "$(echo "$mod_list_work_restored" | grep -qx 'global-app' && echo 1 || echo 0)" "list_modules 'work' vuelve a incluir global-app"
+
 # ==============================================================================
 # Resumen
 # ==============================================================================
+
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
 if [[ $TESTS_FAILED -eq 0 ]]; then

@@ -48,10 +48,12 @@ assert_contains() {
     fi
 }
 
+TEMPLATES_DIR="${PROJECT_ROOT}/templates.d"
+
 echo "=== Iniciando Tests de Módulos: bash-env.conf y ssh-keys.conf ==="
 
 # Test 1: Parser de bash-env
-bash_meta=$(module_model_get "bash-env")
+bash_meta=$(module_model_get "bash-env" "$TEMPLATES_DIR")
 assert_contains "$bash_meta" "ID=bash-env" "bash-env debe tener ID=bash-env"
 assert_contains "$bash_meta" "IS_SENSITIVE=false" "bash-env debe ser no sensible"
 assert_contains "$bash_meta" "PURGE_AFTER_BACKUP=false" "bash-env no debe purgar tras backup"
@@ -59,14 +61,14 @@ assert_contains "$bash_meta" "system" "bash-env debe incluir etiqueta 'system'"
 assert_contains "$bash_meta" "dev" "bash-env debe incluir etiqueta 'dev'"
 
 # Test 2: Parser de ssh-keys
-ssh_meta=$(module_model_get "ssh-keys")
+ssh_meta=$(module_model_get "ssh-keys" "$TEMPLATES_DIR")
 assert_contains "$ssh_meta" "ID=ssh-keys" "ssh-keys debe tener ID=ssh-keys"
 assert_contains "$ssh_meta" "IS_SENSITIVE=true" "ssh-keys debe ser sensible (GPG)"
 assert_contains "$ssh_meta" "PURGE_AFTER_BACKUP=true" "ssh-keys debe tener auto-purga activa"
 assert_contains "$ssh_meta" "chmod 700" "ssh-keys debe definir hook de permisos 700"
 
 # Test 3: Filtrado por etiquetas
-sys_mods=$(module_model_filter_by_tag "system")
+sys_mods=$(module_model_filter_by_tag "system" "$TEMPLATES_DIR")
 assert_contains "$sys_mods" "bash-env" "filter_by_tag 'system' debe incluir bash-env"
 assert_contains "$sys_mods" "ssh-keys" "filter_by_tag 'system' debe incluir ssh-keys"
 
@@ -92,7 +94,7 @@ chmod 700 "$MOCK_HOME/.ssh"
 chmod 600 "$MOCK_HOME/.ssh/id_rsa"
 
 # Test 4: Backup de bash-env (estándar, sin purga)
-b_env_res=$(backup_model_run "bash-env" "$MOCK_BACKUP" "$MOCK_HOME" "" "false" "false")
+b_env_res=$(backup_model_run "bash-env" "$MOCK_BACKUP" "$MOCK_HOME" "" "false" "false" "$TEMPLATES_DIR")
 assert_contains "$b_env_res" "STATUS=SUCCESS" "Backup de bash-env debe ser exitoso"
 assert_contains "$b_env_res" "PURGED=false" "bash-env no debe purgarse"
 
@@ -106,7 +108,7 @@ fi
 
 # Test 5: Backup de ssh-keys (sensible, con purga shred -u)
 TEST_KEY="clave-segura-ssh-123"
-b_ssh_res=$(backup_model_run "ssh-keys" "$MOCK_BACKUP" "$MOCK_HOME" "$TEST_KEY" "auto" "false")
+b_ssh_res=$(backup_model_run "ssh-keys" "$MOCK_BACKUP" "$MOCK_HOME" "$TEST_KEY" "auto" "false" "$TEMPLATES_DIR")
 assert_contains "$b_ssh_res" "STATUS=SUCCESS" "Backup de ssh-keys debe ser exitoso"
 assert_contains "$b_ssh_res" "IS_SENSITIVE=true" "ssh-keys debe registrarse como sensible"
 assert_contains "$b_ssh_res" "PURGED=true" "ssh-keys debe haberse purgado con shred"
@@ -120,7 +122,8 @@ else
 fi
 
 # Test 6: Restauración de ssh-keys y ejecución del hook de permisos
-r_ssh_res=$(restore_model_restore_module "ssh-keys" "$MOCK_BACKUP" "$MOCK_HOME" "" "$TEST_KEY")
+r_ssh_res=$(restore_model_restore_module "ssh-keys" "$MOCK_BACKUP" "$MOCK_HOME" "" "$TEST_KEY" "$TEMPLATES_DIR")
+
 assert_contains "$r_ssh_res" "STATUS=SUCCESS" "Restauración de ssh-keys debe ser exitosa"
 assert_contains "$r_ssh_res" "HOOK_EXECUTED=true" "El hook de permisos de SSH debe haberse ejecutado"
 

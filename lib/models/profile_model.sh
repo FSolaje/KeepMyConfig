@@ -96,13 +96,18 @@ profile_model_get() {
         local def_conf="$profiles_dir/default/profile.conf"
         if [[ -f "$def_conf" && -r "$def_conf" ]]; then
             (
-                unset PROFILE_ID PROFILE_NAME PROFILE_DESCRIPTION TARGET_SUBDIR
+                unset PROFILE_ID PROFILE_NAME PROFILE_DESCRIPTION TARGET_SUBDIR DISABLED_MODULES
                 # shellcheck disable=SC1090
                 source "$def_conf" 2>/dev/null || exit "$PROFILE_ERR_SYNTAX"
                 echo "ID=${PROFILE_ID:-default}"
                 echo "NAME=${PROFILE_NAME:-Perfil por Defecto}"
                 echo "DESCRIPTION=${PROFILE_DESCRIPTION:-Entorno base global de KeepMyConfig}"
                 echo "TARGET_SUBDIR=${TARGET_SUBDIR:-}"
+                local disabled_joined=""
+                if [[ "$(declare -p DISABLED_MODULES 2>/dev/null)" =~ "declare -a" ]]; then
+                    disabled_joined=$(IFS=,; echo "${DISABLED_MODULES[*]}")
+                fi
+                echo "DISABLED_MODULES=$disabled_joined"
                 exit "$PROFILE_OK"
             )
             return $?
@@ -111,6 +116,7 @@ profile_model_get() {
             echo "NAME=Perfil por Defecto"
             echo "DESCRIPTION=Entorno base global de KeepMyConfig"
             echo "TARGET_SUBDIR="
+            echo "DISABLED_MODULES="
             return "$PROFILE_OK"
         fi
     fi
@@ -124,7 +130,7 @@ profile_model_get() {
     fi
 
     (
-        unset PROFILE_ID PROFILE_NAME PROFILE_DESCRIPTION TARGET_SUBDIR
+        unset PROFILE_ID PROFILE_NAME PROFILE_DESCRIPTION TARGET_SUBDIR DISABLED_MODULES
         # shellcheck disable=SC1090
         source "$conf_file" || exit "$PROFILE_ERR_SYNTAX"
 
@@ -135,6 +141,11 @@ profile_model_get() {
         echo "NAME=${PROFILE_NAME:-$profile_id}"
         echo "DESCRIPTION=${PROFILE_DESCRIPTION:-}"
         echo "TARGET_SUBDIR=${TARGET_SUBDIR:-}"
+        local disabled_joined=""
+        if [[ "$(declare -p DISABLED_MODULES 2>/dev/null)" =~ "declare -a" ]]; then
+            disabled_joined=$(IFS=,; echo "${DISABLED_MODULES[*]}")
+        fi
+        echo "DISABLED_MODULES=$disabled_joined"
         exit "$PROFILE_OK"
     )
 }
@@ -268,10 +279,171 @@ profile_model_delete() {
 }
 
 # ------------------------------------------------------------------------------
+# Función: profile_model_get_disabled_modules
+# Descripción: Retorna los IDs de módulos globales excluidos para un perfil.
+# Parámetros:
+#   $1 - ID del perfil
+#   $2 - (Opcional) Directorio de perfiles alternativo
+# Salida stdout:
+#   Lista de IDs excluidos (uno por línea)
+# Retorno:
+#   PROFILE_OK en éxito.
+# ------------------------------------------------------------------------------
+profile_model_get_disabled_modules() {
+    local profile_id="${1:-}"
+    local profiles_dir="${2:-${PROFILES_DIR:-$_PROFILE_MODEL_DEFAULT_DIR}}"
+
+    [[ -n "$profile_id" ]] || return "$PROFILE_ERR_PARAM"
+    [[ "$profile_id" == "default" ]] && return "$PROFILE_OK"
+
+    local conf_file="$profiles_dir/$profile_id/profile.conf"
+    [[ -f "$conf_file" && -r "$conf_file" ]] || return "$PROFILE_ERR_NOT_FOUND"
+
+    (
+        unset DISABLED_MODULES
+        # shellcheck disable=SC1090
+        source "$conf_file" 2>/dev/null || exit "$PROFILE_ERR_SYNTAX"
+        if [[ "$(declare -p DISABLED_MODULES 2>/dev/null)" =~ "declare -a" ]]; then
+            for m in "${DISABLED_MODULES[@]}"; do
+                [[ -n "$m" ]] && echo "$m"
+            done
+        fi
+        exit "$PROFILE_OK"
+    )
+}
+
+# ------------------------------------------------------------------------------
+# Función interna: _profile_model_save_disabled_modules
+# Descripción: Escribe de forma atómica el array DISABLED_MODULES en profile.conf.
+# ------------------------------------------------------------------------------
+_profile_model_save_disabled_modules() {
+    local profile_id="$1"
+    local profiles_dir="$2"
+    shift 2
+    local new_disabled=("$@")
+
+    local conf_file="$profiles_dir/$profile_id/profile.conf"
+    [[ -f "$conf_file" && -w "$conf_file" ]] || return "$PROFILE_ERR_IO"
+
+    local meta
+    meta=$(profile_model_get "$profile_id" "$profiles_dir") || return "$?"
+    local p_name p_desc p_subdir
+    p_name=$(echo "$meta" | awk -F'=' '$1 == "NAME" {print $2}')
+    p_desc=$(echo "$meta" | awk -F'=' '$1 == "DESCRIPTION" {print $2}')
+    p_subdir=$(echo "$meta" | awk -F'=' '$1 == "TARGET_SUBDIR" {print $2}')
+
+    local disabled_formatted=""
+    for d in "${new_disabled[@]}"; do
+        [[ -n "$d" ]] && disabled_formatted+="\"$d\" "
+    done
+
+    local tmp_file
+    tmp_file="$(mktemp "${conf_file}.tmp.XXXXXX")" || return "$PROFILE_ERR_IO"
+
+    cat > "$tmp_file" <<EOF
+# ==============================================================================
+# KeepMyConfig - Configuración del Perfil: $profile_id
+# ==============================================================================
+PROFILE_ID="$profile_id"
+PROFILE_NAME="$p_name"
+PROFILE_DESCRIPTION="$p_desc"
+TARGET_SUBDIR="$p_subdir"
+DISABLED_MODULES=($disabled_formatted)
+EOF
+
+    if bash -n "$tmp_file" 2>/dev/null; then
+        chmod 644 "$tmp_file" 2>/dev/null || true
+        mv "$tmp_file" "$conf_file" || { rm -f "$tmp_file"; return "$PROFILE_ERR_IO"; }
+        return "$PROFILE_OK"
+    else
+        rm -f "$tmp_file"
+        return "$PROFILE_ERR_SYNTAX"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Función: profile_model_disable_module
+# Descripción: Agrega de forma atómica e idempotente un módulo a la lista
+#              DISABLED_MODULES del perfil activo.
+# Parámetros:
+#   $1 - ID del perfil
+#   $2 - ID del módulo a desactivar
+#   $3 - (Opcional) Directorio de perfiles alternativo
+# Retorno:
+#   PROFILE_OK en éxito, código de error si el perfil es default o inválido.
+# ------------------------------------------------------------------------------
+profile_model_disable_module() {
+    local profile_id="${1:-}"
+    local mod_id="${2:-}"
+    local profiles_dir="${3:-${PROFILES_DIR:-$_PROFILE_MODEL_DEFAULT_DIR}}"
+
+    [[ -n "$profile_id" && -n "$mod_id" ]] || return "$PROFILE_ERR_PARAM"
+    profile_model_validate_id "$profile_id" || return "$PROFILE_ERR_INVALID_ID"
+    if [[ "$profile_id" == "default" ]]; then
+        return "$PROFILE_ERR_CANNOT_DELETE"
+    fi
+
+    local current_disabled=()
+    local d
+    while IFS= read -r d; do
+        [[ -n "$d" ]] || continue
+        if [[ "$d" == "$mod_id" ]]; then
+            return "$PROFILE_OK" # Ya está deshabilitado
+        fi
+        current_disabled+=("$d")
+    done < <(profile_model_get_disabled_modules "$profile_id" "$profiles_dir")
+
+    current_disabled+=("$mod_id")
+    _profile_model_save_disabled_modules "$profile_id" "$profiles_dir" "${current_disabled[@]}"
+}
+
+# ------------------------------------------------------------------------------
+# Función: profile_model_enable_module
+# Descripción: Elimina un módulo de la lista DISABLED_MODULES del perfil activo,
+#              volviendo a habilitar su herencia del catálogo global.
+# Parámetros:
+#   $1 - ID del perfil
+#   $2 - ID del módulo a habilitar
+#   $3 - (Opcional) Directorio de perfiles alternativo
+# Retorno:
+#   PROFILE_OK en éxito.
+# ------------------------------------------------------------------------------
+profile_model_enable_module() {
+    local profile_id="${1:-}"
+    local mod_id="${2:-}"
+    local profiles_dir="${3:-${PROFILES_DIR:-$_PROFILE_MODEL_DEFAULT_DIR}}"
+
+    [[ -n "$profile_id" && -n "$mod_id" ]] || return "$PROFILE_ERR_PARAM"
+    profile_model_validate_id "$profile_id" || return "$PROFILE_ERR_INVALID_ID"
+    if [[ "$profile_id" == "default" ]]; then
+        return "$PROFILE_ERR_PARAM"
+    fi
+
+    local current_disabled=()
+    local found=0
+    local d
+    while IFS= read -r d; do
+        [[ -n "$d" ]] || continue
+        if [[ "$d" == "$mod_id" ]]; then
+            found=1
+            continue
+        fi
+        current_disabled+=("$d")
+    done < <(profile_model_get_disabled_modules "$profile_id" "$profiles_dir")
+
+    if [[ $found -eq 0 ]]; then
+        return "$PROFILE_OK" # Ya estaba habilitado
+    fi
+
+    _profile_model_save_disabled_modules "$profile_id" "$profiles_dir" "${current_disabled[@]}"
+}
+
+# ------------------------------------------------------------------------------
 # Función: profile_model_resolve_module
 # Descripción: Resuelve la ruta efectiva al fichero .conf de un módulo aplicando la cascada:
 #              1. profiles/<perfil>/modules.d/<modulo>.conf (Override o Exclusivo)
-#              2. modules.d/<modulo>.conf (Global)
+#              2. Comprueba si está en DISABLED_MODULES del perfil (si es así, no resuelve)
+#              3. modules.d/<modulo>.conf (Global)
 # Parámetros:
 #   $1 - ID del módulo
 #   $2 - ID del perfil activo (por defecto: 'default')
@@ -297,6 +469,17 @@ profile_model_resolve_module() {
             echo "$profile_mod"
             return "$PROFILE_OK"
         fi
+
+        # Si el módulo no tiene override local, verificar si está excluido en este perfil
+        local disabled_list
+        disabled_list=$(profile_model_get_disabled_modules "$active_profile" "$profiles_base" 2>/dev/null)
+        while IFS= read -r dis_id; do
+            [[ -n "$dis_id" ]] || continue
+            if [[ "$dis_id" == "$mod_id" ]]; then
+                # Módulo explícitamente excluido en este perfil
+                return "$PROFILE_ERR_NOT_FOUND"
+            fi
+        done <<< "$disabled_list"
     fi
 
     # 2. Comprobar módulo en el catálogo global
@@ -312,7 +495,7 @@ profile_model_resolve_module() {
 # ------------------------------------------------------------------------------
 # Función: profile_model_list_modules
 # Descripción: Lista todos los IDs de módulos visibles para el perfil activo (unión
-#              deduplicada de módulos globales y módulos específicos del perfil).
+#              deduplicada de módulos globales no excluidos y módulos específicos del perfil).
 # Parámetros:
 #   $1 - ID del perfil activo (por defecto: 'default')
 #   $2 - (Opcional) Directorio base de la aplicación
@@ -328,17 +511,29 @@ profile_model_list_modules() {
     local profiles_base="${PROFILES_DIR:-$base_dir/profiles}"
     local modules=()
 
-    # 1. Módulos globales
+    # 1. Obtener exclusiones si el perfil activo no es 'default'
+    local -A disabled_map=()
+    if [[ -n "$active_profile" && "$active_profile" != "default" ]]; then
+        local dis_id
+        while IFS= read -r dis_id; do
+            [[ -n "$dis_id" ]] || continue
+            disabled_map["$dis_id"]=1
+        done < <(profile_model_get_disabled_modules "$active_profile" "$profiles_base" 2>/dev/null)
+    fi
+
+    # 2. Módulos globales (filtrando excluidos)
     if [[ -d "$global_dir" ]]; then
         for f in "$global_dir"/*.conf; do
             [[ -f "$f" ]] || continue
             local mid
             mid="$(basename "$f" .conf)"
-            modules+=("$mid")
+            if [[ -z "${disabled_map[$mid]:-}" ]]; then
+                modules+=("$mid")
+            fi
         done
     fi
 
-    # 2. Módulos específicos del perfil activo
+    # 3. Módulos específicos del perfil activo
     if [[ -n "$active_profile" && "$active_profile" != "default" ]]; then
         local profile_dir="$profiles_base/$active_profile/modules.d"
         if [[ -d "$profile_dir" ]]; then
@@ -358,6 +553,7 @@ profile_model_list_modules() {
     printf "%s\n" "${modules[@]}" | sort -u
     return "$PROFILE_OK"
 }
+
 
 # ------------------------------------------------------------------------------
 # Función: profile_model_get_active

@@ -36,6 +36,7 @@ assert_exit_code() {
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+RECIPES_DIR="$PROJECT_ROOT/templates.d"
 
 # Cargar modelos necesarios
 # shellcheck source=../lib/models/backup_model.sh
@@ -65,7 +66,7 @@ assert_exit_code "$RESTORE_ERR_NO_ARCHIVE" $? "find_archive en módulo inexisten
 mkdir -p "$MOCK_HOME/.config/Code/User"
 echo '{"theme": "dark_default"}' > "$MOCK_HOME/.config/Code/User/settings.json"
 echo '{"key": "ctrl+k"}' > "$MOCK_HOME/.config/Code/User/keybindings.json"
-RUN_STD=$(backup_model_run "vscode-standard" "$MOCK_STORAGE" "$MOCK_HOME" "" "false" "false" "$PROJECT_ROOT/modules.d")
+RUN_STD=$(backup_model_run "vscode-standard" "$MOCK_STORAGE" "$MOCK_HOME" "" "false" "false" "$RECIPES_DIR")
 STD_TS=$(echo "$RUN_STD" | awk -F'=' '$1 == "TIMESTAMP" {print $2}')
 
 # 2. Preparar y respaldar vscode-sensitive
@@ -73,12 +74,12 @@ mkdir -p "$MOCK_HOME/.config/Code/User/sync"
 echo "TOKEN_SESSION_4455" > "$MOCK_HOME/.config/Code/User/sync/auth.dat"
 PASS_SECRET="ClaveSecreta_9876"
 # Respaldamos sin purga para poder testear su contenido
-backup_model_run "vscode-sensitive" "$MOCK_STORAGE" "$MOCK_HOME" "$PASS_SECRET" "false" "true" "$PROJECT_ROOT/modules.d" >/dev/null
+backup_model_run "vscode-sensitive" "$MOCK_STORAGE" "$MOCK_HOME" "$PASS_SECRET" "false" "true" "$RECIPES_DIR" >/dev/null
 
 # 3. Preparar y respaldar ssh-keys
 mkdir -p "$MOCK_HOME/.ssh"
 echo "MOCK_SSH_PRIVATE_KEY" > "$MOCK_HOME/.ssh/id_rsa"
-backup_model_run "ssh-keys" "$MOCK_STORAGE" "$MOCK_HOME" "$PASS_SECRET" "false" "true" "$PROJECT_ROOT/modules.d" >/dev/null
+backup_model_run "ssh-keys" "$MOCK_STORAGE" "$MOCK_HOME" "$PASS_SECRET" "false" "true" "$RECIPES_DIR" >/dev/null
 
 # ------------------------------------------------------------------------------
 # Test 2: find_archive en módulo existente
@@ -103,7 +104,7 @@ rm -rf "$MOCK_HOME/.config/Code/User/settings.json"
 [[ ! -f "$MOCK_HOME/.config/Code/User/settings.json" ]]
 assert_equals "0" "$?" "settings.json debe haber sido eliminado para probar recuperación"
 
-RESTORE_STD_OUT=$(restore_model_restore_module "vscode-standard" "$MOCK_STORAGE" "$MOCK_HOME" "" "" "$PROJECT_ROOT/modules.d")
+RESTORE_STD_OUT=$(restore_model_restore_module "vscode-standard" "$MOCK_STORAGE" "$MOCK_HOME" "" "" "$RECIPES_DIR")
 assert_exit_code "$RESTORE_OK" $? "restore_module en vscode-standard debe retornar RESTORE_OK"
 [[ "$RESTORE_STD_OUT" =~ STATUS=SUCCESS ]]
 assert_equals "0" "$?" "El reporte debe indicar STATUS=SUCCESS"
@@ -122,13 +123,13 @@ assert_equals "0" "$?" "El contenido restituido debe ser idéntico al respaldado
 rm -rf "$MOCK_HOME/.config/Code/User/sync"
 
 # Intento con contraseña errónea debe fallar
-restore_model_restore_module "vscode-sensitive" "$MOCK_STORAGE" "$MOCK_HOME" "" "ContrasenaErronea" "$PROJECT_ROOT/modules.d" >/dev/null 2>&1
+restore_model_restore_module "vscode-sensitive" "$MOCK_STORAGE" "$MOCK_HOME" "" "ContrasenaErronea" "$RECIPES_DIR" >/dev/null 2>&1
 assert_exit_code "$RESTORE_ERR_PASSPHRASE" $? "restore_module sensible con clave incorrecta debe retornar RESTORE_ERR_PASSPHRASE"
 [[ ! -f "$MOCK_HOME/.config/Code/User/sync/auth.dat" ]]
 assert_equals "0" "$?" "El archivo sensible no debe restaurarse si la clave es incorrecta"
 
 # Intento con contraseña correcta
-RESTORE_SENS_OUT=$(restore_model_restore_module "vscode-sensitive" "$MOCK_STORAGE" "$MOCK_HOME" "" "$PASS_SECRET" "$PROJECT_ROOT/modules.d")
+RESTORE_SENS_OUT=$(restore_model_restore_module "vscode-sensitive" "$MOCK_STORAGE" "$MOCK_HOME" "" "$PASS_SECRET" "$RECIPES_DIR")
 assert_exit_code "$RESTORE_OK" $? "restore_module sensible con clave correcta debe retornar RESTORE_OK"
 [[ "$RESTORE_SENS_OUT" =~ STATUS=SUCCESS ]]
 assert_equals "0" "$?" "El reporte sensible debe indicar STATUS=SUCCESS"
@@ -157,7 +158,7 @@ assert_equals "0" "$?" "El hook posterior debe haberse ejecutado creando hook_ex
 # Test 6: Restauración por Etiqueta (restore_by_tag)
 # ------------------------------------------------------------------------------
 rm -rf "$MOCK_HOME/.config/Code/User/settings.json"
-TAG_RESTORE_OUT=$(restore_model_restore_by_tag "editor" "$MOCK_STORAGE" "$MOCK_HOME" "" "$PROJECT_ROOT/modules.d")
+TAG_RESTORE_OUT=$(restore_model_restore_by_tag "editor" "$MOCK_STORAGE" "$MOCK_HOME" "" "$RECIPES_DIR")
 assert_exit_code "$RESTORE_OK" $? "restore_by_tag 'editor' debe retornar RESTORE_OK"
 [[ "$TAG_RESTORE_OUT" =~ RESTORED=vscode-standard ]]
 assert_equals "0" "$?" "restore_by_tag debe reportar RESTORED=vscode-standard"
@@ -168,7 +169,7 @@ assert_equals "0" "$?" "settings.json debe ser recuperado por la etiqueta 'edito
 # Test 7: Restauración Express Sensible (restore_sensitive_all)
 # ------------------------------------------------------------------------------
 rm -rf "$MOCK_HOME/.config/Code/User/sync/auth.dat"
-EXPRESS_OUT=$(restore_model_restore_sensitive_all "$MOCK_STORAGE" "$MOCK_HOME" "$PASS_SECRET" "$PROJECT_ROOT/modules.d")
+EXPRESS_OUT=$(restore_model_restore_sensitive_all "$MOCK_STORAGE" "$MOCK_HOME" "$PASS_SECRET" "$RECIPES_DIR")
 assert_exit_code "$RESTORE_OK" $? "restore_sensitive_all con clave única debe retornar RESTORE_OK"
 [[ "$EXPRESS_OUT" =~ RESTORED_SENSITIVE=vscode-sensitive ]]
 assert_equals "0" "$?" "restore_sensitive_all debe procesar vscode-sensitive"
@@ -179,7 +180,7 @@ assert_equals "0" "$?" "auth.dat debe reaparecer tras restauración express"
 # Test 8: Restauración Total (restore_all)
 # ------------------------------------------------------------------------------
 rm -rf "$MOCK_HOME/.config/Code/User/settings.json" "$MOCK_HOME/.config/Code/User/sync/auth.dat"
-ALL_OUT=$(restore_model_restore_all "$MOCK_STORAGE" "$MOCK_HOME" "$PASS_SECRET" "$PROJECT_ROOT/modules.d")
+ALL_OUT=$(restore_model_restore_all "$MOCK_STORAGE" "$MOCK_HOME" "$PASS_SECRET" "$RECIPES_DIR")
 assert_exit_code "$RESTORE_OK" $? "restore_all debe retornar RESTORE_OK"
 [[ "$ALL_OUT" =~ RESTORED=vscode-standard && "$ALL_OUT" =~ RESTORED=vscode-sensitive ]]
 assert_equals "0" "$?" "restore_all debe haber restaurado tanto módulos estándar como sensibles"
