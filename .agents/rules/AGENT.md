@@ -119,7 +119,7 @@ Con cada commit o integración de rama en `develop` o `main`, se evaluará el im
   2. Ejecutar la suite de pruebas unitarias asociada a los cambios.
   3. Ejecutar el escáner SAST obligatorio:
      ```bash
-     bash user_data/security_check/scripts/security_check.sh
+     bash user_data/scripts/security_check/security_check.sh
      ```
   4. Mostrar el reporte de seguridad limpio.
   5. **Esperar la orden y aprobación humana explícita:** *"Procede con el commit"*.
@@ -145,7 +145,7 @@ Con cada commit o integración de rama en `develop` o `main`, se evaluará el im
   Todo el contenido de la carpeta `user_data/` (herramientas locales, scripts de SAST, cachés o datos de usuario) queda **SIEMPRE EXCLUIDO** del repositorio mediante `.gitignore`. Bajo ninguna circunstancia se eliminará del `.gitignore` ni se comitearán archivos de este directorio.
 - **SAST Pre-Commit Obligatorio:** Antes de solicitar cualquier commit, la IA debe ejecutar imperativamente:
   ```bash
-  bash user_data/security_check/scripts/security_check.sh
+  bash user_data/scripts/security_check/security_check.sh
   ```
   y verificar que finalice con código de salida 0 sin alertas críticas.
 
