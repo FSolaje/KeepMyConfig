@@ -33,6 +33,19 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - **Selector de Ámbito en Asistente TUI (`app_controller.sh`):** Al crear un módulo con un perfil activo distinto de `default`, se ofrece la opción de asignarlo al catálogo global (`modules.d/`) o exclusivamente al perfil activo (`profiles/<activo>/modules.d/`).
   - **Visualización de Ámbito en TUI:** Etiquetas visuales `[Global]` o `[Perfil: <id>]` al listar, inspeccionar o eliminar recetas en la Opción 7.
   - **Ampliación de Cobertura:** 49 nuevas aserciones en pruebas unitarias (`test_module_model.sh`, `test_profile_model.sh` y `test_controller.sh`), alcanzando 298 tests al 100% de éxito.
+- **Biblioteca de Plantillas, Activación Selectiva y Exclusión en Perfiles (Sub-Hito 12.2):**
+  - **Biblioteca de Plantillas (`templates.d/`):** Desacoplamiento del catálogo de recetas predefinidas en `templates.d/` con 9 recetas oficiales (`bash-env`, `firefox`, `git-config`, `intellij`, `libreoffice`, `ssh-keys`, `thunderbird`, `vscode-sensitive`, `vscode-standard`) y una plantilla de referencia canónica documentada (`template-skeleton.conf`).
+  - **Estado Inicial Limpio (FR-TMPL-002):** Primera ejecución con 0 módulos activos en `modules.d/`. Al invocar `--backup-all` sin módulos activos, se muestra un mensaje explicativo y amigable sugiriendo la activación de plantillas, retornando código `0` en vez de error.
+  - **Lógica de Plantillas en `module_model.sh`:** Funciones `module_model_list_templates`, `module_model_get_template`, `module_model_activate_template`, `module_model_create_template` y `module_model_export_to_template`.
+  - **Exclusión de Módulos Globales en Perfiles (`profile_model.sh`):**
+    - Soporte de directiva `DISABLED_MODULES=("mod1" "mod2")` en `profile.conf`.
+    - Funciones `profile_model_get_disabled_modules`, `profile_model_disable_module` y `profile_model_enable_module`.
+    - Filtrado en cascada en `profile_model_list_modules` y `profile_model_resolve_module` para excluir módulos globales deshabilitados en el perfil activo.
+  - **Integración TUI y CLI (`app_controller.sh` y `backup_manager.sh`):**
+    - Opción 7: Nuevas acciones para *Activar módulo desde plantilla*, *Crear nueva plantilla en la biblioteca* y *Exportar módulo activo a la biblioteca*.
+    - Opción 9: Nueva acción para *Gestionar exclusiones de módulos globales* mediante checklist interactiva para perfiles no predeterminados.
+    - Nuevas banderas CLI: `--list-templates`, `--enable-template <id>` y `--export-template <mod_id>`.
+  - **Suites de Pruebas Actualizadas:** Cobertura ampliada en `tests/test_module_model.sh`, `tests/test_profile_model.sh` y `tests/test_controller.sh`, superando 318 pruebas unitarias al 100% de éxito.
 
 ### Planned
 - Soporte para almacenamiento remoto (Hito 13: SSH, SFTP y Rsync sin privilegios root).

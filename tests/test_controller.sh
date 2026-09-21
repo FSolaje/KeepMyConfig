@@ -48,18 +48,29 @@ assert_contains "$help_out" "--backup-all" "--help debe documentar la opción --
 assert_contains "$help_out" "--restore-sensitive" "--help debe documentar la opción --restore-sensitive"
 assert_contains "$help_out" "--profile" "--help debe documentar la opción --profile"
 assert_contains "$help_out" "--list-profiles" "--help debe documentar la opción --list-profiles"
-assert_contains "$help_out" "--set-active-profile" "--help debe documentar la opción --set-active-profile"
-assert_contains "$help_out" "--create-profile" "--help debe documentar la opción --create-profile"
+assert_contains "$help_out" "--list-templates" "--help debe documentar la opción --list-templates"
+assert_contains "$help_out" "--enable-template" "--help debe documentar la opción --enable-template"
+assert_contains "$help_out" "--export-template" "--help debe documentar la opción --export-template"
 
-# Test 2: Invocación de --list-modules
-list_mods_out=$("${PROJECT_ROOT}/backup_manager.sh" --list-modules 2>&1)
-assert_contains "$list_mods_out" "vscode-standard" "--list-modules debe listar vscode-standard"
-assert_contains "$list_mods_out" "vscode-sensitive" "--list-modules debe listar vscode-sensitive"
+# Test 2: Invocación de --list-templates
+list_tmpl_out=$("${PROJECT_ROOT}/backup_manager.sh" --list-templates 2>&1)
+assert_contains "$list_tmpl_out" "BIBLIOTECA DE PLANTILLAS DISPONIBLES" "--list-templates debe mostrar cabecera"
+assert_contains "$list_tmpl_out" "firefox" "--list-templates debe listar firefox"
+assert_contains "$list_tmpl_out" "vscode-standard" "--list-templates debe listar vscode-standard"
+assert_contains "$list_tmpl_out" "ssh-keys" "--list-templates debe listar ssh-keys"
+
+# Test 2b: Invocación de --backup-all con 0 módulos activos de inicio (FR-TMPL-002)
+backup_zero_out=$("${PROJECT_ROOT}/backup_manager.sh" --backup-all 2>&1)
+backup_zero_status=$?
+assert_eq "0" "$backup_zero_status" "--backup-all con 0 módulos activos debe retornar 0"
+assert_contains "$backup_zero_out" "No hay módulos configurados para respaldar" "--backup-all debe mostrar aviso descriptivo amigable"
+assert_contains "$backup_zero_out" "--enable-template" "--backup-all debe sugerir usar --enable-template"
 
 # Test 3: Invocación de --list-tags
 list_tags_out=$("${PROJECT_ROOT}/backup_manager.sh" --list-tags 2>&1)
 assert_contains "$list_tags_out" "dev" "--list-tags debe listar la etiqueta 'dev'"
 assert_contains "$list_tags_out" "sensitive" "--list-tags debe listar la etiqueta 'sensitive'"
+
 
 # Test 4: Invocación con opción inválida
 set +e
@@ -75,13 +86,15 @@ MOCK_STORAGE="${SANDBOX_DIR}/mock_ssd"
 MOCK_HOME="${SANDBOX_DIR}/mock_home"
 MOCK_CONFIG="${SANDBOX_DIR}/config.conf"
 MOCK_MODULES_DIR="${SANDBOX_DIR}/modules.d"
+MOCK_TEMPLATES_DIR="${SANDBOX_DIR}/templates.d"
 
 cleanup() {
     rm -rf "$SANDBOX_DIR"
 }
 trap cleanup EXIT
 
-mkdir -p "$MOCK_STORAGE/Backups" "$MOCK_HOME/.config/Code/User" "$MOCK_MODULES_DIR"
+mkdir -p "$MOCK_STORAGE/Backups" "$MOCK_HOME/.config/Code/User" "$MOCK_MODULES_DIR" "$MOCK_TEMPLATES_DIR"
+cp -r "${PROJECT_ROOT}/templates.d/"* "$MOCK_TEMPLATES_DIR/"
 
 # Ficheros de prueba en mock home
 echo '{"theme": "dark"}' > "$MOCK_HOME/.config/Code/User/settings.json"
@@ -115,6 +128,7 @@ controller_init "$PROJECT_ROOT"
 # Sobrescribir variables de entorno para usar el sandbox
 TARGET_USER_HOME="$MOCK_HOME"
 MODULES_DIR="$MOCK_MODULES_DIR"
+TEMPLATES_DIR="$MOCK_TEMPLATES_DIR"
 CONTROLLER_CONFIG_FILE="$MOCK_CONFIG"
 # shellcheck disable=SC1090
 source "$MOCK_CONFIG"
@@ -291,6 +305,38 @@ controller_handle_create_profile "investigador" "Perfil Investigador" "Lab" "\$H
 assert_eq "0" "$?" "controller_handle_create_profile con \$HOME debe retornar 0"
 grep -q '^TARGET_SUBDIR="TEST_Lab"' "$MOCK_PROFILES_DIR/investigador/profile.conf"
 assert_eq "0" "$?" "TARGET_SUBDIR debe haberse sanitizado a ruta relativa en profile.conf"
+
+# Test 21: controller_handle_list_templates en CLI
+tmpl_cli_out=$(controller_handle_list_templates "false")
+assert_contains "$tmpl_cli_out" "BIBLIOTECA DE PLANTILLAS DISPONIBLES" "list_templates debe incluir cabecera"
+assert_contains "$tmpl_cli_out" "firefox" "list_templates debe mostrar firefox"
+assert_contains "$tmpl_cli_out" "ssh-keys" "list_templates debe mostrar ssh-keys"
+
+# Test 22: controller_handle_enable_template activando en catálogo global (sandbox)
+enable_out=$(controller_handle_enable_template "git-config" "false" "default")
+enable_status=$?
+assert_eq "0" "$enable_status" "enable_template git-config debe retornar 0"
+assert_contains "$enable_out" "activada" "Debe confirmar activación"
+assert_eq "1" "$([[ -f "$MOCK_MODULES_DIR/git-config.conf" ]] && echo 1 || echo 0)" "git-config.conf debe existir en sandbox modules.d"
+
+# Test 23: controller_handle_enable_template duplicado debe fallar
+set +e
+dup_enable_out=$(controller_handle_enable_template "git-config" "false" "default" 2>&1)
+dup_enable_status=$?
+set -e
+assert_eq "1" "$dup_enable_status" "enable_template duplicado debe retornar 1"
+assert_contains "$dup_enable_out" "ya está activo" "Debe avisar que ya está activo"
+
+# Test 24: controller_handle_enable_template en perfil específico (docente)
+enable_doc_out=$(controller_handle_enable_template "firefox" "false" "docente")
+assert_eq "0" "$?" "enable_template en perfil docente debe retornar 0"
+assert_eq "1" "$([[ -f "$MOCK_PROFILES_DIR/docente/modules.d/firefox.conf" ]] && echo 1 || echo 0)" "firefox.conf debe existir en docente/modules.d"
+
+# Test 25: controller_handle_export_template promoviendo módulo activo a biblioteca
+export_out=$(controller_handle_export_template "docente-excl" "false" "plantilla-docente")
+assert_eq "0" "$?" "export_template de docente-excl debe retornar 0"
+assert_eq "1" "$([[ -f "$SANDBOX_DIR/templates.d/plantilla-docente.conf" ]] && echo 1 || echo 0)" "plantilla-docente.conf debe existir en templates.d"
+
 
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."

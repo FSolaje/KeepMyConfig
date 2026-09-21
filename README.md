@@ -9,12 +9,18 @@ Permite respaldar, cifrar, purgar y restaurar configuraciones del sistema y apli
 ## Características Principales
 
 - **Arquitectura MVC en Bash:**
-  - **Modelos (`lib/models/`):** Lógica pura de empaquetado, sumas SHA-256, *diffs*, cifrado GPG, perfiles y validaciones.
+  - **Modelos (`lib/models/`):** Lógica pura de empaquetado, sumas SHA-256, *diffs*, cifrado GPG, perfiles, plantillas y validaciones.
   - **Vistas (`lib/views/`):** Interfaz desacoplada basada en `whiptail` para menús, checklists, barras de progreso y formateo ANSI.
   - **Controlador (`lib/controllers/`):** Enrutador de eventos que orquesta la ejecución tanto en modo interactivo (TUI) como desatendido (CLI Headless).
+- **Biblioteca de Plantillas Desacoplada (`templates.d/`):**
+  - Catálogo de recetas predefinidas listas para activar (`ssh-keys`, `bash-env`, `firefox`, `vscode-standard`, `vscode-sensitive`, `intellij`, `git-config`, `thunderbird`, `libreoffice`) junto con un esqueleto canónico documentado (`template-skeleton.conf`).
+  - **Estado inicial limpio de primera ejecución:** la instalación arranca con 0 módulos activos en `modules.d/`. Si se ejecuta `--backup-all`, el sistema ofrece una orientación amigable sugiriendo activar plantillas o crear módulos propios en lugar de emitir un fallo técnico.
+  - **Activación selectiva de ámbito:** las plantillas se pueden instanciar en el catálogo global (`modules.d/`) o de forma exclusiva en el perfil activo (`profiles/<id>/modules.d/`).
+  - **Exportación y creación ágil:** permite promover cualquier módulo activo a la biblioteca de plantillas o redactar nuevas plantillas desde TUI y CLI.
 - **Sistema de Perfiles de Backup & Scoped Modules (`profiles/`):**
   - Soporte de múltiples perfiles de trabajo (ej. `docente`, `desarrollo`, `default`).
   - Resolución jerárquica en cascada: módulos específicos del perfil tienen precedencia (*override*) sobre módulos globales.
+  - **Exclusión selectiva de módulos globales (`DISABLED_MODULES`):** los perfiles particulares pueden desactivar módulos globales específicos sin eliminarlos del catálogo general.
   - Selector de ámbito en el asistente TUI: permite crear módulos en el catálogo global o exclusivos del perfil activo.
   - Soporte para módulos exclusivos por perfil y deduplicación automática de listados.
   - Vinculación opcional de carpetas de destino por perfil (`TARGET_SUBDIR`).
@@ -47,7 +53,8 @@ KeepMyConfig/
 ├── config/
 │   ├── config.conf          # Configuración general (dispositivo, rutas, perfil activo)
 │   └── default_tags.conf    # Catálogo de etiquetas
-├── modules.d/               # Recetas individuales globales de backup (.conf)
+├── templates.d/             # Biblioteca de plantillas y recetas preconfiguradas (.conf)
+├── modules.d/               # Recetas activas globales de backup (.conf)
 ├── profiles/                # Perfiles específicos y módulos con ámbito (scoped modules)
 ├── lib/
 │   ├── models/              # Lógica de negocio (device, profile, module, backup, restore, crypto)
@@ -85,6 +92,16 @@ Ejecutar sin argumentos para desplegar la interfaz visual en terminal:
 ```bash
 # Comprobar estado y montaje del disco externo
 ./backup_manager.sh --check-device
+
+# Listar las plantillas predefinidas en la biblioteca
+./backup_manager.sh --list-templates
+
+# Activar una plantilla en el perfil activo (o global si es default)
+./backup_manager.sh --enable-template firefox
+./backup_manager.sh --profile docente --enable-template git-config
+
+# Exportar un módulo activo a la biblioteca de plantillas
+./backup_manager.sh --export-template mi-modulo
 
 # Realizar backup completo de todos los módulos
 ./backup_manager.sh --backup-all

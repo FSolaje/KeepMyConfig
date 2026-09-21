@@ -1,8 +1,8 @@
 # Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
-> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hito 12 Base consolidado en commit `1ba2f20` en la rama `dev/feature/backup-profiles`. Sub-Hito 12.1 finalizado y verificado (298/298 pruebas unitarias al 100% y SAST limpio). Listo para commit independiente.  
-> **Paso inmediato:** Autorización de commit para Sub-Hito 12.1 y proceder con el **Sub-Hito 12.2** (Almacenamiento por Perfil, Perfil Default y Onboarding).
+> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hito 12 Base consolidado en commit `1ba2f20` y Sub-Hito 12.1 en `a5e5ea3` en la rama `dev/feature/backup-profiles`. Sub-Hito 12.2 finalizado y verificado (318/318 pruebas unitarias al 100%, documentación sincronizada y SAST listo).  
+> **Paso inmediato:** Autorización de commit para Sub-Hito 12.2 y proceder con el **Sub-Hito 12.3** (Almacenamiento por Perfil, Perfil Default y Onboarding).
 
 ---
 
@@ -77,6 +77,18 @@
     - [x] **Selector de Ámbito en TUI (`app_controller.sh`):** Pregunta al usuario si el módulo es Global o Exclusivo del perfil activo al crearlo (Opción 7), y muestra etiquetas `[Global]` o `[Perfil: <id>]` en listados y borrados.
     - [x] **Ampliación de Pruebas Unitarias:** 49 nuevas pruebas añadidas (total: 298 pruebas al 100% de éxito).
     - [x] **Escáner SAST:** 0 alertas en 80 archivos auditados.
+    - [x] **Commit de Consolidación:** Registrado bajo Conventional Commits (`a5e5ea3`).
+14. **Biblioteca de Plantillas y Exclusiones en Perfiles (Sub-Hito 12.2):**
+    - [x] **Documentos SDD:** `specs/templates_and_profile_exclusions/` (`spec.md`, `plan.md`, `tasks.md`).
+    - [x] **Biblioteca `templates.d/`:** Desacoplamiento de recetas predefinidas (9 recetas base + esqueleto canónico `template-skeleton.conf`).
+    - [x] **Estado Inicial Limpio:** 0 módulos activos en `modules.d/` de inicio; orientación amigable en `--backup-all` sin error.
+    - [x] **Modelo `module_model.sh`:** Funciones de listado, lectura, activación, creación y exportación de plantillas.
+    - [x] **Modelo `profile_model.sh`:** Directiva `DISABLED_MODULES`, soporte de exclusión selectiva en perfiles y resolución en cascada con filtrado.
+    - [x] **Controlador y Vistas (`app_controller.sh` y `backup_manager.sh`):**
+      - Opciones en TUI 7 y 9 para activar plantillas, crear plantillas, exportar módulos y gestionar exclusiones en perfiles.
+      - Flags CLI `--list-templates`, `--enable-template` y `--export-template`.
+    - [x] **Documentación Actualizada:** `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md` actualizados según Regla Mandatoria 10 de `AGENT.md`.
+    - [x] **Batería de Pruebas:** 318 pruebas unitarias superadas al 100% (72 pruebas de controlador).
 
 ---
 
@@ -90,13 +102,13 @@
 - [x] Suites de pruebas unitarias y de integración (298 tests passing).
 - [x] Commit independiente del Sub-Hito 12.1 consolidado (`a5e5ea3`).
 
-### Sub-Hito 12.2: Biblioteca de Plantillas (`templates.d/`), Activación y Desactivación en Perfiles (Próximo paso)
-- [ ] Creación del catálogo `templates.d/` con recetas estándar listas para usar (Firefox, IntelliJ, Git, VSCode, SSH, Bash, etc.).
-- [ ] Estado inicial limpio de primera ejecución: 0 módulos activos por defecto; catálogo disponible para activación selectiva.
-- [ ] Soporte de directiva `DISABLED_MODULES=("mod1" "mod2")` en `profile.conf` para desactivar módulos globales en perfiles particulares.
-- [ ] Adaptación de la resolución en cascada en `profile_model.sh` para filtrar exclusiones por perfil.
-- [ ] Asistente TUI/CLI para activar módulos desde la biblioteca de plantillas y gestionar exclusiones en perfiles.
-- [ ] Suites de pruebas unitarias y de integración.
+### Sub-Hito 12.2: Biblioteca de Plantillas (`templates.d/`), Activación y Desactivación en Perfiles (Completado y Listo para Commit)
+- [x] Creación del catálogo `templates.d/` con recetas estándar listas para usar (Firefox, IntelliJ, Git, VSCode, SSH, Bash, etc.).
+- [x] Estado inicial limpio de primera ejecución: 0 módulos activos por defecto; catálogo disponible para activación selectiva.
+- [x] Soporte de directiva `DISABLED_MODULES=("mod1" "mod2")` en `profile.conf` para desactivar módulos globales en perfiles particulares.
+- [x] Adaptación de la resolución en cascada en `profile_model.sh` para filtrar exclusiones por perfil.
+- [x] Asistente TUI/CLI para activar módulos desde la biblioteca de plantillas y gestionar exclusiones en perfiles.
+- [x] Suites de pruebas unitarias y de integración (318 tests passing al 100%).
 - [ ] Commit independiente del Sub-Hito 12.2.
 
 ### Sub-Hito 12.3: Almacenamiento por Perfil, Perfil Default y Onboarding

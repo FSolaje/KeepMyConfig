@@ -36,6 +36,7 @@ assert_exit_code() {
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+RECIPES_DIR="$PROJECT_ROOT/templates.d"
 
 # Cargar el modelo
 # shellcheck source=../lib/models/backup_model.sh
@@ -60,7 +61,7 @@ assert_equals "0" "$?" "generate_timestamp debe coincidir con formato AAAAMMDD_H
 # ------------------------------------------------------------------------------
 # Test 2: Backup de módulo sin ficheros locales existentes
 # ------------------------------------------------------------------------------
-backup_model_run "vscode-standard" "$MOCK_STORAGE" "$MOCK_HOME" "" "false" "false" "$PROJECT_ROOT/modules.d" >/dev/null 2>&1
+backup_model_run "vscode-standard" "$MOCK_STORAGE" "$MOCK_HOME" "" "false" "false" "$RECIPES_DIR" >/dev/null 2>&1
 assert_exit_code "$BACKUP_ERR_NO_FILES" $? "backup_model_run sin ficheros locales debe retornar BACKUP_ERR_NO_FILES"
 
 # ------------------------------------------------------------------------------
@@ -71,7 +72,7 @@ echo '{"editor.tabSize": 4}' > "$MOCK_HOME/.config/Code/User/settings.json"
 echo '{"key": "ctrl+shift+p"}' > "$MOCK_HOME/.config/Code/User/keybindings.json"
 echo '// test snippet' > "$MOCK_HOME/.config/Code/User/snippets/html.json"
 
-RUN_STD_OUT=$(backup_model_run "vscode-standard" "$MOCK_STORAGE" "$MOCK_HOME" "" "false" "false" "$PROJECT_ROOT/modules.d")
+RUN_STD_OUT=$(backup_model_run "vscode-standard" "$MOCK_STORAGE" "$MOCK_HOME" "" "false" "false" "$RECIPES_DIR")
 assert_exit_code "$BACKUP_OK" $? "backup_model_run de vscode-standard debe retornar BACKUP_OK"
 [[ "$RUN_STD_OUT" =~ STATUS=SUCCESS ]]
 assert_equals "0" "$?" "El reporte debe indicar STATUS=SUCCESS"
@@ -111,12 +112,12 @@ echo "SECRET_DB_DATA_123" > "$MOCK_HOME/.config/Code/User/globalStorage/state.vs
 echo "SYNC_TOKEN_XYZ" > "$MOCK_HOME/.config/Code/User/sync/token.dat"
 
 # Intento sin contraseña debe fallar
-backup_model_run "vscode-sensitive" "$MOCK_STORAGE" "$MOCK_HOME" "" "false" "false" "$PROJECT_ROOT/modules.d" >/dev/null 2>&1
+backup_model_run "vscode-sensitive" "$MOCK_STORAGE" "$MOCK_HOME" "" "false" "false" "$RECIPES_DIR" >/dev/null 2>&1
 assert_exit_code "$BACKUP_ERR_PASSPHRASE" $? "backup de módulo sensible sin contraseña debe retornar BACKUP_ERR_PASSPHRASE"
 
 # Respaldo con contraseña y purga automática (Vault & Shred)
 SENS_PASS="PassphrasePrueba_2026!"
-RUN_SENS_OUT=$(backup_model_run "vscode-sensitive" "$MOCK_STORAGE" "$MOCK_HOME" "$SENS_PASS" "false" "false" "$PROJECT_ROOT/modules.d")
+RUN_SENS_OUT=$(backup_model_run "vscode-sensitive" "$MOCK_STORAGE" "$MOCK_HOME" "$SENS_PASS" "false" "false" "$RECIPES_DIR")
 assert_exit_code "$BACKUP_OK" $? "backup de módulo sensible con contraseña debe retornar BACKUP_OK"
 [[ "$RUN_SENS_OUT" =~ IS_SENSITIVE=true ]]
 assert_equals "0" "$?" "El reporte debe indicar IS_SENSITIVE=true"
@@ -144,7 +145,7 @@ sleep 1
 echo '{"editor.tabSize": 2, "modified": true}' > "$MOCK_HOME/.config/Code/User/settings.json"
 echo '// nuevo snippet' > "$MOCK_HOME/.config/Code/User/snippets/css.json"
 
-RUN_STD2_OUT=$(backup_model_run "vscode-standard" "$MOCK_STORAGE" "$MOCK_HOME" "" "false" "false" "$PROJECT_ROOT/modules.d")
+RUN_STD2_OUT=$(backup_model_run "vscode-standard" "$MOCK_STORAGE" "$MOCK_HOME" "" "false" "false" "$RECIPES_DIR")
 assert_exit_code "$BACKUP_OK" $? "Segundo backup de vscode-standard debe retornar BACKUP_OK"
 
 # Inspeccionar el segundo manifiesto
@@ -168,13 +169,13 @@ assert_equals "2" "$HIST_COUNT" "backup_model_list_history debe retornar las 2 m
 # ------------------------------------------------------------------------------
 # Test 7: backup_model_run_by_tag con etiqueta inexistente
 # ------------------------------------------------------------------------------
-backup_model_run_by_tag "etiqueta_inexistente" "$MOCK_STORAGE" "$MOCK_HOME" "" "auto" "$PROJECT_ROOT/modules.d" >/dev/null 2>&1
+backup_model_run_by_tag "etiqueta_inexistente" "$MOCK_STORAGE" "$MOCK_HOME" "" "auto" "$RECIPES_DIR" >/dev/null 2>&1
 assert_exit_code "$BACKUP_ERR_MODULE" $? "run_by_tag en etiqueta inexistente debe retornar BACKUP_ERR_MODULE"
 
 # ------------------------------------------------------------------------------
 # Test 8: backup_model_run_by_tag con etiqueta válida
 # ------------------------------------------------------------------------------
-TAG_OUT=$(backup_model_run_by_tag "editor" "$MOCK_STORAGE" "$MOCK_HOME" "clave123" "false" "$PROJECT_ROOT/modules.d")
+TAG_OUT=$(backup_model_run_by_tag "editor" "$MOCK_STORAGE" "$MOCK_HOME" "clave123" "false" "$RECIPES_DIR")
 assert_exit_code "$BACKUP_OK" $? "run_by_tag con etiqueta válida debe retornar BACKUP_OK"
 echo "$TAG_OUT" | grep -qs "BACKUP_SUCCESS=vscode-standard"
 assert_equals "0" "$?" "run_by_tag debe reportar éxito para vscode-standard"
@@ -186,12 +187,13 @@ mkdir -p "$MOCK_HOME/.ssh"
 echo "ssh-rsa AAAA..." > "$MOCK_HOME/.ssh/id_rsa"
 echo "export FOO=BAR" > "$MOCK_HOME/.bashrc"
 
-ALL_OUT=$(backup_model_run_all "$MOCK_STORAGE" "$MOCK_HOME" "clave123" "false" "$PROJECT_ROOT/modules.d")
+ALL_OUT=$(backup_model_run_all "$MOCK_STORAGE" "$MOCK_HOME" "clave123" "false" "$RECIPES_DIR")
 assert_exit_code "$BACKUP_OK" $? "backup_model_run_all debe retornar BACKUP_OK"
 echo "$ALL_OUT" | grep -qs "BACKUP_SUCCESS=vscode-standard"
 assert_equals "0" "$?" "run_all debe incluir vscode-standard"
 echo "$ALL_OUT" | grep -qs "BACKUP_SUCCESS=bash-env"
 assert_equals "0" "$?" "run_all debe incluir bash-env"
+
 
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."

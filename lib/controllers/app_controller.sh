@@ -195,9 +195,27 @@ controller_handle_backup_all() {
         return 2
     fi
 
+    # Verificar módulos activos en el perfil
+    local active_mods=()
+    local m
+    while IFS= read -r m; do
+        [[ -n "$m" ]] && active_mods+=("$m")
+    done < <(_controller_list_modules)
+
+    if [[ ${#active_mods[@]} -eq 0 ]]; then
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_msgbox "Sin Módulos Activos" "No hay módulos configurados para respaldar en el perfil '$act_prof'.\n\nPuede activar recetas estándar desde la biblioteca de plantillas en la opción '7) Administrar Módulos y Etiquetas'."
+        else
+            ansi_view_info "No hay módulos configurados para respaldar en el perfil '$act_prof'. Active módulos desde la biblioteca de plantillas con '--list-templates' y '--enable-template <id>'."
+        fi
+        return 0
+    fi
+
     # Verificar si hay módulos sensibles en el perfil activo
     local has_sensitive="false"
-    for m in $(_controller_list_modules); do
+    for m in "${active_mods[@]}"; do
         local minfo
         minfo=$(_controller_get_module_info "$m") || continue
         if echo "$minfo" | grep -q 'IS_SENSITIVE=true'; then
@@ -905,7 +923,198 @@ controller_handle_device_check() {
     done
 }
 
-# 8. Asistente de Administración de Módulos y Etiquetas (TUI)
+# 8. Asistente de Administración de Módulos, Plantillas y Etiquetas (TUI)
+controller_handle_list_templates() {
+    local is_tui="${1:-false}"
+    local tmpl_dir="${TEMPLATES_DIR:-${CONTROLLER_BASE_DIR}/templates.d}"
+    local tmpls
+    tmpls=$(module_model_list_templates "$tmpl_dir") || true
+
+    if [[ "$is_tui" == "true" ]]; then
+        local txt="Biblioteca de Plantillas Disponibles (templates.d/):\n\n"
+        while IFS= read -r t; do
+            [[ -n "$t" ]] || continue
+            local tinfo
+            tinfo=$(module_model_get_template "$t" "$tmpl_dir" 2>/dev/null || true)
+            local tname tsens tpurge
+            tname=$(echo "$tinfo" | grep '^NAME=' | cut -d'=' -f2-)
+            tsens=$(echo "$tinfo" | grep '^IS_SENSITIVE=' | cut -d'=' -f2-)
+            tpurge=$(echo "$tinfo" | grep '^PURGE_AFTER_BACKUP=' | cut -d'=' -f2-)
+            txt+="• $t: ${tname:-$t} (Sensible: $tsens, Purga: $tpurge)\n"
+        done <<< "$tmpls"
+        whiptail_view_msgbox "Biblioteca de Plantillas" "$txt"
+    else
+        ansi_view_header "BIBLIOTECA DE PLANTILLAS DISPONIBLES"
+        while IFS= read -r t; do
+            [[ -n "$t" ]] || continue
+            local tinfo
+            tinfo=$(module_model_get_template "$t" "$tmpl_dir" 2>/dev/null || true)
+            local tname tsens tpurge
+            tname=$(echo "$tinfo" | grep '^NAME=' | cut -d'=' -f2-)
+            tsens=$(echo "$tinfo" | grep '^IS_SENSITIVE=' | cut -d'=' -f2-)
+            tpurge=$(echo "$tinfo" | grep '^PURGE_AFTER_BACKUP=' | cut -d'=' -f2-)
+            ansi_view_key_value "$t" "${tname:-$t} [Sensible: $tsens, Purga: $tpurge]"
+        done <<< "$tmpls"
+    fi
+}
+
+controller_handle_enable_template() {
+    local tmpl_id="${1:-}"
+    local is_tui="${2:-false}"
+    local target_profile="${3:-}"
+    local tmpl_dir="${TEMPLATES_DIR:-${CONTROLLER_BASE_DIR}/templates.d}"
+
+    if [[ -z "$tmpl_id" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            local tmpls
+            tmpls=$(module_model_list_templates "$tmpl_dir") || true
+            if [[ -z "$tmpls" ]]; then
+                whiptail_view_msgbox "Biblioteca Vacía" "No se encontraron plantillas disponibles en $tmpl_dir."
+                return 0
+            fi
+            local t_items=()
+            while IFS= read -r t; do
+                [[ -n "$t" ]] || continue
+                local tinfo
+                tinfo=$(module_model_get_template "$t" "$tmpl_dir" 2>/dev/null || true)
+                local tname
+                tname=$(echo "$tinfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$t")
+                t_items+=("$t" "$tname")
+            done <<< "$tmpls"
+            tmpl_id=$(whiptail_view_menu "Activar Plantilla" "Seleccione la plantilla que desea activar:" "${t_items[@]}") || return 0
+        else
+            ansi_view_error "Debe especificar el ID de la plantilla a activar. Use --list-templates para ver las disponibles."
+            return 1
+        fi
+    fi
+
+    [[ -n "$tmpl_id" ]] || return 0
+
+    local act_prof="${target_profile:-$(_controller_get_active_profile)}"
+    local target_dir="$MODULES_DIR"
+    local scope_desc="Catálogo Global"
+
+    if [[ "$is_tui" == "true" ]]; then
+        if [[ "$act_prof" != "default" && -n "$act_prof" ]]; then
+            local scope_choice
+            scope_choice=$(whiptail_view_menu "Ámbito de Activación" "¿Dónde desea activar esta plantilla?" \
+                "1" "Catálogo Global (modules.d/ - disponible para todos)" \
+                "2" "Exclusivo del Perfil '$act_prof' (profiles/$act_prof/modules.d/)") || return 0
+            if [[ "$scope_choice" == "2" ]]; then
+                target_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}/${act_prof}/modules.d"
+                scope_desc="Perfil '$act_prof'"
+            fi
+        fi
+    else
+        if [[ -n "$target_profile" && "$target_profile" != "default" ]]; then
+            target_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}/${target_profile}/modules.d"
+            scope_desc="Perfil '$target_profile'"
+        fi
+    fi
+
+    local act_status=0
+    module_model_activate_template "$tmpl_id" "$target_dir" "$tmpl_dir" || act_status=$?
+
+    if (( act_status == 0 )); then
+        if [[ "$scope_desc" == "Catálogo Global" && "$act_prof" != "default" ]]; then
+            profile_model_enable_module "$act_prof" "$tmpl_id" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null || true
+        fi
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_msgbox "Plantilla Activada" "La plantilla '$tmpl_id' ha sido activada en ($scope_desc):\n${target_dir}/${tmpl_id}.conf\n\nYa forma parte de los módulos a respaldar."
+        else
+            ansi_view_success "Plantilla '$tmpl_id' activada en ($scope_desc): ${target_dir}/${tmpl_id}.conf"
+        fi
+        return 0
+    elif (( act_status == MOD_ERR_ALREADY_EXISTS )); then
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Módulo Existente" "Ya existe un módulo activo con ID '$tmpl_id' en ($scope_desc)."
+        else
+            ansi_view_error "El módulo '$tmpl_id' ya está activo en ($scope_desc)."
+        fi
+        return 1
+    else
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Error de Activación" "No se pudo activar la plantilla '$tmpl_id' (código: $act_status)."
+        else
+            ansi_view_error "Error al activar la plantilla '$tmpl_id' (código: $act_status)."
+        fi
+        return "$act_status"
+    fi
+}
+
+controller_handle_export_template() {
+    local mod_id="${1:-}"
+    local is_tui="${2:-false}"
+    local target_tmpl_id="${3:-}"
+    local tmpl_dir="${TEMPLATES_DIR:-${CONTROLLER_BASE_DIR}/templates.d}"
+    local act_prof
+    act_prof=$(_controller_get_active_profile)
+
+    if [[ "$is_tui" == "true" && -z "$mod_id" ]]; then
+        local all_mods
+        all_mods=$(_controller_list_modules) || true
+        if [[ -z "$all_mods" ]]; then
+            whiptail_view_msgbox "Sin Módulos" "No hay módulos activos en el perfil '$act_prof' para exportar."
+            return 0
+        fi
+        local m_items=()
+        for m in $all_mods; do
+            local minfo
+            minfo=$(_controller_get_module_info "$m") || continue
+            local mname
+            mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
+            m_items+=("$m" "$mname")
+        done
+        mod_id=$(whiptail_view_menu "Exportar a Plantilla" "Seleccione el módulo activo a promover como plantilla:" "${m_items[@]}") || return 0
+    fi
+
+    [[ -n "$mod_id" ]] || return 1
+
+    local mod_path
+    mod_path=$(profile_model_resolve_module "$mod_id" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null || true)
+    if [[ -z "$mod_path" || ! -f "$mod_path" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Error" "No se pudo localizar el archivo del módulo '$mod_id'."
+        else
+            ansi_view_error "No se pudo localizar el archivo del módulo '$mod_id'."
+        fi
+        return 2
+    fi
+
+    if [[ "$is_tui" == "true" && -z "$target_tmpl_id" ]]; then
+        target_tmpl_id=$(whiptail_view_input "ID de Plantilla" "Identificador para la plantilla en la biblioteca:" "$mod_id") || return 0
+        [[ -z "$target_tmpl_id" ]] && return 0
+    fi
+    target_tmpl_id="${target_tmpl_id:-$mod_id}"
+
+    if [[ -f "${tmpl_dir}/${target_tmpl_id}.conf" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            if ! whiptail_view_yesno "Plantilla Existente" "Ya existe una plantilla con ID '$target_tmpl_id' en la biblioteca.\n¿Desea sobrescribirla?"; then
+                return 0
+            fi
+        fi
+    fi
+
+    local exp_status=0
+    module_model_export_to_template "$mod_path" "$target_tmpl_id" "$tmpl_dir" || exp_status=$?
+
+    if (( exp_status == 0 )); then
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_msgbox "Exportación Exitosa" "El módulo '$mod_id' ha sido promovido y guardado como plantilla en:\n${tmpl_dir}/${target_tmpl_id}.conf"
+        else
+            ansi_view_success "Módulo '$mod_id' exportado a plantilla: ${tmpl_dir}/${target_tmpl_id}.conf"
+        fi
+        return 0
+    else
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Error de Exportación" "No se pudo exportar a plantilla (código: $exp_status)."
+        else
+            ansi_view_error "No se pudo exportar el módulo '$mod_id' a plantilla (código: $exp_status)."
+        fi
+        return "$exp_status"
+    fi
+}
+
 controller_handle_modules_admin() {
     local is_tui="${1:-true}"
 
@@ -916,11 +1125,14 @@ controller_handle_modules_admin() {
 
     while true; do
         local admin_choice
-        admin_choice=$(whiptail_view_menu "Administración de Módulos y Etiquetas" "Seleccione una acción:" \
-            "1" "Listar y ver detalle de módulos" \
-            "2" "Crear un nuevo módulo" \
-            "3" "Eliminar un módulo existente" \
-            "4" "Añadir etiqueta al catálogo" \
+        admin_choice=$(whiptail_view_menu "Administración de Módulos y Plantillas" "Seleccione una acción:" \
+            "1" "Listar y ver detalle de módulos activos" \
+            "2" "Activar módulo desde plantilla" \
+            "3" "Crear un nuevo módulo activo" \
+            "4" "Crear una nueva plantilla en la biblioteca" \
+            "5" "Exportar módulo activo a la biblioteca de plantillas" \
+            "6" "Eliminar un módulo activo" \
+            "7" "Añadir etiqueta al catálogo" \
             "0" "Volver al Menú Principal") || return 0
 
         case "$admin_choice" in
@@ -930,7 +1142,7 @@ controller_handle_modules_admin() {
                 local all_mods
                 all_mods=$(profile_model_list_modules "$act_prof" "$CONTROLLER_BASE_DIR") || true
                 if [[ -z "$all_mods" ]]; then
-                    whiptail_view_msgbox "Módulos" "No hay módulos registrados para el perfil activo ($act_prof)."
+                    whiptail_view_msgbox "Módulos" "No hay módulos registrados para el perfil activo ($act_prof).\nPuede activar recetas desde la opción '2) Activar módulo desde plantilla'."
                     continue
                 fi
                 local m_items=()
@@ -956,7 +1168,11 @@ controller_handle_modules_admin() {
                 whiptail_view_msgbox "Detalle del Módulo '$sel_m'" "$detail"
                 ;;
             2)
-                # Asistente de creación
+                # Activar módulo desde plantilla
+                controller_handle_enable_template "" "true"
+                ;;
+            3)
+                # Asistente de creación de módulo activo
                 local act_prof
                 act_prof=$(_controller_get_active_profile)
                 local target_modules_dir="$MODULES_DIR"
@@ -1037,7 +1253,77 @@ controller_handle_modules_admin() {
                     whiptail_view_error "Fallo de Creación" "No se pudo crear el archivo del módulo."
                 fi
                 ;;
-            3)
+            4)
+                # Crear nueva plantilla en templates.d/
+                local tmpl_dir="${TEMPLATES_DIR:-${CONTROLLER_BASE_DIR}/templates.d}"
+                local tmpl_id
+                tmpl_id=$(whiptail_view_input "Nueva Plantilla" "Introduzca el ID único de la plantilla (ej: custom-tool):") || continue
+                [[ -z "$tmpl_id" ]] && continue
+
+                local tmpl_name
+                tmpl_name=$(whiptail_view_input "Nueva Plantilla" "Nombre descriptivo de la receta:" "$tmpl_id") || continue
+
+                local tmpl_paths_str
+                tmpl_paths_str=$(whiptail_view_input "Rutas de la Plantilla" "Rutas relativas a \$HOME separadas por espacio:") || continue
+
+                local all_tags
+                all_tags=$(module_model_get_all_tags) || true
+                local tag_checks=()
+                for t in $all_tags; do
+                    tag_checks+=("$t" "Etiqueta $t" "OFF")
+                done
+                local sel_tags
+                sel_tags=$(whiptail_view_checklist "Etiquetas" "Seleccione etiquetas para la plantilla:" "${tag_checks[@]}") || sel_tags="dev"
+
+                local is_sens="false"
+                if whiptail_view_yesno "Seguridad" "¿La plantilla maneja datos sensibles cifrados con GPG?"; then
+                    is_sens="true"
+                fi
+
+                local purge_val="false"
+                if [[ "$is_sens" == "true" ]]; then
+                    if whiptail_view_yesno "Vault & Shred" "¿Desea activar purga automática (shred -u)?"; then
+                        purge_val="true"
+                    fi
+                fi
+
+                local paths_arr=()
+                read -r -a paths_arr <<< "$tmpl_paths_str"
+                local tags_arr=()
+                read -r -a tags_arr <<< "$sel_tags"
+
+                local paths_joined=""
+                for p in "${paths_arr[@]}"; do
+                    [[ -n "$p" ]] || continue
+                    if [[ -n "$paths_joined" ]]; then
+                        paths_joined+="|$p"
+                    else
+                        paths_joined="$p"
+                    fi
+                done
+
+                local tags_joined=""
+                for t in "${tags_arr[@]}"; do
+                    [[ -n "$t" ]] || continue
+                    if [[ -n "$tags_joined" ]]; then
+                        tags_joined+=",$t"
+                    else
+                        tags_joined="$t"
+                    fi
+                done
+                [[ -z "$tags_joined" ]] && tags_joined="dev"
+
+                if module_model_create_template "$tmpl_id" "$tmpl_name" "$tags_joined" "$paths_joined" "$is_sens" "$purge_val" "" "$tmpl_dir"; then
+                    whiptail_view_msgbox "Plantilla Creada" "La plantilla '$tmpl_id' se ha registrado en la biblioteca:\n${tmpl_dir}/${tmpl_id}.conf\n\nEstá lista para ser activada en cualquier perfil."
+                else
+                    whiptail_view_error "Error" "No se pudo registrar la plantilla en $tmpl_dir."
+                fi
+                ;;
+            5)
+                # Exportar módulo activo a la biblioteca de plantillas
+                controller_handle_export_template "" "true" ""
+                ;;
+            6)
                 local act_prof
                 act_prof=$(_controller_get_active_profile)
                 local all_mods
@@ -1074,7 +1360,7 @@ controller_handle_modules_admin() {
                     fi
                 fi
                 ;;
-            4)
+            7)
                 local new_tag
                 new_tag=$(whiptail_view_input "Nueva Etiqueta" "Introduzca el nombre de la nueva etiqueta (alfanumérico):") || continue
                 if [[ -n "$new_tag" ]]; then
@@ -1091,6 +1377,7 @@ controller_handle_modules_admin() {
         esac
     done
 }
+
 
 # ==============================================================================
 # 9. Gestión de Perfiles de Backup
@@ -1286,7 +1573,8 @@ controller_handle_profiles_admin() {
             "2" "Cambiar perfil activo" \
             "3" "Crear un nuevo perfil" \
             "4" "Listar recetas y módulos del perfil activo" \
-            "5" "Eliminar un perfil" \
+            "5" "Gestionar exclusiones de módulos globales" \
+            "6" "Eliminar un perfil" \
             "0" "Volver al Menú Principal") || return 0
 
         case "$choice" in
@@ -1326,6 +1614,63 @@ controller_handle_profiles_admin() {
                 whiptail_view_msgbox "Módulos del Perfil '$act_prof'" "$mod_list_txt"
                 ;;
             5)
+                if [[ "$act_prof" == "default" ]]; then
+                    whiptail_view_msgbox "Perfil Global" "El perfil 'default' es la base global de KeepMyConfig y no admite exclusiones.\nPara desactivar módulos globales de forma selectiva, cree o active un perfil particular."
+                    continue
+                fi
+
+                local global_mods
+                global_mods=$(module_model_list "${CONTROLLER_BASE_DIR}/modules.d") || true
+                if [[ -z "$global_mods" ]]; then
+                    whiptail_view_msgbox "Sin Módulos Globales" "No hay módulos registrados en el catálogo global (modules.d/) para excluir."
+                    continue
+                fi
+
+                local disabled_mods
+                disabled_mods=$(profile_model_get_disabled_modules "$act_prof" "$profiles_dir" 2>/dev/null || true)
+                local -A dis_map=()
+                while IFS= read -r dm; do
+                    [[ -n "$dm" ]] && dis_map["$dm"]=1
+                done <<< "$disabled_mods"
+
+                local chk_items=()
+                while IFS= read -r gm; do
+                    [[ -n "$gm" ]] || continue
+                    local ginfo
+                    ginfo=$(module_model_get "$gm" "${CONTROLLER_BASE_DIR}/modules.d" 2>/dev/null || true)
+                    local gname
+                    gname=$(echo "$ginfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$gm")
+                    local state="OFF"
+                    if [[ -n "${dis_map[$gm]:-}" ]]; then
+                        state="ON"
+                    fi
+                    chk_items+=("$gm" "$gname" "$state")
+                done <<< "$global_mods"
+
+                local sel_disabled
+                sel_disabled=$(whiptail_view_checklist "Exclusiones de Módulos Globales" \
+                    "Marque [ON] los módulos globales que desea EXCLUIR del perfil '$act_prof':\n(Los módulos marcados NO se respaldarán en este perfil)" \
+                    "${chk_items[@]}") || continue
+
+                local -A new_dis_map=()
+                for sel in $sel_disabled; do
+                    sel="${sel%\"}"
+                    sel="${sel#\"}"
+                    [[ -n "$sel" ]] && new_dis_map["$sel"]=1
+                done
+
+                while IFS= read -r gm; do
+                    [[ -n "$gm" ]] || continue
+                    if [[ -n "${new_dis_map[$gm]:-}" ]]; then
+                        profile_model_disable_module "$act_prof" "$gm" "$profiles_dir"
+                    else
+                        profile_model_enable_module "$act_prof" "$gm" "$profiles_dir"
+                    fi
+                done <<< "$global_mods"
+
+                whiptail_view_msgbox "Exclusiones Actualizadas" "La lista de exclusiones para el perfil '$act_prof' ha sido actualizada correctamente en profile.conf."
+                ;;
+            6)
                 local profiles
                 profiles=$(profile_model_list "$profiles_dir") || true
                 local del_items=()
@@ -1355,6 +1700,7 @@ controller_handle_profiles_admin() {
                     fi
                 fi
                 ;;
+
             0)
                 return 0
                 ;;
@@ -1441,6 +1787,11 @@ controller_run_cli() {
                 echo "  --list-profiles                                Listar todos los perfiles disponibles."
                 echo "  --set-active-profile <id>                      Fijar perfil activo en config/config.conf."
                 echo "  --create-profile <id>                          Crear un nuevo perfil de backup."
+                echo ""
+                echo "Biblioteca de Plantillas y Recetas:"
+                echo "  --list-templates                               Listar plantillas disponibles en la biblioteca."
+                echo "  --enable-template <id> [--profile <perfil>]    Activar una plantilla en global o en un perfil."
+                echo "  --export-template <id>                         Exportar un módulo activo a la biblioteca de plantillas."
                 echo ""
                 echo "Ayuda:"
                 echo "  -h, --help                                     Mostrar este menú de ayuda."
@@ -1537,6 +1888,20 @@ controller_run_cli() {
                 action="list-tags"
                 shift
                 ;;
+            --list-templates)
+                action="list-templates"
+                shift
+                ;;
+            --enable-template)
+                action="enable-template"
+                param_val="${2:-}"
+                shift 2 || true
+                ;;
+            --export-template)
+                action="export-template"
+                param_val="${2:-}"
+                shift 2 || true
+                ;;
             *)
                 ansi_view_error "Opción no reconocida: $1"
                 echo "Ejecute '$0 --help' para ver las opciones disponibles."
@@ -1587,6 +1952,15 @@ controller_run_cli() {
         create-profile)
             controller_handle_create_profile "$param_val" "$param_val" "Perfil creado desde CLI" "" "false"
             ;;
+        list-templates)
+            controller_handle_list_templates "false"
+            ;;
+        enable-template)
+            controller_handle_enable_template "$param_val" "false" "$ACTIVE_PROFILE_OVERRIDE"
+            ;;
+        export-template)
+            controller_handle_export_template "$param_val" "false" "$param_val"
+            ;;
         list-modules)
             local act_prof
             act_prof=$(_controller_get_active_profile)
@@ -1628,4 +2002,5 @@ controller_run_cli() {
             return 5
             ;;
     esac
+
 }
