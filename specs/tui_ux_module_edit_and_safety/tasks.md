@@ -33,35 +33,44 @@
 - [x] Actualizar el mensaje de entrada en `controller_handle_set_backup_dest` explicando el tratamiento de rutas relativas y absolutas.
 - [x] Actualizar el mensaje de inicialización en `device_model_init_target_directory` en `lib/models/device_model.sh`.
 - [x] Verificar visualmente la claridad de los textos en la TUI.
-- [ ] **Hito de Commit 2 (feat):**
+- [x] **Hito de Commit 2 (feat):**
   ```bash
   feat(view): añadir contexto de destino base y reglas de ruta en asistentes TUI
   ```
 
 ---
 
-## Fase 3: Asistente de Edición de Módulos en la TUI
+## Fase 3: Asistente de Edición de Módulos y Control de Estado (Flag Activo/Inactivo)
+- [ ] Implementar `module_model_is_enabled` y `module_model_set_enabled` en `lib/models/module_model.sh`.
+- [ ] Desbloquear `DISABLED_MODULES` para el perfil `default` en `lib/models/profile_model.sh`.
+- [ ] Implementar subcomandos CLI `--enable-module <id>` y `--disable-module <id>` en `lib/controllers/app_controller.sh` y `backup_manager.sh`.
+- [ ] Implementar sincronización inteligente entre etiqueta `sensitive` y cifrado GPG en creación y edición de módulos (activación directa si marcada; consulta técnica directa si no marcada).
+- [ ] Aplicar consentimiento activo obligatorio con foco en `[NO]` (`whiptail_view_confirm_critical`) para la opción de purga (`shred -u`) al crear o editar módulos, ofertándola universalmente para módulos sensibles y no sensibles.
 - [ ] Implementar `controller_handle_edit_module` en `lib/controllers/app_controller.sh`.
-- [ ] Añadir selector de módulo activo con indicación de ámbito `[Global]` o `[Perfil: <id>]`.
+- [ ] Añadir selector de módulo activo con indicación de ámbito (`[Global]` o `[Perfil: <id>]`) y estado (`[ON]` o `[OFF]`).
 - [ ] Implementar bifurcación de *Override* si se edita un módulo global desde un perfil específico.
-- [ ] Precargar y permitir editar: nombre descriptivo, rutas (con `whiptail_view_input_paths`), etiquetas (checklist), sensible (GPG) y purga (`shred -u`).
-- [ ] Integrar la opción `2) ✏️ [MÓDULOS] Modificar un Módulo Existente` en el menú de módulos.
+- [ ] Precargar y permitir editar: nombre descriptivo, rutas (con `whiptail_view_input_paths`), etiquetas (checklist), sensible (GPG), purga (`shred -u`) y estado (`MODULE_ENABLED`).
+- [ ] Integrar la opción `2) ✏️ [MÓDULOS] Modificar un Módulo Existente` y conmutador rápido de estado en el menú de módulos.
+- [ ] Adaptar `--backup-all` y `--restore-all` para ignorar módulos con `MODULE_ENABLED="false"`.
 - [ ] Verificar edición interactiva y persistencia correcta en el archivo `.conf`.
 - [ ] **Hito de Commit 3 (feat):**
   ```bash
-  feat(modules): implementar asistente de edicion interactiva de modulos en TUI
+  feat(modules): implementar asistente de edicion interactiva de modulos y flag de estado
   ```
 
 ---
 
-## Fase 4: Resolución de Colisiones en Plantillas y Clonación de Recetas
+## Fase 4: Resolución de Colisiones en Plantillas, Ficha Técnica y Ámbito Universal
+- [ ] Implementar ficha técnica de previsualización con resumen completo y confirmación interactiva antes de activar plantilla en `controller_handle_enable_template`.
+- [ ] Interrogar con foco obligatorio en `[NO]` sobre la conservación de purga (`shred -u`) al activar plantillas que la definan de fábrica, desactivándola por defecto si no es confirmada activamente.
+- [ ] Añadir selector universal de ámbito (Catálogo Global vs Exclusivo de Perfil) al activar plantilla desde cualquier perfil (incluido `default`).
 - [ ] Implementar `module_model_activate_template_as` en `lib/models/module_model.sh` para admitir nuevo ID y nombre.
 - [ ] Modificar `controller_handle_enable_template` para abrir menú de 3 opciones ante colisión (Clonar con nuevo nombre, Sobrescribir, Cancelar).
 - [ ] Añadir soporte en CLI para `--as-module <nuevo_id>` y `--force`.
 - [ ] Aplicar la misma resolución simétrica al exportar módulos a la biblioteca de plantillas.
 - [ ] **Hito de Commit 4 (feat):**
   ```bash
-  feat(templates): incorporar clonacion con nuevo identificador y resolucion interactiva de colisiones
+  feat(templates): incorporar clonacion con nuevo identificador, ficha tecnica y resolucion interactiva de colisiones
   ```
 
 ---

@@ -53,12 +53,19 @@ La implementación se estructura respetando rigurosamente el patrón MVC desacop
   - Lee la plantilla `<template_id>.conf`.
   - Reemplaza `MODULE_ID="<new_id>"` y `MODULE_NAME="<new_name>"`.
   - Persiste el archivo `<target_dir>/<new_id>.conf` validando sintaxis.
+- **`module_model_is_enabled <file_path>`:**
+  - Evalúa `MODULE_ENABLED` en subshell aislada; retorna 0 si es `true` (o ausente), 1 si es `false`.
+- **`module_model_set_enabled <file_path> <true|false>`:**
+  - Actualiza o inserta de forma atómica la directiva `MODULE_ENABLED="true/false"` en el archivo `.conf`.
 - **`module_model_update_field <module_id> <field_name> <field_val> <modules_dir>`:**
   - Modificador auxiliar para campos individuales si es necesario.
 
 ### 2.2. `lib/models/profile_model.sh`
 - **`profile_model_can_delete <profile_id> <active_profile>`:**
   - Retorna error numérico si `profile_id == "default"` o `profile_id == active_profile`.
+- **Desbloqueo de exclusiones en perfil `default`:**
+  - Levantar la guarda `if [[ "$profile_id" == "default" ]]; then return ...` en `profile_model_disable_module` y `profile_model_enable_module`.
+  - En `profile_model_list_modules`, consultar `DISABLED_MODULES` también cuando `active_profile == "default"`.
 
 ---
 
@@ -99,14 +106,24 @@ La implementación se estructura respetando rigurosamente el patrón MVC desacop
   }
   ```
 
-### 4.2. Asistente de Edición de Módulos (`controller_handle_edit_module`)
-- Permite seleccionar un módulo activo.
-- Pregunta sobre *Override* si es global en perfil específico.
-- Carga valores previos y guía la edición interactiva (nombre, rutas con `whiptail_view_input_paths`, tags con checklist, sensible y purga).
+### 4.2. Asistente de Creación y Edición de Módulos (`controller_handle_create_module` / `controller_handle_edit_module`)
+- Permite seleccionar un módulo activo (o crear uno nuevo).
+- Pregunta sobre *Override* si se edita un módulo global desde un perfil específico.
+- **Sincronización inteligente de etiqueta `sensitive`:**
+  - Si en el checklist de tags se marca `sensitive`: `IS_SENSITIVE="true"` directo sin preguntar.
+  - Si NO se marca `sensitive`: no se pregunta si son datos sensibles, pero se ofrece directamente la opción de cifrado GPG (`IS_SENSITIVE=true/false`). Si acepta, se añade el tag `sensitive` a la receta; si no, queda sin cifrar (`IS_SENSITIVE="false"`).
+- **Consentimiento activo y oferta universal para purga (`shred -u`):**
+  - La opción de purga se consulta siempre para cualquier módulo, **tanto si es sensible/cifrado como si no lo es**.
+  - Toda consulta sobre purga debe realizarse mediante `whiptail_view_confirm_critical` (o diálogo con `--defaultno`), requiriendo que el usuario se desplace activamente a `[SÍ]` para activarla.
+- Permite conmutar la flag `MODULE_ENABLED="true/false"`.
+- Carga valores previos y guía la edición interactiva (nombre, rutas con `whiptail_view_input_paths`, tags con checklist, sensible, purga y estado).
 - Guarda atómicamente.
 
-### 4.3. Resolución de Colisiones en Plantillas (`controller_handle_enable_template`)
-- Si `module_model_activate_template` detecta colisión:
+### 4.3. Activación Guiada de Plantillas y Resolución de Colisiones (`controller_handle_enable_template`)
+- **Ficha Técnica de Previsualización:** Antes de activar, muestra un diálogo resumen con ID, Nombre, Descripción, Rutas a respaldar, Etiquetas, Cifrado y Purga, solicitando confirmación interactiva.
+- **Consentimiento activo ante plantillas con purga de fábrica:** Si la plantilla define `PURGE_AFTER_BACKUP="true"` (ej. `ssh-keys`), se interroga al usuario con foco en `[NO]` si desea mantener la destrucción de archivos; si responde No, se activa con `PURGE_AFTER_BACKUP="false"`.
+- **Selector Universal de Ámbito:** Ofrece siempre elegir si se activa en el *Catálogo Global* (`modules.d/`) o *Exclusivo del Perfil Activo* (`profiles/<perfil>/modules.d/`, tanto para `default` como para cualquier otro perfil).
+- **Gestión de Colisiones:** Si `module_model_activate_template` detecta que ya existe:
   - En TUI: Diálogo con 3 opciones (Clonar con nuevo nombre, Sobrescribir, Cancelar).
   - En CLI: Admite flag `--as-module <id>` o `--force`.
 
