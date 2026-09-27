@@ -29,10 +29,10 @@
 ---
 
 ## Fase 2: Clarificación Contextual en Diálogos de Rutas (UX)
-- [ ] Actualizar el mensaje de `whiptail_view_input` en `controller_handle_create_profile` explicando la ruta base `BACKUP_DESTINATION` y la convención Zero-Config.
-- [ ] Actualizar el mensaje de entrada en `controller_handle_set_backup_dest` explicando el tratamiento de rutas relativas y absolutas.
-- [ ] Actualizar el mensaje de inicialización en `device_model_init_target_directory` en `lib/models/device_model.sh`.
-- [ ] Verificar visualmente la claridad de los textos en la TUI.
+- [x] Actualizar el mensaje de `whiptail_view_input` en `controller_handle_create_profile` explicando la ruta base `BACKUP_DESTINATION` y la convención Zero-Config.
+- [x] Actualizar el mensaje de entrada en `controller_handle_set_backup_dest` explicando el tratamiento de rutas relativas y absolutas.
+- [x] Actualizar el mensaje de inicialización en `device_model_init_target_directory` en `lib/models/device_model.sh`.
+- [x] Verificar visualmente la claridad de los textos en la TUI.
 - [ ] **Hito de Commit 2 (feat):**
   ```bash
   feat(view): añadir contexto de destino base y reglas de ruta en asistentes TUI

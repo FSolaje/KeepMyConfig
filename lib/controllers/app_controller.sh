@@ -1048,9 +1048,20 @@ controller_handle_init_target() {
     local is_tui="${3:-false}"
 
     if [[ "$is_tui" == "true" && -z "$subdir" ]]; then
+        local base_dest="${BACKUP_DESTINATION:-}"
+        if [[ -z "$base_dest" ]]; then
+            local cfg_file="$(_controller_get_config_file)"
+            base_dest=$(grep '^BACKUP_DESTINATION=' "$cfg_file" 2>/dev/null | cut -d'=' -f2- | tr -d '"')
+            base_dest="${base_dest:-~/Backups/KeepMyConfig}"
+        fi
         local def_sub="Backups/$(hostname)"
-        subdir=$(whiptail_view_input "Inicializar Destino de Backup" \
-            "Introduzca la ruta relativa de la subcarpeta para este equipo:" "$def_sub") || return 0
+        local prompt_init="Inicializar una subcarpeta de almacenamiento para este equipo:\n\n"
+        prompt_init+="• Destino base actual: $base_dest\n\n"
+        prompt_init+="Indique el nombre de la subcarpeta relativa (ej: '$def_sub').\n"
+        prompt_init+="El sistema creará la estructura 'archives/', 'logs/' y el marcador '.backup_storage_marker' dentro de:\n"
+        prompt_init+="-> $base_dest/<subcarpeta>\n\n"
+        prompt_init+="Subcarpeta a inicializar:"
+        subdir=$(whiptail_view_input "Inicializar Destino de Backup" "$prompt_init" "$def_sub") || return 0
         [[ -z "$subdir" ]] && return 0
 
         if whiptail_view_yesno "Destino Predeterminado" "¿Desea establecer '$subdir' como la carpeta activa en config.conf?"; then
@@ -1280,7 +1291,11 @@ controller_handle_onboarding_wizard() {
 
         local chosen_dest=""
         if [[ "$sel" == "$manual_idx" ]]; then
-            chosen_dest=$(whiptail_view_input "Ruta Personalizada de Backup" "Ingrese la ruta del directorio para las copias (ej: ~/Backups o /media/...):" "~/Backups/KeepMyConfig") || return 1
+            local prompt_onboard="Indique la ruta base para almacenar las copias de seguridad de sus perfiles:\n\n"
+            prompt_onboard+="• Se admite formato con tilde (ej: ~/Backups/KeepMyConfig)\n"
+            prompt_onboard+="• Se admiten rutas absolutas (ej: /media/\$USER/MiDisco/Backups o /mnt/servidor)\n\n"
+            prompt_onboard+="Ruta de destino:"
+            chosen_dest=$(whiptail_view_input "Ruta Personalizada de Backup" "$prompt_onboard" "~/Backups/KeepMyConfig") || return 1
         else
             chosen_dest="${opt_paths[$sel]:-~/Backups/KeepMyConfig}"
         fi
@@ -1333,7 +1348,8 @@ controller_handle_onboarding_wizard() {
 
         local chosen_dest=""
         if [[ "$sel" == "$manual_idx" ]]; then
-            read -r -p "Ingrese la ruta de destino: " chosen_dest || true
+            echo "Ingrese la ruta de destino (admite '~/...' o ruta absoluta ej: '/media/...'):"
+            read -r -p "Destino [~/Backups/KeepMyConfig]: " chosen_dest || true
         else
             chosen_dest="${opt_paths[$sel]:-~/Backups/KeepMyConfig}"
         fi
@@ -1370,8 +1386,20 @@ controller_handle_set_backup_destination() {
     local cfg_file="$(_controller_get_config_file)"
 
     if [[ "$is_tui" == "true" ]]; then
-        local cur_dest="${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}"
-        new_dest=$(whiptail_view_input "Destino de Backup" "Introduzca la nueva ruta de destino para las copias:" "$cur_dest") || return 0
+        local cur_dest="${BACKUP_DESTINATION:-}"
+        if [[ -z "$cur_dest" ]]; then
+            cur_dest=$(grep '^BACKUP_DESTINATION=' "$cfg_file" 2>/dev/null | cut -d'=' -f2- | tr -d '"')
+            cur_dest="${cur_dest:-~/Backups/KeepMyConfig}"
+        fi
+        local prompt_dest="Defina la ruta base donde se almacenarán las copias de seguridad de sus perfiles:\n\n"
+        prompt_dest+="• Destino base actual: $cur_dest\n\n"
+        prompt_dest+="Formatos admitidos:\n"
+        prompt_dest+="• Ruta local con tilde: ej. ~/Backups/KeepMyConfig\n"
+        prompt_dest+="• Ruta absoluta en disco local o externo: ej. /media/\$USER/MiDisco/Backups\n"
+        prompt_dest+="• Ruta de red montada: ej. /mnt/nfs_backups\n\n"
+        prompt_dest+="Nota: El sistema desplegará automáticamente el marcador '.backup_storage_marker' si no existe.\n\n"
+        prompt_dest+="Introduzca la nueva ruta de destino:"
+        new_dest=$(whiptail_view_input "Destino Global de Backup" "$prompt_dest" "$cur_dest") || return 0
         [[ -n "$new_dest" ]] || return 0
         local resolved
         resolved=$(device_model_resolve_destination "$new_dest") || {
@@ -1986,7 +2014,20 @@ controller_handle_create_profile() {
 
         name=$(whiptail_view_input "Nuevo Perfil" "Nombre descriptivo:" "$profile_id") || return 0
         desc=$(whiptail_view_input "Nuevo Perfil" "Descripción del perfil:" "") || return 0
-        target_subdir=$(whiptail_view_input "Nuevo Perfil" "Subcarpeta de backup asociada (opcional, ej: Backups/Docente):" "") || return 0
+        local base_dest="${BACKUP_DESTINATION:-}"
+        if [[ -z "$base_dest" ]]; then
+            local cfg_file="$(_controller_get_config_file)"
+            base_dest=$(grep '^BACKUP_DESTINATION=' "$cfg_file" 2>/dev/null | cut -d'=' -f2- | tr -d '"')
+            base_dest="${base_dest:-~/Backups/KeepMyConfig}"
+        fi
+        local prompt_sub="Ubicación o subcarpeta de backup para este perfil:\n\n"
+        prompt_sub+="• Destino base actual: $base_dest\n\n"
+        prompt_sub+="Opciones disponibles:\n"
+        prompt_sub+="• Dejar VACÍO: Aplica Zero-Config automático -> $base_dest/$profile_id\n"
+        prompt_sub+="• Subcarpeta relativa (ej: 'Trabajo/$profile_id'): Se ubica dentro del destino base.\n"
+        prompt_sub+="• Ruta absoluta o '~' (ej: '~/MisBackups/$profile_id'): Destino independiente fuera del base.\n\n"
+        prompt_sub+="Ingrese la subcarpeta o ruta deseada (o deje en blanco para predeterminada):"
+        target_subdir=$(whiptail_view_input "Nuevo Perfil - Destino" "$prompt_sub" "") || return 0
     fi
 
     if [[ -z "$profile_id" ]]; then
