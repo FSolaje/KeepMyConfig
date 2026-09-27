@@ -166,6 +166,7 @@ main() {
     # 4. Gestión del directorio de la aplicación
     if [[ "$PURGE" == true ]]; then
         if [[ -d "$TARGET_DIR" ]]; then
+            chmod -R u+w "$TARGET_DIR" 2>/dev/null || true
             rm -rf "$TARGET_DIR"
             log_success "Directorio de aplicación y datos purgado completamente: ${TARGET_DIR}"
         fi

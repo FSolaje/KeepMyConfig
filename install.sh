@@ -144,6 +144,9 @@ deploy_application_files() {
     local target_dir="$1"
     local force="$2"
 
+    # Desbloquear permisos de escritura preventivamente por si se trata de una actualización
+    chmod -R u+w "$target_dir" 2>/dev/null || true
+
     mkdir -p "$target_dir"
     mkdir -p "${target_dir}/config"
     mkdir -p "${target_dir}/modules.d"
@@ -267,6 +270,40 @@ EOF
         sed -i "s|^ACTIVE_PROFILE=.*|ACTIVE_PROFILE=\"${initial_profile}\"|" "$config_file"
         log_success "Perfil inicial '${initial_profile}' creado y configurado como activo."
     fi
+}
+
+# ------------------------------------------------------------------------------
+# Endurecimiento Preventivo de Permisos UNIX (Read-Only Hardening)
+# ------------------------------------------------------------------------------
+apply_security_hardening() {
+    local target_dir="$1"
+    log_info "Aplicando endurecimiento de permisos UNIX (solo lectura en código y librerías)..."
+
+    # Ejecutables principales del core en solo lectura y ejecución
+    chmod 0555 "${target_dir}/backup_manager.sh"
+    if [[ -f "${target_dir}/uninstall.sh" ]]; then
+        chmod 0555 "${target_dir}/uninstall.sh"
+    fi
+
+    # Librerías MVC en solo lectura
+    find "${target_dir}/lib" -type d -exec chmod 0555 {} +
+    find "${target_dir}/lib" -type f -exec chmod 0444 {} +
+
+    # Catálogo de plantillas en solo lectura
+    if [[ -d "${target_dir}/templates.d" ]]; then
+        find "${target_dir}/templates.d" -type d -exec chmod 0555 {} +
+        find "${target_dir}/templates.d" -type f -exec chmod 0444 {} +
+    fi
+
+    # Carpetas de datos mutables del usuario permanecen con permisos de escritura
+    find "${target_dir}/config" -type d -exec chmod 0755 {} +
+    find "${target_dir}/config" -type f -exec chmod 0644 {} +
+    find "${target_dir}/modules.d" -type d -exec chmod 0755 {} +
+    find "${target_dir}/modules.d" -type f -exec chmod 0644 {} +
+    find "${target_dir}/profiles" -type d -exec chmod 0755 {} +
+    find "${target_dir}/profiles" -type f -exec chmod 0644 {} +
+
+    log_success "Blindaje de permisos UNIX completado."
 }
 
 # ------------------------------------------------------------------------------
@@ -519,7 +556,10 @@ main() {
     log_info "Configurando integración con el escritorio..."
     setup_xdg_integration "$TARGET_DIR" "$BIN_DIR" "$terminal_cmd"
 
-    # 7. Auditar PATH
+    # 7. Endurecimiento preventivo de permisos UNIX (Solo lectura en código)
+    apply_security_hardening "$TARGET_DIR"
+
+    # 8. Auditar PATH
     audit_user_path "$BIN_DIR"
 
     echo -e "${COLOR_BOLD}======================================================${COLOR_RESET}"
