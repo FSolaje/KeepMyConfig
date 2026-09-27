@@ -1,174 +1,165 @@
-# KeepMyConfig - Gestor de Backup y Recuperación Modular en Terminal (MVC en Bash)
+# KeepMyConfig - Gestor de Backup y Recuperación Modular en Terminal
 
-Sistema modular y desacoplado de copias de seguridad e histórico para terminal, diseñado específicamente para entornos educativos y corporativos con permisos restringidos (sin `sudo`) como **Lliurex 25 (Ubuntu 24.04 LTS)**.
+[![Bash 5.0+](https://img.shields.io/badge/bash-5.0%2B-blue.svg)](https://www.gnu.org/software/bash/)
+[![Linux](https://img.shields.io/badge/platform-linux-lightgrey.svg)](https://www.kernel.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![SemVer 2.0.0](https://img.shields.io/badge/semver-2.0.0-green.svg)](https://semver.org/)
 
-Permite respaldar, cifrar, purgar y restaurar configuraciones del sistema y aplicaciones en almacenamiento universal (carpeta local `~/Backups/KeepMyConfig`, disco externo SSD/USB o montajes de red mediante `BACKUP_DESTINATION`) de forma atómica o por lotes, garantizando la persistencia de datos ante restauraciones periódicas del SAI o congelación de discos.
+**KeepMyConfig** es un gestor modular y desacoplado de copias de seguridad, cifrado y restauración en terminal bajo arquitectura **MVC en Bash puro**, diseñado específicamente para entornos educativos y corporativos con permisos restringidos (sin privilegios `sudo`) como **Lliurex 25 (Ubuntu 24.04 LTS)**.
 
----
-
-## Características Principales
-
-- **Arquitectura MVC en Bash:**
-  - **Modelos (`lib/models/`):** Lógica pura de empaquetado, sumas SHA-256, *diffs*, cifrado GPG, perfiles, plantillas y validaciones.
-  - **Vistas (`lib/views/`):** Interfaz desacoplada basada en `whiptail` para menús, checklists, barras de progreso y formateo ANSI.
-  - **Controlador (`lib/controllers/`):** Enrutador de eventos que orquesta la ejecución tanto en modo interactivo (TUI) como desatendido (CLI Headless).
-- **Ruta Universal de Almacenamiento & Asistente de Onboarding:**
-  - **Destino Canónico Único (`BACKUP_DESTINATION`):** Flexibilidad total para definir destinos locales (`~/Backups/KeepMyConfig`), discos montados (`/media/$USER/...`), rutas de red o notación semántica de conveniencia (`@media/<LABEL>/...`).
-  - **Asistente de Primera Ejecución (Onboarding Wizard):** Configuración inicial guiada paso a paso tanto en TUI como en CLI (`--setup`), con auditoría de discos conectados, recomendación de ruta local y auto-despliegue del marcador de seguridad `.backup_storage_marker`.
-  - **Control de Persistencia de Sesión (`REMEMBER_LAST_PROFILE`):** Opción para recordar el perfil de la última sesión al iniciar o arrancar siempre en el perfil predeterminado.
-- **Sistema de Perfiles de Backup & Convención Zero-Config (`profiles/`):**
-  - Soporte de múltiples perfiles de trabajo (ej. `docente`, `desarrollo`, `default`).
-  - **Convención Zero-Config por Perfil:** Las copias de perfiles secundarios se organizan de forma automática en `<BACKUP_DESTINATION>/<id_perfil>` sin necesidad de configuración adicional, preservando la raíz para el perfil `default`.
-  - **Perfil Físico `default` Permanente & Auto-Healing:** Garantía de existencia física de `profiles/default/profile.conf` con recuperación automática si es eliminado.
-  - Resolución jerárquica en cascada: módulos específicos del perfil tienen precedencia (*override*) sobre módulos globales.
-  - **Exclusión selectiva de módulos globales (`DISABLED_MODULES`):** los perfiles particulares pueden desactivar módulos globales específicos sin eliminarlos del catálogo general.
-  - Selector de ámbito en el asistente TUI: permite crear módulos en el catálogo global o exclusivos del perfil activo.
-  - Soporte para módulos exclusivos por perfil y deduplicación automática de listados.
-- **Biblioteca de Plantillas Desacoplada (`templates.d/`):**
-  - Catálogo de recetas predefinidas listas para activar (`ssh-keys`, `bash-env`, `firefox`, `vscode-standard`, `vscode-sensitive`, `intellij`, `git-config`, `thunderbird`, `libreoffice`) junto con un esqueleto canónico documentado (`template-skeleton.conf`).
-  - **Estado inicial limpio de primera ejecución:** la instalación arranca con 0 módulos activos en `modules.d/`. Si se ejecuta `--backup-all`, el sistema ofrece una orientación amigable sugiriendo activar plantillas o crear módulos propios en lugar de emitir un fallo técnico.
-  - **Activación selectiva de ámbito:** las plantillas se pueden instanciar en el catálogo global (`modules.d/`) o de forma exclusiva en el perfil activo (`profiles/<id>/modules.d/`).
-  - **Exportación y creación ágil:** permite promover cualquier módulo activo a la biblioteca de plantillas o redactar nuevas plantillas desde TUI y CLI.
-- **Módulos Atómicos con Captura Guiada y Sanitización de Rutas (`modules.d/`):**
-  - Cada aplicación o configuración es una receta independiente (`.conf`).
-  - **Captura interactiva de rutas línea a línea:** Entrada asistida con confirmación por Enter, visualización de rutas acumuladas en pantalla y orientación sobre rutas relativas/$HOME.
-  - Normalización inteligente de rutas en recetas (`$HOME/`, `~/`, `/home/<user>/` convertidos a rutas relativas seguras).
-  - Desacoplamiento de aplicaciones complejas en perfiles estándar y sensibles (ej. `vscode-standard` vs `vscode-sensitive`).
-- **Sistema de Etiquetas Dinámicas:**
-  - Agrupación de respaldos y restauraciones por etiquetas (`dev`, `sensitive`, `system`, etc.).
-- **Gestión Efímera de Datos Sensibles (*Vault & Shred*):**
-  - Cifrado simétrico robusto mediante **GPG (AES-256)**.
-  - Purga segura en disco local mediante `shred -u -z -n 3` tras verificar el respaldo.
-  - Reporte interactivo detallado con rutas absolutas completas de origen, destino y ficheros destruidos.
-  - Restauración instantánea de datos sensibles con una única orden al inicio de la jornada de trabajo.
-- **Seguridad de Dispositivo Anti-Escritura Fantasma:**
-  - Comprobación mandatoria del archivo testigo (`.backup_storage_marker`) con validación jerárquica y creación atómica de subcarpetas.
-- **Histórico con Marcas de Tiempo y Auditoría:**
-  - Nomenclatura uniforme: `AAAAMMDD_HHMMSS`.
-  - Generación de `manifest.log` con inventario de ficheros, hashes SHA-256 y bitácora `backup_history.log`.
-- **Arquitectura Universal de Menús TUI & Personalización Visual:**
-  - **Estructura Híbrida de 7 Menús:** Acceso directo a operaciones inmediatas de respaldo y restauración en el Menú Principal, y submenús especializados para Respaldo, Restauración, Perfiles, Módulos, Almacenamiento y Preferencias.
-  - **Telemetría Dinámica en Cabeceras:** Cada pantalla TUI informa en tiempo real del perfil activo, ruta de destino resuelta, módulos activos y espacio disponible en disco.
-  - **Temas de Color (`NEWT_COLORS`):** Soporte de paletas visuales seleccionables desde la TUI o `config.conf` (`default` nativo del sistema, `midnight`, `cyberdark`, `aubergine`, `amber`).
-- **Pre-Flight Safety Gate & Salvaguardas de Seguridad:**
-  - **Matriz de Impacto Previo:** Inspección interactiva de ámbito, nivel de cifrado GPG, estado de purga y destino de cada módulo antes de iniciar cualquier copia de seguridad.
-  - **Alerta Roja de Purga Irreversible:** Aviso crítico destacado (`\033[41;97;1m` / `--defaultno`) con el listado exhaustivo de rutas a destruir mediante `shred -u` antes de autorizar la acción destructiva. En CLI, exige teclear `SI` en mayúsculas salvo uso deliberado de `--yes` / `-y`.
-  - **Advertencia Previa de Sobreescritura en Restauración:** Muestra el listado de archivos en destino que serán sobrescritos antes de extraer cualquier snapshot.
-- **Asistente de Edición de Módulos y Conmutación de Estado (`[ON]` / `[OFF]`):**
-  - **Edición Interactiva Asistida:** Permite modificar nombre, rutas, etiquetas, sensibilidad y purga de módulos existentes respetando el ámbito global o de perfil con opción de bifurcación (*Override*).
-  - **Sincronización Inteligente de Cifrado y Purga:** Marcado de etiqueta `sensitive` activa directamente GPG AES-256; sin la etiqueta, ofrece cifrado y añade el tag si se acepta. La purga segura (`shred -u`) se oferta universalmente requiriendo confirmación activa con foco en `[NO]`.
-  - **Conmutador Rápido de Estado:** Activa o desactiva módulos individualmente en la TUI o mediante los comandos CLI `--enable-module <id>` y `--disable-module <id>`.
-- **Biblioteca de Plantillas, Ficha Técnica y Resolución de Colisiones:**
-  - **Ficha Técnica de Previsualización:** Muestra un resumen técnico detallado antes de activar cualquier plantilla de la biblioteca.
-  - **Selector Universal de Ámbito:** Permite registrar la receta en el catálogo global (`modules.d/`) o de forma exclusiva en el perfil activo (`profiles/<id>/modules.d/`).
-  - **Gestión Interactiva de Colisiones:** Si el módulo ya existe, la TUI ofrece clonarlo con nuevo identificador, sobrescribirlo o cancelar. En CLI, se gestiona mediante `--as-module <nuevo_id>` y `--force`.
-- **Modo Sandbox y Entorno Aislado de Pruebas (`--test-mode`, `--clean-sandbox`):**
-  - **Home Virtual de Pruebas (`user_data/sandbox/home/`):** Confinamiento estricto de `TARGET_USER_HOME` con datos de prueba preconfigurados para todas las recetas (`.bashrc`, `.ssh/id_rsa`, `.config/Code/User/settings.json`, `.gitconfig`, etc.), permitiendo probar el borrado y purga con `shred -u` con total seguridad sin tocar el `$HOME` real.
-  - Entorno seguro y confinado en `user_data/sandbox/` para probar recetas, perfiles, asistentes y copias sin alterar configuraciones de producción ni dejar rastros sin seguimiento (*untracked files*) en Git.
-  - Activación por flag (`--test-mode`, `--sandbox`) o variable de entorno (`KEEP_MY_CONFIG_TEST_MODE=true`).
-  - Indicador visual `[SANDBOX]` en el menú interactivo de Whiptail y avisos de seguridad ANSI en consola.
-  - Comando de purga inmediata `--clean-sandbox` para resetear y regenerar limpiamente el entorno de pruebas.
-- **100% Nativo en Linux:**
-  - Sin dependencias de compilación ni librerías de terceros (`bash`, `whiptail`, `tar`, `zstd`, `gpg`, `shred`).
+Resuelve de forma definitiva el problema de la **congelación de discos y pérdidas de datos** en aulas de Formación Profesional y puestos compartidos, permitiendo respaldar entornos de desarrollo, credenciales temporales y dotar de persistencia a las configuraciones en discos externos (SSD/USB) o carpetas locales seguras.
 
 ---
 
-## Estructura del Proyecto
+## 1. Características Clave
+
+- 🛡️ **100% Non-Root:** No requiere ni solicita permisos de superusuario (`sudo`). Todo opera en el espacio del usuario y sus puntos de montaje.
+- 🔐 **Gestión Efímera "Vault & Shred":** Cifrado simétrico de datos sensibles con **GPG (AES-256)** y destrucción segura en el equipo local mediante **`shred -u -z -n 3`**.
+- 🗂️ **Sistema de Perfiles & Convención Zero-Config:** Gestión multi-perfil (`docente`, `desarrollo`, `default`) con aislamiento automático de copias en subdirectorios `<DESTINO>/<perfil>`.
+- 🧩 **Biblioteca de Plantillas (`templates.d/`):** Catálogo de recetas predefinidas listas para activar (`vscode`, `ssh-keys`, `bash-env`, `firefox`, `git-config`, etc.).
+- 🛑 **Pre-Flight Safety Gate:** Matriz interactiva de impacto previo y alertas rojas ante borrados destructivos antes de autorizar cualquier respaldo.
+- 🧪 **Modo Sandbox Aislado:** Entorno seguro en `user_data/sandbox/` con un **Home Virtual** completo para probar recetas y borrado seguro sin tocar datos reales.
+- 📦 **Distribución Dual:** Disponible en versión instalable integrada en el escritorio (XDG) y versión portable autónoma para pendrives.
+
+---
+
+## 2. Instalación y Despliegue
+
+KeepMyConfig se publica de forma oficial en [GitHub Releases](https://github.com/FSolaje/KeepMyConfig/releases) en dos modalidades:
+
+### Requisitos Mínimos
+- **Sistema Operativo:** Lliurex 25 / Ubuntu 24.04 LTS o cualquier distribución Linux moderna.
+- **Intérprete y herramientas base:** `bash` (>= 5.0), `whiptail`, `tar`, `zstd` (o `gzip`), `gpg` y `coreutils` (`shred`, `sha256sum`). *(Incluidas por defecto en la inmensa mayoría de distribuciones).*
+
+### Opción A: Edición Estándar (Instalable bajo XDG Freedesktop)
+Recomendada para puestos de trabajo fijos o cuentas de usuario individuales:
+
+```bash
+# 1. Descargar y descomprimir el paquete oficial
+tar -xzf KeepMyConfig-v0.1.0-alpha.2.tar.gz
+cd KeepMyConfig-v0.1.0-alpha.2
+
+# 2. Ejecutar el instalador asistido (sin sudo)
+./install.sh
+```
+- **Integración Freedesktop:** Despliega en `~/.local/share/KeepMyConfig/`, genera el enlace ejecutable en `~/.local/bin/keepmyconfig`, instala el icono SVG oficial y añade el lanzador al menú de aplicaciones de GNOME, KDE, XFCE o MATE.
+- **Endurecimiento UNIX (Read-Only):** Protege el código ejecutable y las librerías con permisos de solo lectura (`0555` / `0444`), evitando manipulaciones accidentales o inyecciones de código.
+- **Instalación Desatendida:**
+  ```bash
+  ./install.sh --yes --backup-dest ~/Backups/KeepMyConfig --initial-profile trabajo
+  ```
+- **Desinstalación Limpia:**
+  ```bash
+  ~/.local/share/KeepMyConfig/uninstall.sh          # Preserva tus configuraciones y perfiles
+  ~/.local/share/KeepMyConfig/uninstall.sh --purge  # Elimina la aplicación y todos sus datos
+  ```
+
+### Opción B: Edición Portable (Plug & Play para Unidades Externas)
+Diseñada para transportar tu entorno en un pendrive o disco SSD externo y usarlo en cualquier equipo de aula:
+
+```bash
+# 1. Descomprimir directamente en la raíz de tu pendrive o disco externo
+tar -xzf KeepMyConfig-v0.1.0-alpha.2-portable.tar.gz
+cd KeepMyConfig-v0.1.0-alpha.2-portable
+
+# 2. Ejecutar sin instalar nada en el sistema
+./keepmyconfig.sh
+```
+*Compatible al 100% con sistemas de archivos FAT32, exFAT y NTFS sin depender de enlaces simbólicos UNIX.*
+
+---
+
+## 3. Modos de Uso Más Relevantes
+
+Una vez instalado (o desde la versión portable), el sistema ofrece interfaz visual en terminal y órdenes directas por línea de comandos:
+
+### A. Interfaz Interactiva TUI (Uso Diario Recomendado)
+Inicia la interfaz gráfica de terminal con telemetría en tiempo real y navegación guiada:
+```bash
+keepmyconfig
+```
+*(En el primer arranque, lanza automáticamente el asistente de bienvenida para detectar discos y configurar tu ruta de copias).*
+
+### B. Comandos CLI Esenciales
+Para tareas inmediatas, secuencias de arranque o integración en scripts:
+
+| Acción | Comando | Descripción |
+| :--- | :--- | :--- |
+| **Respaldo Completo** | `keepmyconfig --backup-all` | Respalda todos los módulos activos del perfil actual. |
+| **Restauración Matinal** | `keepmyconfig --restore-sensitive` | Descifra y restaura inmediatamente credenciales y llaves SSH. |
+| **Copia y Purga Segura** | `keepmyconfig --backup-tag sensitive --purge` | Respalda datos sensibles con GPG y los destruye localmente con `shred`. |
+| **Modo Sandbox Seguro** | `keepmyconfig --test-mode` | Inicia la TUI en un entorno aislado con Home Virtual de prueba. |
+| **Asistente de Almacenamiento** | `keepmyconfig --setup` | Reconfigura la ruta de backup y comprueba discos externos. |
+| **Listar Módulos y Estado** | `keepmyconfig --list-modules` | Muestra qué recetas están activadas `[ON]` o inactivas `[OFF]`. |
+
+> [!TIP]
+> 📖 **¿Necesitas más opciones o automatización con `cron`?**  
+> Para la guía exhaustiva de todas las banderas CLI, sintaxis de recetas personalizadas, gestión avanzada de perfiles y resolución de problemas, consulta el [Manual de Usuario y Administración](MANUAL_USUARIO.md).
+
+---
+
+## 4. El Flujo de Seguridad "Vault & Shred"
+
+Para evitar que contraseñas, perfiles de navegador o llaves SSH (`id_rsa`) queden expuestas en ordenadores compartidos tras finalizar la clase o jornada, KeepMyConfig implementa un ciclo de vida efímero:
+
+```text
+[Archivos Locales en $HOME]
+           │
+           ▼  (keepmyconfig --backup-tag sensitive --purge)
+ 1. Cifrado GPG Simétrico (AES-256) hacia el SSD/USB
+           │
+           ▼
+ 2. Verificación de Integridad y Hash SHA-256 en Destino
+           │
+           ▼
+ 3. Destrucción Irreversible Local con 'shred -u -z -n 3'
+           │
+      [Equipo Limpio sin Rastro de Credenciales]
+           │
+           ▼  (Al día siguiente: keepmyconfig --restore-sensitive)
+ 4. Descifrado en Tubería y Restauración Instantánea de Permisos (600/700)
+```
+
+---
+
+## 5. Arquitectura del Proyecto
+
+Construido bajo el patrón **Modelo-Vista-Controlador (MVC)** estricto en Bash:
 
 ```text
 KeepMyConfig/
-├── backup_manager.sh        # Ejecutable principal (TUI / CLI)
-├── config/
-│   ├── config.conf          # Configuración general (BACKUP_DESTINATION, perfil activo, flags)
-│   └── default_tags.conf    # Catálogo de etiquetas
-├── templates.d/             # Biblioteca de plantillas y recetas preconfiguradas (.conf)
-├── modules.d/               # Recetas activas globales de backup (.conf)
-├── profiles/                # Perfiles de backup y módulos con ámbito (scoped modules)
-│   └── default/             # Perfil predeterminado persistente con auto-healing
-│       └── profile.conf     # Configuración canónica del perfil default
+├── backup_manager.sh        # Entrypoint principal (CLI/TUI) y resolución canónica
+├── install.sh               # Instalador asistido sin privilegios (XDG & Hardening)
+├── uninstall.sh             # Desinstalador limpio con soporte de purga (--purge)
+├── config/                  # Configuración global (BACKUP_DESTINATION, perfil activo)
+├── templates.d/             # Biblioteca de plantillas y recetas predefinidas (.conf)
+├── modules.d/               # Catálogo de recetas activas globales
+├── profiles/                # Perfiles de usuario (default, docente, etc.) y módulos exclusivos
 ├── lib/
 │   ├── models/              # Lógica de negocio (device, profile, module, backup, restore, crypto)
-│   ├── views/               # Interfaz TUI (whiptail) y formateo ANSI
-│   └── controllers/         # Controlador de aplicación y enrutador CLI
-├── markers/                 # Archivos testigo (.backup_storage_marker)
-├── specs/                   # Especificaciones guiadas por requerimientos (SDD)
-├── tests/                   # Suites de pruebas unitarias automatizadas
-│   └── fixtures/            # Semillas canónicas para el home virtual de sandbox
-├── MANUAL_USUARIO.md        # Manual exhaustivo de usuario y administración
-├── CHANGELOG.md             # Registro de cambios siguiendo SemVer
-├── README.md                # Documentación del proyecto
-└── .gitignore               # Exclusiones de control de versiones
+│   ├── views/               # Vistas desacopladas en Whiptail (TUI) y ANSI
+│   └── controllers/         # Enrutamiento, pre-flight safety gate y orquestación MVC
+├── assets/                  # Icono vectorial oficial SVG y plantilla .desktop
+├── scripts/                 # Herramientas de empaquetado y distribución (package.sh)
+└── tests/                   # Suite de pruebas unitarias automatizadas (624 tests)
 ```
 
 ---
 
-## Requisitos del Sistema
+## 6. Empaquetado y Verificación Reproducible
 
-- **Sistema Operativo:** Lliurex 25 / Ubuntu 24.04 LTS o cualquier distribución Linux moderna.
-- **Intérprete:** Bash 5.0 o superior.
-- **Herramientas base (incluidas de serie):** `whiptail`, `tar`, `zstd` (o `gzip`), `gpg`, `coreutils` (`shred`, `sha256sum`, `lsblk`).
-- **Permisos:** Usuario estándar (no requiere privilegios `sudo`).
+Si deseas construir los paquetes oficiales estándar y portables a partir del código fuente:
 
----
-
-## Modos de Uso
-
-### 1. Modo Interactivo (TUI)
-Ejecutar sin argumentos para desplegar la interfaz visual en terminal (en el primer arranque lanza automáticamente el asistente de Onboarding):
 ```bash
-./backup_manager.sh
-```
+# Compilar paquetes (.tar.gz y .tar.zst) con normalización de permisos y anti-tarbomb
+./scripts/package.sh --type all --clean
 
-### 2. Modo Línea de Comandos (CLI / TTY Remota)
-```bash
-# Ejecutar o reconfigurar el Asistente de Configuración Inicial (Onboarding)
-./backup_manager.sh --setup
-
-# Comprobar estado y accesibilidad del almacenamiento universal configurado
-./backup_manager.sh --check-device
-
-# Listar las plantillas predefinidas en la biblioteca
-./backup_manager.sh --list-templates
-
-# Activar una plantilla en el perfil activo (o global si es default)
-./backup_manager.sh --enable-template firefox
-./backup_manager.sh --profile docente --enable-template git-config
-
-# Activar una plantilla derivando a un nuevo identificador (clonación) o forzando sobrescritura
-./backup_manager.sh --enable-template firefox --as-module firefox-trabajo
-./backup_manager.sh --enable-template firefox --force
-
-# Conmutar estado de módulos (activar [ON] o desactivar [OFF])
-./backup_manager.sh --disable-module firefox
-./backup_manager.sh --profile docente --enable-module custom-eval
-
-# Exportar un módulo activo a la biblioteca de plantillas
-./backup_manager.sh --export-template mi-modulo
-
-# Realizar backup completo de todos los módulos (con confirmación desatendida Pre-Flight)
-./backup_manager.sh --backup-all
-./backup_manager.sh --backup-all --yes
-
-# Realizar backup de una etiqueta específica (ej. desarrollo)
-./backup_manager.sh --backup-tag dev
-
-# Realizar backup de datos sensibles y purgarlos del equipo local
-./backup_manager.sh --backup-tag sensitive --purge
-
-# Restaurar rápidamente todos los datos sensibles al iniciar sesión
-./backup_manager.sh --restore-sensitive
-
-# Restaurar un módulo concreto a un punto histórico
-./backup_manager.sh --restore-module vscode-standard --timestamp 20260918_130000
-
-# Entorno de pruebas y desarrollo aislado (Sandbox)
-./backup_manager.sh --test-mode                              # Iniciar interfaz TUI en modo sandbox
-./backup_manager.sh --test-mode --backup-all                 # Probar backup completo confinado en sandbox
-./backup_manager.sh --test-mode --enable-template bash-env   # Probar activación de recetas en sandbox
-./backup_manager.sh --clean-sandbox                          # Purgar por completo el entorno sandbox
+# Validar firmas criptográficas generadas
+sha256sum -c dist/SHA256SUMS.txt
 ```
 
 ---
 
-## Licencia y Ámbito
-Desarrollado para su uso en entornos docentes y estaciones de trabajo DAW en centros educativos de la Comunitat Valenciana.
+## 7. Licencia y Ámbito
+
+Este software se distribuye bajo licencia **MIT**. Diseñado y optimizado para su despliegue en ciclos formativos de Grado Superior de Desarrollo de Aplicaciones Web (DAW) y centros educativos de la Comunitat Valenciana.

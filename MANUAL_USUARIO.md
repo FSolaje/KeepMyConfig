@@ -1,6 +1,6 @@
 # Manual de Usuario y Administración: KeepMyConfig
 
-> **Versión:** 0.1.0-alpha.1  
+> **Versión:** 0.1.0-alpha.2  
 > **Sistema Operativo Objetivo:** Lliurex 25 / Ubuntu 24.04 LTS  
 > **Privilegios:** Usuario estándar sin privilegios (`non-root`, sin `sudo`)  
 > **Arquitectura:** Modelo-Vista-Controlador (MVC) en Bash 5+  
@@ -14,29 +14,46 @@
    - [1.2 Principio de Ejecución sin Privilegios (Non-Root)](#12-principio-de-ejecución-sin-privilegios-non-root)
    - [1.3 Pila Tecnológica y Dependencias](#13-pila-tecnológica-y-dependencias)
    - [1.4 Verificación Rápida del Sistema](#14-verificación-rápida-del-sistema)
-2. [Capítulo 2: Preparación del Almacenamiento Externo (SSD / USB)](#capítulo-2-preparación-del-almacenamiento-externo-ssd--usb)
-   - [2.1 El Mecanismo de Seguridad Safety Marker](#21-el-mecanismo-de-seguridad-safety-marker)
-   - [2.2 Paso a Paso: Inicialización de la Unidad Externa](#22-paso-a-paso-inicialización-de-la-unidad-externa)
-   - [2.3 Configuración Central (`config/config.conf`)](#23-configuración-central-configconfigconf)
-3. [Capítulo 3: Guía de Uso - Interfaz Interactiva TUI (`whiptail`)](#capítulo-3-guía-de-uso---interfaz-interactiva-tui-whiptail)
-   - [3.1 Inicio de la Interfaz Gráfica de Terminal](#31-inicio-de-la-interfaz-gráfica-de-terminal)
-   - [3.2 Esquema del Menú Principal](#32-esquema-del-menú-principal)
-   - [3.3 Recorrido Detallado por las 9 Opciones](#33-recorrido-detallado-por-las-9-opciones)
-   - [3.4 El Flujo "Vault & Shred" y Advertencias de Seguridad](#34-el-flujo-vault--shred-y-advertencias-de-seguridad)
-4. [Capítulo 4: Guía de Uso - Interfaz de Comandos CLI (Headless / Cron)](#capítulo-4-guía-de-uso---interfaz-de-comandos-cli-headless--cron)
-   - [4.1 Sintaxis General y Modos de Operación](#41-sintaxis-general-y-modos-de-operación)
-   - [4.2 Tabla Exhaustiva de Opciones CLI](#42-tabla-exhaustiva-de-opciones-cli)
-   - [4.3 Automatización Desatendida con `PASSPHRASE`](#43-automatización-desatendida-con-passphrase)
-   - [4.4 Integración con Tareas Programadas (`cron`)](#44-integración-con-tareas-programadas-cron)
-   - [4.5 Tabla de Códigos de Salida UNIX](#45-tabla-de-códigos-de-salida-unix)
-   - [4.6 Entorno de Pruebas y Desarrollo (Modo Sandbox)](#46-entorno-de-pruebas-y-desarrollo-modo-sandbox)
-5. [Capítulo 5: Creación de Módulos, Recetas y Perfiles](#capítulo-5-creación-de-módulos-recetas-y-perfiles)
+2. [Capítulo 2: Instalación, Integración Freedesktop y Modalidades de Despliegue](#capítulo-2-instalación-integración-freedesktop-y-modalidades-de-despliegue)
+   - [2.1 Modalidades Oficiales de Distribución](#21-modalidades-oficiales-de-distribución)
+   - [2.2 Instalador sin Privilegios (`install.sh`) e Integración en el Escritorio](#22-instalador-sin-privilegios-installsh-e-integración-en-el-escritorio)
+   - [2.3 Parámetros CLI para Instalación Desatendida](#23-parámetros-cli-para-instalación-desatendida)
+   - [2.4 Endurecimiento Preventivo de Permisos UNIX (Read-Only Hardening)](#24-endurecimiento-preventivo-de-permisos-unix-read-only-hardening)
+   - [2.5 Edición Portable Plug & Play para Unidades Externas](#25-edición-portable-plug--play-para-unidades-externas)
+   - [2.6 Desinstalador Limpio y Purga de Datos (`uninstall.sh`)](#26-desinstalador-limpio-y-purga-de-datos-uninstallsh)
+3. [Capítulo 3: Modos de Uso - Interfaz Interactiva TUI y Línea de Comandos CLI](#capítulo-3-modos-de-uso---interfaz-interactiva-tui-y-línea-de-comandos-cli)
+   - [3.1 Interfaz Interactiva TUI (`whiptail`)](#31-interfaz-interactiva-tui-whiptail)
+     - [3.1.1 Inicio de la Interfaz Gráfica de Terminal](#311-inicio-de-la-interfaz-gráfica-de-terminal)
+     - [3.1.2 Esquema de la Arquitectura Universal TUI](#312-esquema-de-la-arquitectura-universal-tui)
+     - [3.1.3 Recorrido Detallado por los 7 Menús](#313-recorrido-detallado-por-los-7-menús)
+     - [3.1.4 Preferencias y Personalización Visual (Temas `NEWT_COLORS`)](#314-preferencias-y-personalización-visual-temas-newt_colors)
+     - [3.1.5 El Flujo "Vault & Shred" y Pre-Flight Safety Gate](#315-el-flujo-vault--shred-y-pre-flight-safety-gate)
+   - [3.2 Interfaz de Comandos CLI (Headless y Automatización)](#32-interfaz-de-comandos-cli-headless-y-automatización)
+     - [3.2.1 Sintaxis General y Operaciones Inmediatas](#321-sintaxis-general-y-operaciones-inmediatas)
+     - [3.2.2 Tabla Exhaustiva de Opciones CLI](#322-tabla-exhaustiva-de-opciones-cli)
+     - [3.2.3 Automatización Desatendida con `PASSPHRASE`](#323-automatización-desatendida-con-passphrase)
+     - [3.2.4 Integración con Tareas Programadas (`cron`)](#324-integración-con-tareas-programadas-cron)
+     - [3.2.5 Tabla de Códigos de Salida UNIX](#325-tabla-de-códigos-de-salida-unix)
+   - [3.3 Entorno de Pruebas y Desarrollo (Modo Sandbox)](#33-entorno-de-pruebas-y-desarrollo-modo-sandbox)
+     - [3.3.1 Activación del Modo Sandbox](#331-activación-del-modo-sandbox)
+     - [3.3.2 Home Virtual de Pruebas y Aislamiento de Rutas](#332-home-virtual-de-pruebas-y-aislamiento-de-rutas)
+     - [3.3.3 Indicadores Visuales y Trazabilidad](#333-indicadores-visuales-y-trazabilidad)
+     - [3.3.4 Purga y Reseteo (`--clean-sandbox`)](#334-purga-y-reseteo---clean-sandbox)
+4. [Capítulo 4: Preparación y Gestión del Almacenamiento (`BACKUP_DESTINATION`)](#capítulo-4-preparación-y-gestión-del-almacenamiento-backup_destination)
+   - [4.1 El Mecanismo de Seguridad Safety Marker](#41-el-mecanismo-de-seguridad-safety-marker)
+   - [4.2 Inicialización del Almacenamiento y Asistente de Onboarding](#42-inicialización-del-almacenamiento-y-asistente-de-onboarding)
+   - [4.3 Detección de Discos Externos, Rutas Locales y Notación `@media/...`](#43-detección-de-discos-externos-rutas-locales-y-notación-medialabel)
+   - [4.4 Convención Zero-Config por Perfil](#44-convención-zero-config-por-perfil)
+   - [4.5 Configuración Central (`config/config.conf`)](#45-configuración-central-configconfigconf)
+5. [Capítulo 5: Catálogo de Recetas, Plantillas y Perfiles](#capítulo-5-catálogo-de-recetas-plantillas-y-perfiles)
    - [5.1 Estructura Declarativa de una Receta](#51-estructura-declarativa-de-una-receta)
    - [5.2 Directivas Soportadas](#52-directivas-soportadas)
    - [5.3 Ejemplos Oficiales de Producción](#53-ejemplos-oficiales-de-producción)
    - [5.4 Hooks Post-Restauración (`POST_RESTORE_HOOK`)](#54-hooks-post-restauración-post_restore_hook)
-   - [5.5 Sistema de Perfiles de Backup y Scoped Modules](#55-sistema-de-perfiles-de-backup-y-scoped-modules)
-   - [5.6 Biblioteca de Plantillas (`templates.d/`) y Exclusiones en Perfiles](#56-biblioteca-de-plantillas-templatesd-y-exclusiones-en-perfiles)
+   - [5.5 Asistente Interactivo de Edición y Conmutación de Estado (`[ON]` / `[OFF]`)](#55-asistente-interactivo-de-edición-y-conmutación-de-estado-on--off)
+   - [5.6 Sistema de Perfiles de Backup y Scoped Modules](#56-sistema-de-perfiles-de-backup-y-scoped-modules)
+   - [5.7 Biblioteca de Plantillas (`templates.d/`), Ficha Técnica y Resolución de Colisiones](#57-biblioteca-de-plantillas-templatesd-ficha-técnica-y-resolución-de-colisiones)
+   - [5.8 Gestión de Exclusiones en Perfiles (`DISABLED_MODULES`)](#58-gestión-de-exclusiones-en-perfiles-disabled_modules)
 6. [Capítulo 6: Auditoría, Logs y Resolución de Problemas (Troubleshooting)](#capítulo-6-auditoría-logs-y-resolución-de-problemas-troubleshooting)
    - [6.1 Árbol de Directorios en la Unidad Externa](#61-árbol-de-directorios-en-la-unidad-externa)
    - [6.2 Registro Histórico y Manifiestos de Integridad](#62-registro-histórico-y-manifiestos-de-integridad)
@@ -46,7 +63,10 @@
    - [A.2 Ciclo de Pre-Releases (Alfa, Beta, RC)](#a2-ciclo-de-pre-releases-alfa-beta-rc)
    - [A.3 Publicación de Releases en GitHub desde Tags de Git](#a3-publicación-de-releases-en-github-desde-tags-de-git)
    - [A.4 Registro de Cambios (`CHANGELOG.md`)](#a4-registro-de-cambios-changelogmd)
-
+8. [Apéndice B: Script Reproducible de Empaquetado (`scripts/package.sh`) y Checksums](#apéndice-b-script-reproducible-de-empaquetado-scriptspackagesh-y-checksums)
+   - [B.1 Modos de Compilación y Flags CLI](#b1-modos-de-compilación-y-flags-cli)
+   - [B.2 Garantías Anti-Tarbomb y Lista Blanca Estricta](#b2-garantías-anti-tarbomb-y-lista-blanca-estricta)
+   - [B.3 Normalización de Permisos UNIX y Firmas SHA-256](#b3-normalización-de-permisos-unix-y-firmas-sha-256)
 
 ---
 
@@ -60,7 +80,7 @@ En entornos educativos basados en **Lliurex 25 / Ubuntu 24.04 LTS** (como aulas 
 - Configuraciones de shell (`.bashrc`, `.bash_aliases`, scripts personales en `~/bin`).
 
 **KeepMyConfig** ha sido diseñado para resolver este problema permitiendo a docentes y alumnos:
-1. Respaldar selectivamente sus herramientas y configuraciones a una unidad externa (SSD o pendrive USB).
+1. Respaldar selectivamente sus herramientas y configuraciones a una unidad externa (SSD o pendrive USB) o carpeta local persistente.
 2. Proteger con cifrado militar (GPG AES-256) cualquier dato privado o llave de seguridad.
 3. Purgar del ordenador del aula los datos sensibles mediante borrado seguro irrecuperable (`shred -u`), eliminando el riesgo de que otros alumnos o usuarios accedan a sus credenciales.
 4. Restaurar el entorno completo en cuestión de segundos al iniciar sesión en cualquier equipo.
@@ -70,7 +90,7 @@ En entornos educativos basados en **Lliurex 25 / Ubuntu 24.04 LTS** (como aulas 
 ### 1.2 Principio de Ejecución sin Privilegios (Non-Root)
 
 > [!IMPORTANT]
-> **BackupConfig no requiere ni debe ejecutarse con `sudo`**.
+> **KeepMyConfig no requiere ni debe ejecutarse con `sudo`**.
 > Todas las operaciones se realizan exclusivamente dentro del espacio de usuario (`$HOME`) y en los puntos de montaje externos del usuario (`/media/$USER/...`).
 
 Esto garantiza:
@@ -85,7 +105,7 @@ Esto garantiza:
 La aplicación está construida en **Bash puro** bajo un diseño desacoplado **MVC**:
 - **Modelos (`lib/models/`):** Lógica de negocio (detección de discos, empaquetado, cifrado GPG, análisis de recetas).
 - **Vistas (`lib/views/`):** Presentación TUI (`whiptail`) y CLI formateado (`ansi_view.sh`).
-- **Controlador (`lib/controllers/`):** Orquestación, validación y enrutamiento de peticiones.
+- **Controlador (`lib/controllers/`):** Orquestación, validación, Pre-Flight Safety Gate y enrutamiento de peticiones.
 
 Las herramientas requeridas son utilidades estándar del sistema:
 
@@ -101,7 +121,7 @@ Las herramientas requeridas son utilidades estándar del sistema:
 
 ### 1.4 Verificación Rápida del Sistema
 
-Para comprobar que su estación de trabajo dispone de todas las herramientas necesarias, ejecute en su terminal:
+Para comprobar la presencia de las herramientas necesarias antes de la instalación, puede ejecutar:
 
 ```bash
 for cmd in whiptail gpg tar zstd shred lsblk sha256sum; do
@@ -120,108 +140,129 @@ sudo apt update && sudo apt install -y whiptail gnupg tar zstd
 
 ---
 
-## Capítulo 2: Preparación del Almacenamiento Externo (SSD / USB)
+## Capítulo 2: Instalación, Integración Freedesktop y Modalidades de Despliegue
 
-### 2.1 El Mecanismo de Seguridad Safety Marker
+### 2.1 Modalidades Oficiales de Distribución
 
-> [!CAUTION]
-> **Prevención de Escrituras Fantasma:** Si una unidad externa se desconecta inesperadamente, el punto de montaje `/media/$USER/MI_DISCO` puede quedar como una carpeta local vacía en el disco raíz del ordenador. Un script de backup tradicional escribiría en el disco interno, saturando la partición del sistema y dejando los datos expuestos localmente.
+KeepMyConfig se publica en [GitHub Releases](https://github.com/FSolaje/KeepMyConfig/releases) en dos modalidades complementarias:
 
-Para evitar esto, **BackupConfig** exige la presencia de un archivo testigo denominado **`.backup_storage_marker`** en la raíz de su carpeta de copias. Si dicho archivo no existe o no contiene la firma válida, el motor detiene de inmediato cualquier operación con código de salida `2`.
-
----
-
-### 2.2 Inicialización del Almacenamiento y Asistente de Onboarding
-
-KeepMyConfig incluye un **Asistente de Configuración Inicial (Onboarding Wizard)** diseñado para preparar el entorno de copias en menos de un minuto sin necesidad de comandos manuales.
-
-#### Método 1: Asistente Automático de Primera Ejecución (Recomendado)
-Al ejecutar por primera vez la aplicación sin haber completado la configuración (`INITIAL_SETUP_DONE="false"`):
-```bash
-./backup_manager.sh
-```
-El sistema detecta el primer arranque e inicia automáticamente el asistente en pantalla:
-1. **Auditoría de hardware y medios montados:** Escanea particiones externas y unidades USB en `/media/$USER/` o `/run/media/$USER/`.
-2. **Selección guiada de destino:**
-   - **Almacenamiento Local (Por defecto):** Configura `~/Backups/KeepMyConfig`. Ideal para ordenadores personales o estaciones con almacenamiento persistente.
-   - **Dispositivos Externos Detectados:** Muestra una lista con las memorias USB o discos SSD externos conectados para seleccionarlos directamente.
-   - **Ruta Personalizada:** Permite ingresar manualmente cualquier ruta del sistema o montaje de red.
-3. **Despliegue del Marcador de Seguridad:** Crea automáticamente las carpetas `archives/` y `logs/` e instala el archivo testigo `.backup_storage_marker` para prevenir escrituras accidentales.
-4. **Preferencia de Sesión (`REMEMBER_LAST_PROFILE`):** Pregunta si desea que la aplicación recuerde el último perfil utilizado en cada sesión o si prefiere iniciar siempre en el perfil `default`.
-
-> [!TIP]
-> Puede relanzar este asistente de configuración guiada en cualquier momento mediante la opción de línea de comandos:
-> ```bash
-> ./backup_manager.sh --setup
-> ```
-> O desde la **Opción 8** del menú interactivo TUI.
-
-#### Método 2: Inicialización Manual o de Rutas Personalizadas
-Si desea inicializar manualmente un destino en un disco externo o carpeta específica:
-```bash
-mkdir -p "$HOME/Backups/KeepMyConfig/archives" "$HOME/Backups/KeepMyConfig/logs"
-cp markers/.backup_storage_marker "$HOME/Backups/KeepMyConfig/.backup_storage_marker"
-```
+1. **Edición Estándar (`KeepMyConfig-vX.Y.Z.tar.gz` o `.tar.zst`):**
+   - Paquete de instalación para cuentas de usuario en estaciones de trabajo y portátiles.
+   - Incluye el instalador automatizado `install.sh`, desinstalador `uninstall.sh`, icono vectorial y lanzador de escritorio.
+2. **Edición Portable Autónoma (`KeepMyConfig-vX.Y.Z-portable.tar.gz` o `.tar.zst`):**
+   - Paquete autónomo *plug-and-play* diseñado para ejecutarse directamente desde unidades externas (pendrives o discos SSD) formateadas en FAT32, exFAT o NTFS.
+   - Incluye el marcador `.portable` y el lanzador directo ejecutable `keepmyconfig.sh`.
 
 ---
 
-### 2.3 Configuración Central (`config/config.conf`)
+### 2.2 Instalador sin Privilegios (`install.sh`) e Integración en el Escritorio
 
-La configuración central de **KeepMyConfig** se administra a través del archivo `config/config.conf`:
+El script `install.sh` despliega la aplicación de forma limpia en el espacio del usuario sin requerir permisos de superusuario (`sudo`).
 
-```bash
-# Ruta universal de almacenamiento (carpeta local, disco externo o notación @media)
-BACKUP_DESTINATION="~/Backups/KeepMyConfig"
-
-# Algoritmo de cifrado simétrico GPG (AES256 recomendado)
-CIPHER_ALGO="AES256"
-
-# Algoritmo de compresión (zstd o gzip)
-COMPRESSION_ALGO="zstd"
-
-# Días de retención de registros antes de purga automática
-LOG_RETENTION_DAYS=90
-
-# Estado del asistente de configuración inicial
-INITIAL_SETUP_DONE="true"
-
-# Perfil de backup activo
-ACTIVE_PROFILE="default"
-
-# Memoria de sesión: recordar último perfil activo utilizado (true/false)
-REMEMBER_LAST_PROFILE="true"
-```
-
-#### Formatos Soportados para `BACKUP_DESTINATION`
-El sistema normaliza y resuelve de forma inteligente los siguientes formatos de ruta:
-- **Ruta local con tilde o `$HOME`:** `~/Backups/KeepMyConfig` o `$HOME/Copias`.
-- **Rutas de discos externos montados:** `/media/$USER/DISCO_BACKUP/Backups`.
-- **Notación semántica de conveniencia:** `@media/<ETIQUETA>/...` (ej. `@media/DISCO_BACKUP/Backups`), que busca automáticamente la unidad cuya etiqueta coincida en `/media/$USER/` o `/run/media/$USER/`.
-- **Rutas absolutas fijas o montajes de red (NFS/SMB/SSHFS):** `/mnt/servidor_backup/datos`.
-
-#### Convención Zero-Config por Perfil
-KeepMyConfig organiza las copias de seguridad de múltiples perfiles sin requerir configuraciones complejas:
-- **Perfil Predeterminado (`default`):** Almacena sus archivos directamente en la raíz de `BACKUP_DESTINATION`.
-- **Perfiles Secundarios (`docente`, `desarrollo`, etc.):** Por convención automática Zero-Config, almacenan sus copias en `<BACKUP_DESTINATION>/<id_perfil>`.
-- **Validación Jerárquica del Marcador:** No es necesario copiar manualmente el marcador `.backup_storage_marker` en cada subcarpeta de perfil. El sistema valida la presencia del marcador en la raíz del destino o en cualquier carpeta ascendente y crea automáticamente la estructura necesaria.
+#### Flujo Interactivo con Asistente de Primera Instalación (OOBE)
+Al ejecutar `./install.sh` sin argumentos, el instalador presenta un asistente interactivo:
+1. **Detección y confirmación de rutas:** Propone por defecto `~/.local/share/KeepMyConfig` para la aplicación y `~/.local/bin` para el enlace ejecutable.
+2. **Selección interactiva del destino de backups:** Detecta automáticamente unidades externas conectadas y ofrece fijar una ruta local (`~/Backups/KeepMyConfig`) o un disco externo, desplegando de inmediato el marcador de seguridad `.backup_storage_marker`.
+3. **Definición del perfil inicial:** Permite seleccionar el perfil canónico `default` o crear un perfil personalizado con su estructura canónica de configuración.
+4. **Detección inteligente de la terminal gráfica:** Detecta emuladores instalados (`ptyxis`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `x-terminal-emulator`) para que el lanzador de escritorio abra una ventana de terminal interactiva con `whiptail`.
+5. **Instalación de artefactos de escritorio:**
+   - Enlace ejecutable: `~/.local/bin/keepmyconfig` apuntando a `~/.local/share/KeepMyConfig/backup_manager.sh`.
+   - Icono vectorial SVG oficial: `~/.local/share/icons/hicolor/scalable/apps/keepmyconfig.svg`.
+   - Lanzador Freedesktop: `~/.local/share/applications/keepmyconfig.desktop` (permitiendo abrir la aplicación desde el menú de inicio de GNOME, KDE, XFCE o MATE).
 
 ---
 
-## Capítulo 3: Guía de Uso - Interfaz Interactiva TUI (`whiptail`)
+### 2.3 Parámetros CLI para Instalación Desatendida
 
-### 3.1 Inicio de la Interfaz Gráfica de Terminal
-
-Para iniciar la aplicación interactiva, abra su terminal dentro del directorio del proyecto y ejecute:
+Para entornos de despliegue automatizado o scripts de aprovisionamiento de aulas:
 
 ```bash
-./backup_manager.sh
+./install.sh [OPCIONES]
+
+Opciones:
+  -y, --yes, --silent        Modo desatendido (no solicita confirmación interactiva)
+  -t, --target-dir <dir>     Directorio de instalación (por defecto: ~/.local/share/KeepMyConfig)
+  -b, --bin-dir <dir>        Directorio para el enlace ejecutable (por defecto: ~/.local/bin)
+  -d, --backup-dest <dir>    Ruta de almacenamiento de backups (inicializa con marcador)
+  -p, --initial-profile <id> Perfil inicial a configurar como activo (por defecto: default)
+  -f, --force                Sobrescribir archivos del núcleo sin confirmación
+  -h, --help                 Mostrar ayuda de instalación y salir
 ```
 
-El sistema verificará la presencia de `whiptail` y abrirá el menú principal de pantalla completa.
+Ejemplo de instalación desatendida completa:
+```bash
+./install.sh --yes \
+  --backup-dest "/media/$USER/DISCO_BACKUP/Backups/KeepMyConfig" \
+  --initial-profile "docente"
+```
 
 ---
 
-### 3.2 Esquema de la Arquitectura Universal TUI
+### 2.4 Endurecimiento Preventivo de Permisos UNIX (Read-Only Hardening)
+
+Dado que KeepMyConfig está íntegramente desarrollado en Bash y reside en el espacio de usuario, el instalador aplica automáticamente un endurecimiento preventivo de permisos sobre el directorio instalado:
+
+- **Ejecutables del core:** `backup_manager.sh` y `uninstall.sh` se configuran con permisos `0555` (`r-xr-xr-x`).
+- **Librerías del motor (MVC):** El directorio `lib/` y sus subcarpetas se fijan en `0555`, y todos los ficheros `.sh` internos en `0444` (`r--r--r--`).
+- **Biblioteca de plantillas:** `templates.d/` se fija en `0555` (directorios) y `0444` (ficheros).
+- **Directorios de datos mutables del usuario:** `config/`, `modules.d/` y `profiles/` mantienen permisos estándar de lectura y escritura (`0755` para carpetas y `0644` para ficheros), permitiendo crear o editar módulos y perfiles normalmente.
+
+> [!NOTE]
+> **Actualizaciones y Reinstalaciones:** `install.sh` y `uninstall.sh` incorporan mecanismos defensivos de desbloqueo (`chmod -R u+w`) que permiten actualizar versiones o reinstalar sin colisiones ni errores de permisos denegados.
+
+---
+
+### 2.5 Edición Portable Plug & Play para Unidades Externas
+
+La Edición Portable está concebida para usuarios que transportan su entorno en un pendrive o disco externo entre distintos ordenadores de aula o departamentos:
+
+1. Descomprima el archivo `KeepMyConfig-vX.Y.Z-portable.tar.gz` en su unidad USB o SSD externo.
+2. La carpeta contendrá el marcador `.portable` y el lanzador ejecutable `keepmyconfig.sh`.
+3. Ejecute directamente:
+   ```bash
+   cd /media/$USER/MI_PENDIVE/KeepMyConfig-v0.1.0-alpha.2-portable
+   ./keepmyconfig.sh
+   ```
+4. **Compatibilidad total con sistemas de archivos externos:** El lanzador `keepmyconfig.sh` es un script wrapper directo (no un enlace simbólico UNIX), lo que garantiza su funcionamiento sin errores en unidades formateadas con FAT32, exFAT o NTFS.
+
+---
+
+### 2.6 Desinstalador Limpio y Purga de Datos (`uninstall.sh`)
+
+La aplicación incluye un desinstalador sin privilegios que revierte de forma limpia todas las modificaciones en el sistema:
+
+```bash
+~/.local/share/KeepMyConfig/uninstall.sh [OPCIONES]
+
+Opciones:
+  -y, --yes, --silent     Modo desatendido (no solicita confirmación interactiva)
+  -p, --purge             Eliminar también la carpeta de aplicación, perfiles y configuraciones
+  -t, --target-dir <dir>  Directorio de instalación (por defecto: ~/.local/share/KeepMyConfig)
+  -b, --bin-dir <dir>     Directorio de ejecutables (por defecto: ~/.local/bin)
+  -h, --help              Mostrar ayuda y salir
+```
+
+- **Desinstalación estándar (sin `--purge`):** Retira el enlace `~/.local/bin/keepmyconfig`, el lanzador `.desktop` y el icono SVG, pero preserva el directorio `~/.local/share/KeepMyConfig` (con perfiles, recetas y configuraciones intactas para una futura reinstalación).
+- **Desinstalación completa con purga (`--purge`):** Desbloquea los permisos y elimina íntegramente `~/.local/share/KeepMyConfig` sin dejar rastros en el equipo.
+
+---
+
+## Capítulo 3: Modos de Uso - Interfaz Interactiva TUI y Línea de Comandos CLI
+
+### 3.1 Interfaz Interactiva TUI (`whiptail`)
+
+#### 3.1.1 Inicio de la Interfaz Gráfica de Terminal
+
+Para iniciar la aplicación interactiva, abra su terminal y ejecute:
+
+```bash
+keepmyconfig
+```
+*(Si no ha realizado la instalación en `$PATH`, puede invocar directamente `./backup_manager.sh` desde el directorio del proyecto).*
+
+---
+
+#### 3.1.2 Esquema de la Arquitectura Universal TUI
 
 KeepMyConfig implementa un modelo de interfaz híbrido estructurado en **un Menú Principal de Acceso Inmediato y 6 Submenús Temáticos Especializados**:
 
@@ -250,26 +291,26 @@ KeepMyConfig implementa un modelo de interfaz híbrido estructurado en **un Men�
 
 ---
 
-### 3.3 Recorrido Detallado por los 7 Menús
+#### 3.1.3 Recorrido Detallado por los 7 Menús
 
-#### Menú 1: Menú Principal Híbrido (Operaciones Inmediatas)
+##### Menú 1: Menú Principal Híbrido (Operaciones Inmediatas)
 Diseñado para la máxima agilidad operativa diaria:
 - **Opción 1 (`Ejecutar Respaldo Inmediato`):** Lanza el respaldo completo de todos los módulos activos del perfil actual, canalizado a través del *Pre-Flight Safety Gate*.
 - **Opción 2 (`Restauración Rápida de Datos Sensibles`):** Al comenzar la jornada, descifra en memoria y restaura en un solo paso las credenciales y llaves confidenciales.
 - **Opciones 3 a 8:** Navegan hacia los centros de gestión temática especializada.
 
-#### Submenú 2: Centro de Operaciones de Respaldo
+##### Submenú 2: Centro de Operaciones de Respaldo
 Agrupa todas las modalidades de empaquetado y salvaguarda:
 - **1) [BACKUP] Realizar Respaldo Completo:** Procesa todos los módulos activos (`MODULE_ENABLED="true"`).
 - **2) [TAG] Respaldo Filtrado por Etiquetas:** Checklist interactivo para seleccionar etiquetas (`dev`, `ide`, `shell`, etc.).
 - **3) [MOD] Respaldo de Módulo Individual:** Selector único (*Radiolist*) para respaldar una sola receta.
 
-#### Submenú 3: Centro de Recuperación y Restauración
+##### Submenú 3: Centro de Recuperación y Restauración
 - **1) [VAULT] Restauración Rápida de Datos Sensibles:** Recupera snapshots confidenciales descifrando mediante tubería segura GPG AES-256.
 - **2) [HIST] Restauración Selectiva por Histórico:** Permite elegir un módulo y examinar todos sus puntos en el tiempo (`AAAAMMDD_HHMMSS`) para restaurar versiones exactas.
 - **3) [FULL] Restauración Total:** Desempaqueta secuencialmente todas las configuraciones con advertencia previa de los archivos que serán sobrescritos.
 
-#### Submenú 4: Gestión de Perfiles de Trabajo (`profiles/`)
+##### Submenú 4: Gestión de Perfiles de Trabajo (`profiles/`)
 - **1) [INFO] Ver Detalles del Perfil Activo:** Identificador, nombre, descripción y ruta Zero-Config (`<BACKUP_DESTINATION>/<id_perfil>`).
 - **2) [SWITCH] Conmutar Perfil Activo:** Cambia el perfil en `config/config.conf` persistiendo la preferencia.
 - **3) [NEW] Crear Nuevo Perfil de Backup:** Asistente guiado para nuevos entornos aislados.
@@ -277,7 +318,7 @@ Agrupa todas las modalidades de empaquetado y salvaguarda:
 - **5) [EXCL] Gestionar Exclusiones de Módulos (`DISABLED_MODULES`):** Checklist para deshabilitar módulos globales en perfiles secundarios.
 - **6) [DEL] Eliminar Perfil:** Purga segura de la definición de un perfil secundario con **salvaguarda de seguridad estricta** (impide eliminar `default` o el perfil actualmente activo).
 
-#### Submenú 5: Administración de Módulos y Plantillas
+##### Submenú 5: Administración de Módulos y Plantillas
 - **1) [VIEW] Inspeccionar Módulos:** Muestra rutas, etiquetas, cifrado, purga, ámbito y estado `[ON]` / `[OFF]`.
 - **2) [EDIT] ✏️ Modificar un Módulo Existente (Asistente de Edición):**
   - **Bifurcación de Ámbito (*Override*):** Si se edita un módulo global desde un perfil secundario, el asistente consulta si desea modificar la receta global o crear una derivación exclusiva (*override*) en el perfil activo.
@@ -296,24 +337,30 @@ Agrupa todas las modalidades de empaquetado y salvaguarda:
 - **8) [DEL] Eliminar Módulo:** Baja definitiva del archivo `.conf` en su carpeta correspondiente.
 - **9) [TAG] Registrar Nueva Etiqueta:** Incorporación al catálogo `config/default_tags.conf`.
 
-#### Submenú 6: Destinos de Almacenamiento y Diagnóstico
+##### Submenú 6: Destinos de Almacenamiento y Diagnóstico
 - **1) [DIAG] Diagnóstico de Almacenamiento:** Valida la presencia del archivo marcador jerárquico `.backup_storage_marker`, permisos y espacio disponible en disco.
 - **2) [DEST] Cambiar Destino Canónico (`BACKUP_DESTINATION`):** Actualización de la directiva universal (rutas locales, absolutas o notación `@media/<LABEL>/...`).
 - **3) [WIZARD] Relanzar Asistente de Configuración (Onboarding):** Configuración asistida paso a paso.
 - **4) [MARKER] Desplegar Marcador de Seguridad:** Instalación manual del archivo testigo y estructura de directorios.
 
-#### Submenú 7: Preferencias y Personalización Visual
-- **1) [THEME] 🎨 Selección de Tema Visual TUI (`NEWT_COLORS`):**
-  - **`default` (Por Defecto):** Respeta los colores nativos de la terminal configurada por el usuario (tema de fábrica de KeepMyConfig).
-  - **`midnight` (Medianoche):** Azul profundo de alto contraste nocturno.
-  - **`cyberdark` (Cibernético):** Verde fluorescente sobre fondo negro estilo terminal de ciberseguridad.
-  - **`aubergine` (Berenjena):** Tonos magenta y violeta inspirados en la estética moderna de Lliurex / Ubuntu.
-  - **`amber` (Ámbar):** Resplandor fósforo ámbar clásico estilo monitor monocromático vintage.
+##### Submenú 7: Preferencias y Personalización Visual
+- **1) [THEME] 🎨 Selección de Tema Visual TUI (`NEWT_COLORS`):** Selección de paletas cromáticas.
 - **2) [PROFILE] 🧠 Memoria de Sesión (`REMEMBER_LAST_PROFILE`):** Configura si la aplicación arranca en el último perfil utilizado o siempre en `default`.
 
 ---
 
-### 3.4 El Flujo "Vault & Shred" y Pre-Flight Safety Gate
+#### 3.1.4 Preferencias y Personalización Visual (Temas `NEWT_COLORS`)
+
+KeepMyConfig permite seleccionar entre 5 temas cromáticos persistidos en `config/config.conf`:
+- **`default` (Por Defecto):** Respeta los colores nativos de la terminal configurada por el usuario (tema de fábrica de KeepMyConfig).
+- **`midnight` (Medianoche):** Azul profundo de alto contraste nocturno.
+- **`cyberdark` (Cibernético):** Verde fluorescente sobre fondo negro estilo terminal de ciberseguridad.
+- **`aubergine` (Berenjena):** Tonos magenta y violeta inspirados en la estética moderna de Lliurex / Ubuntu.
+- **`amber` (Ámbar):** Resplandor fósforo ámbar clásico estilo monitor monocromático vintage.
+
+---
+
+#### 3.1.5 El Flujo "Vault & Shred" y Pre-Flight Safety Gate
 
 KeepMyConfig implementa un interceptor mandatorio denominado **Pre-Flight Safety Gate** que se ejecuta antes de cualquier operación de respaldo:
 
@@ -326,19 +373,35 @@ KeepMyConfig implementa un interceptor mandatorio denominado **Pre-Flight Safety
 
 ---
 
-## Capítulo 4: Guía de Uso - Interfaz de Comandos CLI (Headless / Cron)
+### 3.2 Interfaz de Comandos CLI (Headless y Automatización)
 
-### 4.1 Sintaxis General y Modos de Operación
+#### 3.2.1 Sintaxis General y Operaciones Inmediatas
 
 La interfaz de línea de comandos está optimizada para scripts bash, tareas programadas en segundo plano o usuarios avanzados de terminal:
 
 ```bash
-./backup_manager.sh [OPERACIÓN] [MODIFICADORES]
+keepmyconfig [OPERACIÓN] [MODIFICADORES]
+```
+
+Operaciones de uso frecuente:
+```bash
+# Respaldo completo
+keepmyconfig --backup-all
+
+# Respaldo por etiqueta con confirmación desatendida
+keepmyconfig --backup-tag dev -y
+
+# Restauración de credenciales matinal
+keepmyconfig --restore-sensitive
+
+# Conmutar módulos activos/inactivos
+keepmyconfig --disable-module firefox
+keepmyconfig --enable-module firefox
 ```
 
 ---
 
-### 4.2 Tabla Exhaustiva de Opciones CLI
+#### 3.2.2 Tabla Exhaustiva de Opciones CLI
 
 | Parámetro | Argumento | Descripción |
 | :--- | :--- | :--- |
@@ -371,43 +434,36 @@ La interfaz de línea de comandos está optimizada para scripts bash, tareas pro
 | `--clean-sandbox` | *Ninguno* | Purga y elimina por completo el entorno aislado `user_data/sandbox/`. |
 | `-h, --help` | *Ninguno* | Muestra la ayuda rápida de sintaxis CLI. |
 
-
 ---
 
-### 4.3 Automatización Desatendida con `PASSPHRASE`
+#### 3.2.3 Automatización Desatendida con `PASSPHRASE`
 
-Para ejecutar backups o restauraciones de módulos sensibles sin intervención manual (sin que se pause pidiendo la clave por teclado), proporcione la contraseña a través de la variable de entorno `PASSPHRASE`:
+Para ejecutar backups o restauraciones de módulos sensibles sin intervención manual:
 
 ```bash
 # Backup completo desatendido
-PASSPHRASE="MiClaveSegura2026" ./backup_manager.sh --backup-all
+PASSPHRASE="MiClaveSegura2026" keepmyconfig --backup-all -y
 
 # Restauración exprés de llaves y credenciales desatendida
-PASSPHRASE="MiClaveSegura2026" ./backup_manager.sh --restore-sensitive
+PASSPHRASE="MiClaveSegura2026" keepmyconfig --restore-sensitive
 ```
 
 ---
 
-### 4.4 Integración con Tareas Programadas (`cron`)
+#### 3.2.4 Integración con Tareas Programadas (`cron`)
 
-Puede programar la ejecución de una copia de seguridad automática al terminar cada jornada de clase.
-
-Abra su crontab de usuario:
+Puede programar la ejecución de una copia de seguridad automática al terminar cada jornada de clase. Abra su crontab:
 ```bash
 crontab -e
 ```
-
 Añada una regla para ejecutar la copia de lunes a viernes a las 14:30:
 ```cron
-# Respaldo automático de desarrollo y entorno shell a las 14:30
-30 14 * * 1-5 /home/usuario/scripts/BackupConfig/backup_manager.sh --backup-tag dev >> /tmp/backup_cron.log 2>&1
+30 14 * * 1-5 ~/.local/bin/keepmyconfig --backup-all -y >> ~/.local/share/KeepMyConfig/storage/logs/backup_cron.log 2>&1
 ```
 
 ---
 
-### 4.5 Tabla de Códigos de Salida UNIX
-
-Para facilitar el control de flujo en scripts o pipelines de integración continua, **BackupConfig** retorna códigos de salida estandarizados:
+#### 3.2.5 Tabla de Códigos de Salida UNIX
 
 | Código | Significado | Causa Habitual |
 | :---: | :--- | :--- |
@@ -421,31 +477,31 @@ Para facilitar el control de flujo en scripts o pipelines de integración contin
 
 ---
 
-### 4.6 Entorno de Pruebas y Desarrollo (Modo Sandbox)
+### 3.3 Entorno de Pruebas y Desarrollo (Modo Sandbox)
 
 Para facilitar la verificación manual, desarrollo de nuevas recetas o pruebas de flujos completos sin alterar el repositorio Git ni contaminar los directorios de producción (`config/`, `modules.d/`, `profiles/`), **KeepMyConfig** incorpora el **Modo Sandbox / Test Mode**.
 
-#### 4.6.1 Activación del Modo Sandbox
+#### 3.3.1 Activación del Modo Sandbox
 El modo sandbox puede activarse de tres formas equivalentes:
 1. **Flag CLI explícito:**
    ```bash
-   ./backup_manager.sh --test-mode
+   keepmyconfig --test-mode
    # o bien:
-   ./backup_manager.sh --sandbox
+   keepmyconfig --sandbox
    ```
 2. **Combinado con cualquier comando CLI:**
    ```bash
-   ./backup_manager.sh --test-mode --backup-all
-   ./backup_manager.sh --test-mode --enable-template firefox
-   ./backup_manager.sh --test-mode --create-profile docente
-   ./backup_manager.sh --test-mode --list-modules
+   keepmyconfig --test-mode --backup-all
+   keepmyconfig --test-mode --enable-template firefox
+   keepmyconfig --test-mode --create-profile docente
+   keepmyconfig --test-mode --list-modules
    ```
 3. **Variable de entorno:**
    ```bash
-   KEEP_MY_CONFIG_TEST_MODE=true ./backup_manager.sh
+   KEEP_MY_CONFIG_TEST_MODE=true keepmyconfig
    ```
 
-#### 4.6.2 Arquitectura y Aislamiento de Rutas
+#### 3.3.2 Home Virtual de Pruebas y Aislamiento de Rutas
 Al activarse, el sistema inicializa de forma transparente una réplica completa del entorno confinado bajo `user_data/sandbox/`:
 - **Home Virtual de Pruebas (`user_data/sandbox/home/`):**
   - Confinamiento estricto de `TARGET_USER_HOME="${sandbox_base}/home"`.
@@ -464,33 +520,124 @@ Al activarse, el sistema inicializa de forma transparente una réplica completa 
 > [!NOTE]
 > La carpeta `user_data/` está excluida permanentemente en el archivo `.gitignore`. Ningún archivo generado durante las pruebas en sandbox figurará jamás en `git status`, evitando ensuciar el árbol de trabajo.
 
-#### 4.6.3 Indicadores Visuales y Trazabilidad de Rutas
+#### 3.3.3 Indicadores Visuales y Trazabilidad
 - **Interfaz TUI (Whiptail):** El título del menú principal refleja explícitamente el entorno de pruebas:
   ```text
   KeepMyConfig [SANDBOX] [Perfil: default]
   ```
-  Al completar operaciones de backup, restauración o purga, los cuadros de diálogo muestran **rutas absolutas completas** del home virtual (`user_data/sandbox/home/...`), del archivo generado en `storage/archives/` y de los ficheros eliminados con `shred -u`.
 - **Línea de Comandos (CLI):** Cada ejecución emite una advertencia visual formateada:
   ```text
   [AVISO] Ejecutando en MODO TEST / SANDBOX (Rutas aisladas en user_data/sandbox/)
   ```
 
-#### 4.6.4 Purga y Reseteo (`--clean-sandbox`)
+#### 3.3.4 Purga y Reseteo (`--clean-sandbox`)
 Para eliminar por completo el entorno sandbox y liberar espacio:
 ```bash
-./backup_manager.sh --clean-sandbox
+keepmyconfig --clean-sandbox
 ```
-Este comando elimina la carpeta `user_data/sandbox/` (incluyendo su home virtual y almacenamiento de prueba) y confirma la purga en la terminal.
 
 ---
 
-## Capítulo 5: Creación de Módulos y Recetas (`modules.d/*.conf`)
+## Capítulo 4: Preparación y Gestión del Almacenamiento (`BACKUP_DESTINATION`)
+
+### 4.1 El Mecanismo de Seguridad Safety Marker
+
+> [!CAUTION]
+> **Prevención de Escrituras Fantasma:** Si una unidad externa se desconecta inesperadamente, el punto de montaje `/media/$USER/MI_DISCO` puede quedar como una carpeta local vacía en el disco raíz del ordenador. Un script de backup tradicional escribiría en el disco interno, saturando la partición del sistema y dejando los datos expuestos localmente.
+
+Para evitar esto, **KeepMyConfig** exige la presencia de un archivo testigo denominado **`.backup_storage_marker`** en la raíz de su carpeta de copias. Si dicho archivo no existe o no contiene la firma válida, el motor detiene de inmediato cualquier operación con código de salida `2`.
+
+---
+
+### 4.2 Inicialización del Almacenamiento y Asistente de Onboarding
+
+KeepMyConfig incluye un **Asistente de Configuración Inicial (Onboarding Wizard)** diseñado para preparar el entorno de copias en menos de un minuto sin necesidad de comandos manuales:
+
+Al ejecutar por primera vez la aplicación (`INITIAL_SETUP_DONE="false"`):
+```bash
+keepmyconfig
+```
+El sistema detecta el primer arranque e inicia automáticamente el asistente en pantalla:
+1. **Auditoría de hardware y medios montados:** Escanea particiones externas y unidades USB en `/media/$USER/` o `/run/media/$USER/`.
+2. **Selección guiada de destino:**
+   - **Almacenamiento Local (Por defecto):** Configura `~/Backups/KeepMyConfig`.
+   - **Dispositivos Externos Detectados:** Muestra una lista con las memorias USB o discos SSD externos conectados.
+   - **Ruta Personalizada:** Permite ingresar manualmente cualquier ruta del sistema o montaje de red.
+3. **Despliegue del Marcador de Seguridad:** Crea automáticamente las carpetas `archives/` y `logs/` e instala el archivo testigo `.backup_storage_marker`.
+4. **Preferencia de Sesión (`REMEMBER_LAST_PROFILE`):** Pregunta si desea recordar el último perfil utilizado o arrancar siempre en `default`.
+
+---
+
+### 4.3 Detección de Discos Externos, Rutas Locales y Notación `@media/...`
+
+El motor de almacenamiento resuelve rutas relativas, absolutas y semánticas de conveniencia:
+- **Ruta relativa a `$HOME`:** `~/Backups/KeepMyConfig` o `$HOME/Copias`.
+- **Ruta absoluta:** `/mnt/compartido/backups`.
+- **Notación semántica `@media`:** `@media/MI_SSD/Backups` se resuelve automáticamente al punto de montaje activo `/media/$USER/MI_SSD/Backups` o `/run/media/$USER/MI_SSD/Backups`.
+
+---
+
+### 4.4 Convención Zero-Config por Perfil
+
+Todo perfil secundario organiza sus copias de forma transparente en un subdirectorio aislado:
+```text
+<BACKUP_DESTINATION>/
+├── .backup_storage_marker
+├── archives/                 # Copias del perfil default
+├── logs/
+├── docente/                  # Subdirectorio automático para perfil 'docente'
+│   ├── archives/
+│   └── logs/
+└── desarrollo/               # Subdirectorio automático para perfil 'desarrollo'
+    ├── archives/
+    └── logs/
+```
+No se requiere configurar rutas adicionales por cada nuevo perfil.
+
+---
+
+### 4.5 Configuración Central (`config/config.conf`)
+
+El archivo de configuración principal se ubica en `config/config.conf` (o en `~/.local/share/KeepMyConfig/config/config.conf` si está instalado):
+
+```ini
+# Ubicación universal del repositorio de respaldos
+BACKUP_DESTINATION="/media/usuario/SSD_BACKUP/Backups/KeepMyConfig"
+
+# Perfil activo actual
+ACTIVE_PROFILE="default"
+
+# Memoria de perfil de la última sesión (true/false)
+REMEMBER_LAST_PROFILE="false"
+
+# Tema visual TUI (default, midnight, cyberdark, aubergine, amber)
+TUI_THEME="default"
+
+# Estado de inicialización inicial
+INITIAL_SETUP_DONE="true"
+```
+
+---
+
+## Capítulo 5: Catálogo de Recetas, Plantillas y Perfiles
 
 ### 5.1 Estructura Declarativa de una Receta
 
-Cada elemento a respaldar se define en un archivo de configuración independiente ubicado en la carpeta `modules.d/` con extensión `.conf` (ejemplo: `modules.d/mi-herramienta.conf`).
+Cada elemento a respaldar se define en un archivo `.conf` independiente en `modules.d/`:
 
-Las recetas se procesan dentro de una subshell aislada para evitar la contaminación del entorno.
+```bash
+MODULE_ID="mi-herramienta"
+MODULE_NAME="Mi Herramienta de Trabajo"
+MODULE_TAGS=("dev" "tools")
+MODULE_PATHS=(
+    ".config/mi-herramienta/config.json"
+    ".mi-herramienta/plugins"
+)
+IS_SENSITIVE=false
+PURGE_AFTER_BACKUP=false
+MODULE_ENABLED=true
+POST_RESTORE_HOOK=""
+```
 
 ---
 
@@ -511,8 +658,7 @@ Las recetas se procesan dentro de una subshell aislada para evitar la contaminac
 
 ### 5.3 Ejemplos Oficiales de Producción
 
-#### 1. `modules.d/vscode-standard.conf` (Configuración Abierta)
-Respalda las extensiones y preferencias visuales de VSCode. No requiere cifrado ni purga:
+#### 1. Configuración Abierta: `vscode-standard.conf`
 ```bash
 MODULE_ID="vscode-standard"
 MODULE_NAME="Visual Studio Code - Configuración y Extensiones"
@@ -527,42 +673,11 @@ IS_SENSITIVE="false"
 PURGE_AFTER_BACKUP="false"
 ```
 
-#### 2. `modules.d/vscode-sensitive.conf` (Credenciales y Tokens)
-Respalda el almacenamiento seguro de credenciales y sincronización de cuentas:
-```bash
-MODULE_ID="vscode-sensitive"
-MODULE_NAME="Visual Studio Code - Credenciales y Tokens"
-MODULE_TAGS=("dev" "ide" "auth" "vscode")
-MODULE_PATHS=(
-    ".config/Code/User/globalStorage/state.vscdb"
-    ".config/Code/User/sync"
-)
-IS_SENSITIVE="true"
-PURGE_AFTER_BACKUP="true"
-```
-
-#### 3. `modules.d/bash-env.conf` (Entorno de Consola)
-Preserva los alias y scripts personales del usuario:
-```bash
-MODULE_ID="bash-env"
-MODULE_NAME="Entorno Bash y Dotfiles"
-MODULE_TAGS=("system" "shell" "dev")
-MODULE_PATHS=(
-    ".bashrc"
-    ".bash_aliases"
-    ".profile"
-    "bin"
-)
-IS_SENSITIVE="false"
-PURGE_AFTER_BACKUP="false"
-```
-
-#### 4. `modules.d/ssh-keys.conf` (Llaves Criptográficas con Hook)
-Respalda las llaves SSH privadas/públicas y los hosts conocidos, asegurando los permisos correctos al restaurar:
+#### 2. Credenciales y Vault con Purga: `ssh-keys.conf`
 ```bash
 MODULE_ID="ssh-keys"
 MODULE_NAME="Claves SSH y Configuración Remota"
-MODULE_TAGS=("security" "auth" "ssh")
+MODULE_TAGS=("security" "auth" "ssh" "sensitive")
 MODULE_PATHS=(
     ".ssh"
 )
@@ -585,142 +700,62 @@ POST_RESTORE_HOOK() {
 ### 5.4 Hooks Post-Restauración (`POST_RESTORE_HOOK`)
 
 > [!TIP]
-> **Mantenimiento Automático de Permisos:**
-> Ciertas aplicaciones (como el cliente OpenSSH o GnuPG) rechazan funcionar si los ficheros de configuración tienen permisos excesivos (ejemplo: lectura para grupo o terceros).
-> 
-> Use la función `POST_RESTORE_HOOK()` para aplicar automáticamente `chmod` o regenerar enlaces simbólicos tras la restauración. El hook recibe `$1` como la ruta base del `$HOME` de restauración.
+> Use `POST_RESTORE_HOOK()` para aplicar automáticamente permisos restrictivos (`chmod 600`, `chmod 700`) o recrear enlaces simbólicos tras la restauración de archivos confidenciales. El hook recibe `$1` como la ruta base del `$HOME` de destino.
 
 ---
 
-### 5.5 Sistema de Perfiles de Backup y Scoped Modules
+### 5.5 Asistente Interactivo de Edición y Conmutación de Estado (`[ON]` / `[OFF]`)
 
-KeepMyConfig incluye un sistema de perfiles que permite aislar entornos de trabajo (por ejemplo: `docente`, `desarrollo`, `administracion`) adaptando qué recetas se procesan y a qué carpeta de almacenamiento se destinan.
+Desde la TUI (Submenú 5, Opción 2), el Asistente de Edición permite modificar cualquier receta:
+- **Bifurcación (*Override*):** Si edita un módulo global desde un perfil secundario, puede elegir entre modificar el original global o crear una versión exclusiva para su perfil.
+- **Conmutador Rápido (`[ON]`/`[OFF]`):** Permite activar o desactivar módulos puntualmente sin borrar la receta. En CLI:
+  ```bash
+  keepmyconfig --enable-module vscode-standard
+  keepmyconfig --disable-module firefox
+  ```
 
-#### Estructura de un Perfil (`profiles/<perfil_id>/`)
-Cada perfil reside en un subdirectorio propio dentro de `profiles/`:
+---
+
+### 5.6 Sistema de Perfiles de Backup y Scoped Modules
+
+Cada perfil reside en `profiles/<perfil_id>/`:
 ```text
 profiles/
-├── default/                  # Perfil base conceptual
+├── default/                  # Perfil base permanente con auto-healing
+│   └── profile.conf
 └── docente/
-    ├── profile.conf          # Metadatos y destino específico
-    └── modules.d/            # Módulos propios del perfil
-        ├── custom-eval.conf  # Módulo exclusivo (solo visible en 'docente')
-        └── bash-env.conf     # Módulo sobrescrito (Override sobre el global)
+    ├── profile.conf          # Metadatos del perfil
+    └── modules.d/            # Módulos exclusivos o sobrescritos
 ```
 
-#### Fichero de Metadatos (`profile.conf`)
-```ini
-PROFILE_ID="docente"
-PROFILE_NAME="Perfil Docente"
-PROFILE_DESCRIPTION="Entorno educativo para docencia de FP"
-TARGET_SUBDIR="Backups/Docente"
-# Módulos globales excluidos específicamente en este perfil:
-DISABLED_MODULES=("firefox" "thunderbird")
-```
-
-#### Resolución en Cascada de Módulos
-Cuando se ejecuta una operación bajo un perfil activo:
-1. **Exclusión de Módulos Globales:** Si un módulo global está listado en `DISABLED_MODULES` dentro del `profile.conf` del perfil activo, es omitido automáticamente de los listados y de las operaciones de respaldo colectivas (`--backup-all`, `--backup-tag`).
-2. **Sobrescritura (*Override*):** Si existe `profiles/<perfil>/modules.d/<modulo>.conf`, prevalece sobre la versión global `modules.d/<modulo>.conf`.
-3. **Módulo Exclusivo:** Si un módulo solo existe dentro de `profiles/<perfil>/modules.d/`, solo será visible y ejecutable cuando ese perfil esté activo.
-4. **Módulo Global:** Las recetas definidas en `modules.d/` están siempre disponibles como base para todos los perfiles salvo que sean sobrescritas o excluidas.
-5. **Deduplicación:** Las operaciones colectivas (`--backup-all`, `--list-modules`) presentan una vista unificada sin duplicados, indicando el ámbito `[Global]`, `[Override]` o `[Exclusivo]`.
-
-#### Uso desde CLI
-```bash
-# Crear un nuevo perfil
-./backup_manager.sh --create-profile docente
-
-# Establecerlo como predeterminado
-./backup_manager.sh --set-active-profile docente
-
-# Ejecutar una operación puntual bajo un perfil temporal
-./backup_manager.sh --profile dev --backup-all
-```
+#### Resolución Jerárquica en Cascada
+1. **Exclusiones:** Si un módulo global figura en `DISABLED_MODULES`, se omite.
+2. **Override:** Si existe en `profiles/<perfil>/modules.d/`, prevalece sobre la versión global.
+3. **Exclusivo:** Módulos que solo existen en la carpeta del perfil.
+4. **Global:** Recetas en `modules.d/` disponibles para todos los perfiles.
 
 ---
 
-### 5.6 Biblioteca de Plantillas (`templates.d/`) y Exclusiones en Perfiles
+### 5.7 Biblioteca de Plantillas (`templates.d/`), Ficha Técnica y Resolución de Colisiones
 
-#### Principio de Estado Inicial Limpio
-Por diseño, una nueva instalación de **KeepMyConfig** arranca sin ningún módulo activo en `modules.d/`. Esto previene respaldos accidentales indeseados antes de que el usuario haya seleccionado conscientemente qué aplicaciones desea proteger. Si se invoca `--backup-all` sin módulos configurados, la herramienta no falla ni arroja un error crítico; en su lugar, despliega una guía amigable indicando cómo activar recetas desde la biblioteca de plantillas.
+KeepMyConfig arranca por diseño con **0 módulos activos de inicio** para evitar copias no deseadas.
 
-#### Catálogo Oficial de Recetas Predefinidas (`templates.d/`)
-El directorio `templates.d/` incluye plantillas listas para su activación inmediata:
+Catálogo disponible en `templates.d/`: `bash-env.conf`, `firefox.conf`, `git-config.conf`, `intellij.conf`, `libreoffice.conf`, `ssh-keys.conf`, `thunderbird.conf`, `vscode-sensitive.conf`, `vscode-standard.conf` y `template-skeleton.conf`.
 
-| Receta de Plantilla | ID | Descripción | Sensible / Purga | Etiquetas |
-| :--- | :--- | :--- | :---: | :--- |
-| `bash-env.conf` | `bash-env` | Entorno Bash (`.bashrc`, `.bash_aliases`, `~/.local/bin`) | No / No | `system`, `shell`, `dev` |
-| `firefox.conf` | `firefox` | Marcadores y perfiles de Mozilla Firefox | No / No | `browser`, `web`, `user` |
-| `git-config.conf` | `git-config` | Configuración global Git (`.gitconfig`, `.gitignore_global`) | No / No | `git`, `dev`, `tools` |
-| `intellij.conf` | `intellij` | Preferencias y configuraciones de IDEs JetBrains / IntelliJ | No / No | `ide`, `dev`, `jetbrains` |
-| `libreoffice.conf` | `libreoffice` | Perfiles de usuario y plantillas de LibreOffice | No / No | `office`, `desktop`, `docs` |
-| `ssh-keys.conf` | `ssh-keys` | Llaves privadas/públicas SSH y config (`~/.ssh/`) | **Sí / Sí** | `security`, `ssh`, `keys`, `sensitive` |
-| `thunderbird.conf` | `thunderbird` | Perfiles de correo de Mozilla Thunderbird | No / No | `mail`, `desktop`, `user` |
-| `vscode-sensitive.conf` | `vscode-sensitive` | Credenciales, tokens y auth de Visual Studio Code | **Sí / Sí** | `editor`, `vscode`, `sensitive` |
-| `vscode-standard.conf` | `vscode-standard` | Ajustes, atajos y snippets de Visual Studio Code | No / No | `editor`, `vscode`, `dev` |
-| `template-skeleton.conf` | N/A | Esqueleto canónico exhaustivamente comentado para crear nuevas recetas | N/A | N/A |
+#### Activación Asistida:
+- Muestra una **Ficha Técnica** con rutas y advertencia de purga.
+- Permite seleccionar el ámbito: **Global** (`modules.d/`) o **Perfil Activo** (`profiles/<id>/modules.d/`).
+- **Resolución de Colisiones:** Si la receta ya existe, ofrece: Clonar con nuevo nombre (`--as-module <nuevo_id>`), Sobrescribir forzando a la plantilla limpia (`--force`), o Cancelar.
 
-#### Esqueleto Canónico (`template-skeleton.conf`)
-Para desarrolladores o administradores de aula que deseen crear nuevas recetas, se incluye `templates.d/template-skeleton.conf`:
-```bash
-# Identificador único (minúsculas, números y guiones)
-MODULE_ID="mi-herramienta"
+---
 
-# Nombre legible para interfaces TUI/CLI
-MODULE_NAME="Mi Herramienta de Trabajo"
+### 5.8 Gestión de Exclusiones en Perfiles (`DISABLED_MODULES`)
 
-# Etiquetas para agrupación por lotes (--backup-tag)
-MODULE_TAGS=("dev" "tools")
-
-# Rutas relativas al $HOME del usuario (NUNCA incluir /home/<user> ni $HOME)
-MODULE_PATHS=(
-    ".config/mi-herramienta/config.json"
-    ".mi-herramienta/plugins"
-)
-
-# Confidencialidad: true si requiere cifrado GPG AES-256
-IS_SENSITIVE=false
-
-# Purga segura: true si debe eliminarse con 'shred -u' del equipo de origen tras respaldar
-PURGE_AFTER_BACKUP=false
-
-# Hook opcional en Bash tras la restauración (ej. restablecer permisos)
-POST_RESTORE_HOOK=""
+Para omitir módulos globales en perfiles secundarios sin eliminarlos del sistema, defina en `profile.conf`:
+```ini
+DISABLED_MODULES=("firefox" "thunderbird")
 ```
-
-#### Activación de Plantillas en TUI y CLI
-
-**Desde la TUI (Interfaz Interactiva):**
-1. Acceda a la **Opción 7: `[MODULES] Administrar Módulos, Plantillas y Etiquetas`**.
-2. Seleccione la acción **`Activar módulo desde plantilla`**.
-3. El sistema listará todas las plantillas disponibles con sus descripciones y nivel de seguridad.
-4. Elija la plantilla deseada.
-5. Si el perfil activo es distinto de `default`, el sistema le preguntará si desea activarla a nivel **Global** (visible para todos los perfiles) o **Exclusivo del Perfil Activo**.
-
-**Desde la CLI (Línea de Comandos):**
-```bash
-# 1. Explorar el catálogo de plantillas
-./backup_manager.sh --list-templates
-
-# 2. Activar una plantilla en el catálogo global (cuando el perfil es default)
-./backup_manager.sh --enable-template firefox
-
-# 3. Activar una plantilla para un perfil específico (ej. docente)
-./backup_manager.sh --profile docente --enable-template git-config
-
-# 4. Promover un módulo activo personalizado a la biblioteca de plantillas
-./backup_manager.sh --export-template mi-modulo-personal
-```
-
-#### Gestión de Exclusiones en Perfiles (`DISABLED_MODULES`)
-
-Cuando un módulo global (como `firefox` o `thunderbird`) no sea necesario o no deba respaldarse en un perfil especializado (por ejemplo, en un perfil de sólo código o de administración):
-1. Inicie la TUI y vaya a la **Opción 9: `[PROFILES] Gestión de Perfiles de Backup`**.
-2. Seleccione la opción **`5) Gestionar exclusiones de módulos globales`**.
-3. Marque en la checklist interactiva qué módulos globales deben quedar desactivados en el perfil actual.
-4. El sistema guardará la directiva `DISABLED_MODULES=("...")` en el `profile.conf` del perfil.
-5. Al invocar backups bajo ese perfil, los módulos excluidos serán ignorados de forma transparente.
+Esto puede gestionarse interactivamente desde la TUI (Submenú 4, Opción 5).
 
 ---
 
@@ -728,10 +763,8 @@ Cuando un módulo global (como `firefox` o `thunderbird`) no sea necesario o no 
 
 ### 6.1 Árbol de Directorios en la Unidad Externa
 
-Una vez realizadas las primeras copias, la carpeta configurada en su unidad externa presentará la siguiente estructura:
-
 ```text
-/media/$USER/SSD_BACKUP/Backups/Lliurex25/
+<BACKUP_DESTINATION>/
 ├── .backup_storage_marker                   # Marcador de seguridad obligatorio
 ├── archives/
 │   ├── bash-env_20260920_183000.tar.zst     # Archivo abierto comprimido con zstd
@@ -747,49 +780,30 @@ Una vez realizadas las primeras copias, la carpeta configurada en su unidad exte
 
 ### 6.2 Registro Histórico y Manifiestos de Integridad
 
-- **`backup_history.log`:** Contiene una línea por cada operación realizada:
-  ```text
-  [2026-09-20 18:30:00] [BACKUP] [ssh-keys] SUCCESS Archive: ssh-keys_20260920_183000.tar.zst.gpg Status: ENCRYPTED Purged: TRUE
-  ```
-- **Manifiestos (`.manifest.log`):** Cada archivo de copia contiene un catálogo de todos los ficheros respaldados junto con su suma de verificación criptográfica `SHA-256`, garantizando la detección de corrupciones silenciosas.
-- **Detección de Diffs (`.diff.log`):** Indica los cambios detectados respecto al snapshot previo:
-  - `+` : Fichero nuevo añadido.
-  - `~` : Fichero modificado (el hash difiere).
-  - `-` : Fichero eliminado del sistema local.
+- **`backup_history.log`:** Registro línea a línea con fecha, módulo, estado y archivo resultante.
+- **Manifiesto (`.manifest.log`):** Inventario completo de cada archivo respaldado y su suma SHA-256.
+- **Diff (`.diff.log`):** Registro de altas (`+`), modificaciones (`~`) y bajas (`-`) respecto a la copia previa.
 
 ---
 
 ### 6.3 Matriz de Resolución de Incidencias
 
 #### Caso 1: Error `STORAGE_MARKER_MISSING` (Código de salida `2`)
-- **Síntoma:** El sistema muestra: `No se detectó el almacenamiento de backup o falta el marcador de seguridad.`
-- **Causa:** La ruta definida en `BACKUP_DESTINATION` no es accesible, el disco externo no está montado, o la carpeta no contiene el archivo testigo `.backup_storage_marker`.
+- **Causa:** La ruta en `BACKUP_DESTINATION` no es accesible, el disco no está montado, o falta `.backup_storage_marker`.
 - **Solución:**
-  1. Ejecute `./backup_manager.sh --check-device` para auditar la ruta configurada.
-  2. Si utiliza un disco externo, compruebe con `lsblk -f` que esté montado en `/media/$USER/` o `/run/media/$USER/`.
-  3. Ejecute `./backup_manager.sh --setup` para inicializar automáticamente la carpeta y desplegar el marcador de seguridad.
-  4. Desde el menú interactivo, acceda a la **Opción 8** y seleccione *Inicializar nueva subcarpeta en el almacenamiento*.
+  1. Ejecute `keepmyconfig --check-device` para auditar la ruta.
+  2. Ejecute `keepmyconfig --setup` para inicializar automáticamente la carpeta y crear el marcador.
 
 #### Caso 2: Error de Cifrado o Descifrado GPG (Código de salida `4`)
-- **Síntoma:** `Fallo al descifrar el módulo. Compruebe la contraseña introducida.`
-- **Causa:** La contraseña introducida no coincide con la utilizada al momento del empaquetado, o el archivo `.gpg` está incompleto.
-- **Solución:**
-  1. Vuelva a intentar la operación verificando que el bloqueo de mayúsculas esté desactivado.
-  2. Si está automatizando con variable, asegúrese de exportar `export PASSPHRASE="su_clave"`.
+- **Causa:** Contraseña incorrecta o snapshot corrupto.
+- **Solución:** Compruebe mayúsculas/minúsculas. Si usa automatización, exporte `export PASSPHRASE="su_clave"`.
 
 #### Caso 3: Módulo no encontrado (Código de salida `3`)
-- **Síntoma:** `El módulo 'xyz' no existe o está corrupto.`
-- **Causa:** El archivo de receta `modules.d/xyz.conf` no existe o no tiene una estructura Bash válida.
-- **Solución:**
-  1. Ejecute `./backup_manager.sh --list-modules` para verificar la lista de recetas registradas.
-  2. Si editó el archivo manualmente, verifique con `bash -n modules.d/xyz.conf` que no contenga errores de sintaxis.
+- **Causa:** La receta no existe o contiene errores de sintaxis Bash.
+- **Solución:** Compruebe con `keepmyconfig --list-modules` o valide la sintaxis con `bash -n modules.d/receta.conf`.
 
 #### Caso 4: Espacio insuficiente en el almacenamiento
-- **Síntoma:** Error de compresión `zstd` o escritura en disco fallida.
-- **Causa:** La unidad SSD/USB ha alcanzado su capacidad máxima.
-- **Solución:**
-  1. Utilice la opción 8 del menú TUI (`Diagnóstico de Disco Externo`) para comprobar el espacio libre.
-  2. Purgue snapshots obsoletos de la carpeta `archives/`.
+- **Solución:** Compruebe el espacio libre en el Submenú 6 (Diagnóstico) y purgue snapshots antiguos en `archives/`.
 
 ---
 
@@ -797,59 +811,63 @@ Una vez realizadas las primeras copias, la carpeta configurada en su unidad exte
 
 ### A.1 Estándar SemVer 2.0.0 y Reglas de Incremento
 
-El proyecto implementa estrictamente la especificación [Semantic Versioning 2.0.0](https://semver.org/lang/es/) mediante el formato:
-
+El proyecto implementa estrictamente [Semantic Versioning 2.0.0](https://semver.org/lang/es/):
 ```text
 v<MAJOR>.<MINOR>.<PATCH>[-<PRERELEASE>]
 ```
-
-El prefijo `v` es obligatorio para todos los tags de Git y publicaciones de GitHub. Las reglas de incremento asociadas a los tipos de [Conventional Commits](https://www.conventionalcommits.org/) son:
-
-1. **`MAJOR` (X.0.0):** Cambios que rompen la compatibilidad hacia atrás (*Breaking Changes*), identificados por `!` o pie `BREAKING CHANGE:`.
-2. **`MINOR` (X.Y.0):** Nuevas funcionalidades o capacidades compatibles hacia atrás, identificadas por `feat(...)`. Reinicia el contador de `PATCH` a 0.
-3. **`PATCH` (X.Y.Z):** Corrección de errores y bugs compatibles hacia atrás, identificadas por `fix(...)`.
-4. **`<PRERELEASE>` (`-alpha.N`, `-beta.N`, `-rc.N`):** Versiones preliminares para pruebas, validación e iteración controlada.
+- **`MAJOR`:** Rompimiento de compatibilidad (*Breaking Changes*).
+- **`MINOR`:** Nuevas funcionalidades compatibles (`feat`).
+- **`PATCH`:** Corrección de errores (`fix`).
+- **`<PRERELEASE>`:** Iteraciones alfa, beta o rc (`-alpha.1`, `-alpha.2`).
 
 ---
 
 ### A.2 Ciclo de Pre-Releases (Alfa, Beta, RC)
-
-Durante el ciclo de desarrollo activo:
-- **Salto de Hito Funcional:** Al iniciar o planificar un conjunto de funcionalidades mayores (por ejemplo, el Sistema de Perfiles), se incrementa el número menor preparatorio (de `v0.1.0-alpha.X` a `v0.2.0-alpha.1`).
-- **Iteraciones de Validación:** Correcciones, ajustes y pruebas dentro de la misma fase de desarrollo incrementan el sufijo de pre-release (`v0.1.0-alpha.1` ➔ `v0.1.0-alpha.2`).
-- **Paso a Beta / RC:** Cuando las funcionalidades están completas y se entra en fase de congelación para pruebas intensivas de estabilidad, se transmuta a `-beta.1` y finalmente `-rc.1` (Release Candidate) antes de la versión final de producción (`v1.0.0`).
+Las fases intermedias incrementan el sufijo pre-release (`v0.1.0-alpha.1` ➔ `v0.1.0-alpha.2`). Tras congelar funcionalidades y estabilizar, se transiciona a `-beta.1`, `-rc.1` y versión final `v1.0.0`.
 
 ---
 
 ### A.3 Publicación de Releases en GitHub desde Tags de Git
-
-GitHub integra soporte nativo para Semantic Versioning y pre-releases:
-
-1. **Reconocimiento Automático de Pre-Release:**
-   Cualquier tag que incluya un guion seguido de texto (como `-alpha.1` o `-beta.1`) es reconocido automáticamente por la plataforma y marcado con la insignia visual **`Pre-release`**, impidiendo que sustituya a la versión oficial de producción (`Latest`).
-2. **Creación de Tags Anotados en Git:**
-   Los tags deben crearse siempre de forma anotada para registrar autoría, firma y mensaje descriptivo:
-   ```bash
-   git tag -a v0.1.0-alpha.1 -m "release: versión alfa inicial (MVP funcional: MVC, GPG, Shred, TUI/CLI, Multi-target)"
-   ```
-3. **Publicación del Tag hacia GitHub:**
-   Para subir la etiqueta al repositorio remoto (cuando se autorice expresamente):
-   ```bash
-   git push origin v0.1.0-alpha.1
-   ```
-4. **Generación de la Release en GitHub:**
-   - Desde la interfaz web de GitHub: Acceder a **Releases** ➔ **Draft a new release** ➔ Seleccionar el tag existente `v0.1.0-alpha.1`.
-   - GitHub activará automáticamente la casilla *"Set as a pre-release"*.
-   - El cuerpo de la release se puede autocompletar haciendo clic en *"Generate release notes"* o pegando el extracto correspondiente de `CHANGELOG.md`.
+Los tags se crean de forma anotada:
+```bash
+git tag -a v0.1.0-alpha.2 -m "release: versión alfa con empaquetado dual e instalador"
+```
+GitHub reconoce automáticamente el sufijo `-alpha` y lo publica con la insignia **`Pre-release`**.
 
 ---
 
 ### A.4 Registro de Cambios (`CHANGELOG.md`)
+Todo cambio significativo se clasifica de forma mandatoria en `CHANGELOG.md` bajo `### Added`, `### Fixed`, `### Changed` y `### Security`.
 
-Todo cambio significativo debe documentarse de forma continua en `CHANGELOG.md` bajo las siguientes directivas:
-- `### Added`: Nuevas características añadidas (`feat`).
-- `### Fixed`: Errores o problemas solucionados (`fix`).
-- `### Changed`: Modificaciones en el comportamiento de funcionalidades existentes.
-- `### Security`: Mejoras de seguridad, algoritmos de cifrado o purga de datos.
-- `### Documentation`: Actualizaciones sustanciales en guías, especificaciones y manuales.
+---
 
+## Apéndice B: Script Reproducible de Empaquetado (`scripts/package.sh`) y Checksums
+
+Para administradores, empaquetadores y contribuidores que deseen compilar y empaquetar KeepMyConfig desde el repositorio de código fuente:
+
+```bash
+scripts/package.sh [OPCIONES]
+
+Opciones:
+  -v, --version <tag>     Especificar versión explícita (ej. v0.1.0-alpha.2)
+  -o, --output-dir <dir>  Directorio destino de los artefactos (por defecto: dist/)
+  -t, --type <tipo>       Tipo de paquete a generar: all, standard, portable (default: all)
+  -c, --clean             Limpiar artefactos previos en el directorio de salida
+  -s, --skip-tests        Omitir el smoke test posterior (no recomendado)
+  -h, --help              Mostrar esta ayuda de uso y salir
+```
+
+### B.1 Modos de Compilación y Flags CLI
+- **`--type all` (por defecto):** Genera la Edición Estándar (`KeepMyConfig-${VERSION}.tar.gz` y `.tar.zst`) y la Edición Portable (`KeepMyConfig-${VERSION}-portable.tar.gz` y `.tar.zst`).
+- **`--type standard`:** Genera exclusivamente la versión con instalador y artefactos Freedesktop.
+- **`--type portable`:** Genera exclusivamente la versión plug-and-play con marcador `.portable` y lanzador `keepmyconfig.sh`.
+- **`--clean`:** Purga artefactos previos y sumas SHA-256 en el directorio de salida antes de iniciar el empaquetado.
+
+### B.2 Garantías Anti-Tarbomb y Lista Blanca Estricta
+- **Anti-Tarbomb:** Todo archivo comprimido se descomprime dentro de un único subdirectorio contenedor con el nombre del paquete, evitando la dispersión de archivos en la carpeta del usuario.
+- **Lista Blanca Estricta:** El empaquetador utiliza un directorio temporal de preparación (*staging*) y copia únicamente los componentes de producción necesarios, excluyendo de forma garantizada `.git/`, `.github/`, `.agents/`, `specs/`, `tests/` y `user_data/`.
+
+### B.3 Normalización de Permisos UNIX y Firmas SHA-256
+- **Normalización de Permisos:** Antes del empaquetado, todos los directorios y ejecutables se fijan a `0755` y los ficheros regulares a `0644`.
+- **Sumas Criptográficas SHA-256:** El script genera automáticamente `dist/SHA256SUMS.txt` con las sumas de todos los archivos generados y valida su correspondencia mediante `sha256sum -c`.
+- **Smoke Tests Integrados:** Cada paquete generado se descomprime temporalmente en un entorno aislado y se valida la respuesta de sus binarios antes de declarar el empaquetado como exitoso.
