@@ -14,6 +14,41 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - **Convención Zero-Config por Perfil:** Todo perfil secundario guarda de forma automática sus copias en el subdirectorio `<BACKUP_DESTINATION>/<id_perfil>` sin necesidad de parametrización manual, mientras que el perfil `default` preserva la raíz de `<BACKUP_DESTINATION>`.
 
 ### Added
+- **Arquitectura Universal de Menús TUI (Sub-Hito 12.4.2):**
+  - Reestructuración integral de la navegación interactiva en un Menú Principal híbrido (acceso inmediato a backup completo y restauración sensible) y 6 submenús especializados (Respaldo, Recuperación, Perfiles, Módulos, Almacenamiento y Preferencias).
+  - Cabeceras de telemetría dinámica en tiempo real que informan en cada pantalla del perfil activo, ruta resuelta de destino, módulos activos y espacio disponible en disco.
+  - Iconografía Unicode homogénea y numeración estandarizada en todos los niveles de menú.
+- **Personalización Visual y Temas de Color (`NEWT_COLORS`):**
+  - Catálogo de 5 paletas cromáticas seleccionables desde el Submenú 7 y persistidas en `config.conf`: `default` (colores nativos de la terminal configurada por el usuario), `midnight` (azul profundo), `cyberdark` (verde fluorescente sobre fondo negro), `aubergine` (tonos berenjena/magenta) y `amber` (resplandor fósforo ámbar vintage).
+- **Pre-Flight Safety Gate y Matriz de Impacto Previo:**
+  - Interceptor mandatorio antes de cualquier operación de respaldo que presenta una matriz detallada con módulos, ámbito, cifrado GPG, purga y destino.
+  - Alerta roja destacada ante purga activa con `shred -u` (`\033[41;97;1m` / `--defaultno`) listando exhaustivamente las rutas locales que serán destruidas.
+  - Advertencia previa de sobreescritura antes de iniciar la restauración de archivos en `$HOME`.
+  - Soporte de bandera desatendida `--yes` / `-y` para omitir confirmaciones interactivas en scripts y `cron`.
+- **Asistente de Edición de Módulos (`controller_handle_edit_module`):**
+  - Asistente interactivo en TUI para modificar recetas existentes respetando el ámbito global vs perfil con opción de bifurcación (*Override*), precargando y editando nombre, rutas, etiquetas, sensibilidad, purga y estado.
+  - **Sincronización Inteligente de Cifrado y Purga:** Marcado de etiqueta `sensitive` activa directamente GPG AES-256; sin la etiqueta, ofrece cifrado y añade el tag si se acepta. La purga segura (`shred -u`) se oferta universalmente para cualquier módulo.
+- **Control de Estado de Módulos (`MODULE_ENABLED="true/false"`):**
+  - Soporte para activar (`[ON]`) o desactivar (`[OFF]`) módulos desde la TUI (conmutador rápido de estado) y mediante los subcomandos CLI `--enable-module <id>` y `--disable-module <id>`, ignorando módulos inactivos en respaldos colectivos.
+- **Ficha Técnica y Ámbito Universal en Activación de Plantillas:**
+  - Despliegue de ficha técnica detallada previa a la confirmación, consulta obligatoria sobre purga de fábrica y selector universal de ámbito (catálogo global vs perfil activo) al instanciar cualquier plantilla.
+- **Asistente de Resolución de Colisiones en Plantillas:**
+  - Menú interactivo de 3 vías (clonar con nuevo ID, sobrescribir a la plantilla limpia, cancelar) y soporte en CLI mediante `--as-module <nuevo_id>` y `--force`.
+- **Batería de Pruebas Unitarias Automatizadas (Fase 7):**
+  - 70 nuevas pruebas unitarias y de integración distribuidas en `tests/test_views.sh`, `tests/test_module_model.sh` y `tests/test_controller.sh`, alcanzando un total de 528 pruebas unitarias al 100% de éxito.
+
+### Security
+- **Consentimiento Activo Obligatorio para Purga (`shred -u`):**
+  - Todo diálogo de activación o mantenimiento de purga utiliza `whiptail_view_confirm_critical` con foco predeterminado en `[NO]` (`--defaultno`), requiriendo que el usuario se desplace activamente a `[SÍ]`. En consola, `ansi_view_confirm_critical` exige escribir explícitamente `SI` en mayúsculas salvo uso de `--yes`.
+- **Salvaguardas en Eliminación de Perfiles:**
+  - Bloqueo estricto para impedir el borrado accidental del perfil canónico `default` o del perfil actualmente activo.
+
+### Fixed
+- **Sembrado Automático en Modo Sandbox (`_sandbox_seed_modules`):**
+  - Inicialización automática de recetas base (`bash-env.conf`, `ssh-keys.conf`, etc.) en `user_data/sandbox/modules.d/` al entrar en modo test.
+- **Guardas Defensivas ante Listas Vacías:**
+  - Mensajes amigables y orientación técnica en lugar de selectores vacíos al invocar operaciones sobre perfiles sin recetas.
+
 - **Home Virtual de Pruebas y Semillas Canónicas en Sandbox (`user_data/sandbox/home/`):**
   - Confinamiento estricto de `TARGET_USER_HOME="${sandbox_base}/home"` en ejecuciones sandbox (`--test-mode`, `--sandbox`, `KEEP_MY_CONFIG_TEST_MODE=true`).
   - Semillas canónicas de prueba reproducibles en `tests/fixtures/sandbox_home/` y auto-inicialización en `_sandbox_seed_virtual_home` para todas las recetas base (`.bashrc`, `.bash_aliases`, `.profile`, `.bash_logout`, `.ssh/id_rsa`, `.ssh/id_rsa.pub`, `.config/Code/User/settings.json`, `.config/Code/User/keybindings.json`, `.config/Code/User/sync/sync_state.json`, `.gitconfig`, `.config/git/ignore`, `.mozilla/firefox/*`, `.config/JetBrains/*`, `.thunderbird/*`, `.config/libreoffice/*`).
