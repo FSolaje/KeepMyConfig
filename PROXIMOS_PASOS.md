@@ -1,12 +1,13 @@
 # Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
-> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hito 12 Base consolidado en commit `1ba2f20`, Sub-Hito 12.1 en `a5e5ea3`, Sub-Hito 12.3 en `7b34f9e`, y **Sub-Hito 12.4 (Modo Sandbox / Test Mode) completado y listo para commit** en la rama `dev/feature/backup-profiles`. Toda la suite de 10 baterías con **405/405 pruebas unitarias al 100%**, escáner SAST impecable y aislamiento total en Git.  
-> **Paso inmediato para la próxima sesión:** Consolidar en Git el Sub-Hito 12.4 tras aprobación del usuario, y continuar con el **Sub-Hito 12.5: Sistema de Empaquetado y Distribución Automatizada para Releases** (`scripts/package.sh` e `install.sh`).
+> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hito 12 Base consolidado en commit `1ba2f20`, Sub-Hito 12.1 en `a5e5ea3`, Sub-Hito 12.3 en `7b34f9e`, Sub-Hito 12.4 en `264cc7c`, y **Sub-Hito 12.4.1 (Home Virtual en Sandbox, Captura Guiada de Rutas y Corrección de Cancelación TUI) completado y listo para commit** en la rama `dev/feature/backup-profiles`. Toda la suite de 10 baterías con **458/458 pruebas unitarias al 100%**, escáner SAST impecable y aislamiento total en Git.  
+> **Paso inmediato para la próxima sesión:** Consolidar en Git el Sub-Hito 12.4.1 tras aprobación del usuario, y continuar con el **Sub-Hito 12.5: Sistema de Empaquetado y Distribución Automatizada para Releases** (`scripts/package.sh` e `install.sh`).
 
 ---
 
 ## Hitos Completados:
+
 
 1. **Validación del Documento de Especificación:**
    - [x] Revisión del archivo `ESPECIFICACION.md` completada y aprobada con la inclusión de `PURGE_AFTER_BACKUP=true/false` para control atómico de purga segura con `shred -u`.
@@ -106,21 +107,28 @@
     - [x] **Purga Segura (`controller_clean_sandbox`):** Eliminación total del sandbox con `--clean-sandbox` y reporte ANSI formateado.
     - [x] **Integración CLI y TUI (`backup_manager.sh` y `app_controller.sh`):** Flags `--test-mode`, `--sandbox`, variable `KEEP_MY_CONFIG_TEST_MODE=true`, banner `[SANDBOX]` en título de Whiptail y avisos de seguridad en consola.
     - [x] **Documentación Actualizada:** `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md` sincronizados rigurosamente.
-    - [x] **Batería de Pruebas Unitarias:** Nueva suite `tests/test_sandbox_mode.sh` con 33 pruebas superadas (total: 405/405 pruebas al 100%).
+    - [x] **Commit de Consolidación:** Registrado bajo Conventional Commits (`264cc7c`).
+17. **Home Virtual en Sandbox, Captura Guiada de Rutas y Corrección TUI (Sub-Hito 12.4.1):**
+    - [x] **Documentos SDD:** `specs/sandbox_virtual_home_and_tui_ux/` (`spec.md`, `plan.md`, `tasks.md`).
+    - [x] **Home Virtual de Pruebas (`user_data/sandbox/home/`):** Confinamiento estricto de `TARGET_USER_HOME`, semillas canónicas en `tests/fixtures/sandbox_home/` para todas las recetas base y verificación segura de purga con `shred -u` sin tocar el `$HOME` real.
+    - [x] **Captura Interactiva de Rutas Línea a Línea (`whiptail_view_input_paths`):** Cuadro dinámico con confirmación por Enter, visualización acumulada y orientación sobre rutas relativas/$HOME.
+    - [x] **Feedback Detallado con Rutas Absolutas en TUI:** Desglose de rutas completas de origen, destino y ficheros destruidos en diálogos informativos.
+    - [x] **Corrección de Cancelación en TUI:** Retorno limpio `0` en cancelación voluntaria de selección de módulos, etiquetas, menús y contraseñas (evitando abortos bajo `set -e`).
+    - [x] **Batería de Pruebas Unitarias:** 50 pruebas en `tests/test_sandbox_mode.sh` (total: 458/458 pruebas superadas al 100%).
 
 ---
 
 ## Hoja de Ruta Inmediata y Futuras Funcionalidades (Roadmap):
 
-### Sub-Hito 12.4: Modo Sandbox / Test Mode (`--test-mode` y `--clean-sandbox`) (Completado y Listo para Commit)
-- [x] Documentos SDD completados en `specs/sandbox_test_mode/` (`spec.md`, `plan.md`, `tasks.md`).
-- [x] Implementar `controller_enable_sandbox_mode` en `lib/controllers/app_controller.sh` (confinamiento en `user_data/sandbox/` para `config/`, `modules.d/`, `profiles/`, `storage/`).
-- [x] Implementar `controller_clean_sandbox` en `lib/controllers/app_controller.sh`.
-- [x] Integrar flags `--test-mode`, `--sandbox` y `--clean-sandbox` en `backup_manager.sh`.
-- [x] Indicador visual en TUI Whiptail: `KeepMyConfig [SANDBOX] [Perfil: <id>]`.
-- [x] Suite de pruebas unitarias `tests/test_sandbox_mode.sh` con verificación de aislamiento en `git status` (33/33 tests).
+### Sub-Hito 12.4.1: Home Virtual de Sandbox y Mejoras TUI (Completado y Listo para Commit)
+- [x] Documentos SDD completados en `specs/sandbox_virtual_home_and_tui_ux/`.
+- [x] Bugfix de cancelación voluntaria en TUI (código 0).
+- [x] Home virtual de pruebas con semillas canónicas en `tests/fixtures/sandbox_home/`.
+- [x] Función interactiva de captura de rutas `whiptail_view_input_paths`.
+- [x] Feedback detallado con rutas absolutas completas en cuadros de diálogo de la TUI.
+- [x] 10 suites de pruebas unitarias superadas al 100% (458 tests).
 - [x] Sincronización mandatoria de `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md`.
-- [ ] Autorización y Commit independiente del Sub-Hito 12.4.
+- [ ] Autorización y Commit independiente del Sub-Hito 12.4.1.
 
 ### Sub-Hito 12.5 (Siguiente Tarea): Sistema de Empaquetado y Distribución Automatizada para Releases
 - [ ] Definición de Manifiesto de Distribución con Lista Blanca estricta (exclusión de `.agents/`, `specs/`, `tests/`, `user_data/`, etc.).

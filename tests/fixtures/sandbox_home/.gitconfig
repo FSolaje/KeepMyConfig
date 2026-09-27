@@ -1,0 +1,8 @@
+[user]
+	name = Sandbox Tester
+	email = tester@sandbox.local
+[core]
+	editor = nano
+	autocrlf = input
+[init]
+	defaultBranch = main

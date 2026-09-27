@@ -279,10 +279,14 @@ El sistema verificará la presencia de `whiptail` y abrirá el menú principal d
 - **¿Qué hace?:** Abre un subasistente interactivo que permite:
   - **Inspeccionar módulos:** Ver las rutas, etiquetas, nivel de seguridad y estado de purga de cualquier módulo disponible para el perfil activo, etiquetado visualmente como `[Global]` o `[Perfil: <id>]`.
   - **Activar módulo desde plantilla:** Explora la biblioteca `templates.d/` con recetas preconfiguradas listas para usar (Firefox, VSCode, Git, SSH, IntelliJ, etc.), permitiendo instanciarlas en el catálogo global o en el perfil activo.
-  - **Crear un nuevo módulo con selector de ámbito:** Asistente paso a paso que solicita identificador, rutas a respaldar, etiquetas y nivel de seguridad. Si el perfil activo es distinto de `default`, permite elegir si el módulo se registra en el **Catálogo Global (`modules.d/`)** (visible en todos los perfiles) o como **Exclusivo del Perfil Activo (`profiles/<activo>/modules.d/`)**.
-  - **Crear nueva plantilla en la biblioteca:** Asistente interactivo para redactar una receta directamente en la biblioteca reutilizable `templates.d/`.
+  - **Crear un nuevo módulo con selector de ámbito y captura guiada:** Asistente paso a paso que solicita identificador, nombre descriptivo, nivel de seguridad y etiquetas. Si el perfil activo es distinto de `default`, permite elegir si el módulo se registra en el **Catálogo Global (`modules.d/`)** o como **Exclusivo del Perfil Activo (`profiles/<activo>/modules.d/`)**.
+  - **Captura interactiva de rutas línea a línea (Enter para confirmar):** Las rutas no se introducen agrupadas por espacios, sino una a una en un cuadro de diálogo dinámico:
+    - Cada pulsación de Enter confirma y añade la ruta a una lista acumulada visible en pantalla.
+    - Se ofrece orientación explícita: las rutas se procesan relativas a `$HOME` (admitiendo rutas relativas como `.config/app` o completas con `$HOME` / `~`, que el sistema normaliza automáticamente).
+    - Un Enter en campo en blanco finaliza la recogida de rutas.
+  - **Crear nueva plantilla en la biblioteca:** Asistente interactivo para redactar una receta directamente en la biblioteca reutilizable `templates.d/` con el mismo flujo guiado de captura de rutas línea a línea.
   - **Exportar módulo activo a la biblioteca de plantillas:** Permite promover cualquier receta activa validada del usuario al catálogo general `templates.d/`.
-  - **Sanitización automática de rutas:** Al ingresar rutas de ficheros (ej. `$HOME/Documentos`, `~/Descargas/`), el sistema normaliza automáticamente las rutas a formato relativo respecto a `$HOME`, eliminando barras redundantes y previniendo errores de empaquetado.
+  - **Sanitización automática de rutas:** Al ingresar rutas de ficheros (ej. `$HOME/Documentos`, `~/Descargas/`), el sistema normaliza automáticamente las rutas a formato relativo respecto a `$HOME`, eliminando barras redundantes y bloqueando intentos de directory traversal (`..`).
   - **Eliminar un módulo:** Da de baja un archivo de receta de su ámbito correspondiente (`modules.d/` o `profiles/<activo>/modules.d/`).
   - **Añadir etiquetas:** Enriquecer el catálogo `config/default_tags.conf`.
 
@@ -450,6 +454,15 @@ El modo sandbox puede activarse de tres formas equivalentes:
 
 #### 4.6.2 Arquitectura y Aislamiento de Rutas
 Al activarse, el sistema inicializa de forma transparente una réplica completa del entorno confinado bajo `user_data/sandbox/`:
+- **Home Virtual de Pruebas (`user_data/sandbox/home/`):**
+  - Confinamiento estricto de `TARGET_USER_HOME="${sandbox_base}/home"`.
+  - El sistema siembra automáticamente datos de prueba sintéticos para todas las recetas base:
+    - **Bash y Entorno:** `.bashrc`, `.bash_aliases`, `.profile`, `.bash_logout`.
+    - **SSH (Vault & Shred):** `.ssh/id_rsa`, `.ssh/id_rsa.pub`, `.ssh/id_ed25519`, `.ssh/id_ed25519.pub`, `.ssh/config`, `.ssh/known_hosts`.
+    - **VSCode:** `.config/Code/User/settings.json`, `keybindings.json`, `snippets/bash.json`, `globalStorage/state.vscdb`, `sync/sync_state.json`.
+    - **Desarrollo y Navegación:** `.gitconfig`, `.config/git/ignore`, `.mozilla/firefox/testprofile.default/prefs.js`, `.config/JetBrains/IdeaIC2024.1/idea.properties`, `.thunderbird/testprofile.default/prefs.js`, `.config/libreoffice/4/user/registrymodifications.xcu`.
+  - **Pruebas Seguras de Purga Sensible (`shred -u`):** Permite verificar en vivo la destrucción irrecuperable de claves y archivos confidenciales sin poner en riesgo jamás los datos reales de `/home/$USER`.
+  - **Regeneración Idempotente:** Ante una purga con `--clean-sandbox`, la siguiente invocación con `--test-mode` vuelve a reconstruir el home virtual íntegro con sus archivos semilla originales.
 - **Configuración Aislada:** `user_data/sandbox/config/config.conf` (con `INITIAL_SETUP_DONE="true"` y `BACKUP_DESTINATION` apuntando a `user_data/sandbox/storage`).
 - **Módulos Aislados:** `user_data/sandbox/modules.d/` (inicia limpio; cualquier plantilla activada o receta creada se escribe aquí sin tocar las carpetas raíz del proyecto).
 - **Perfiles Aislados:** `user_data/sandbox/profiles/` (incluye perfil base `profiles/default/profile.conf`).
@@ -458,11 +471,12 @@ Al activarse, el sistema inicializa de forma transparente una réplica completa 
 > [!NOTE]
 > La carpeta `user_data/` está excluida permanentemente en el archivo `.gitignore`. Ningún archivo generado durante las pruebas en sandbox figurará jamás en `git status`, evitando ensuciar el árbol de trabajo.
 
-#### 4.6.3 Indicadores Visuales
+#### 4.6.3 Indicadores Visuales y Trazabilidad de Rutas
 - **Interfaz TUI (Whiptail):** El título del menú principal refleja explícitamente el entorno de pruebas:
   ```text
   KeepMyConfig [SANDBOX] [Perfil: default]
   ```
+  Al completar operaciones de backup, restauración o purga, los cuadros de diálogo muestran **rutas absolutas completas** del home virtual (`user_data/sandbox/home/...`), del archivo generado en `storage/archives/` y de los ficheros eliminados con `shred -u`.
 - **Línea de Comandos (CLI):** Cada ejecución emite una advertencia visual formateada:
   ```text
   [AVISO] Ejecutando en MODO TEST / SANDBOX (Rutas aisladas en user_data/sandbox/)
@@ -473,7 +487,7 @@ Para eliminar por completo el entorno sandbox y liberar espacio:
 ```bash
 ./backup_manager.sh --clean-sandbox
 ```
-Este comando elimina la carpeta `user_data/sandbox/` y confirma la purga en la terminal.
+Este comando elimina la carpeta `user_data/sandbox/` (incluyendo su home virtual y almacenamiento de prueba) y confirma la purga en la terminal.
 
 ---
 

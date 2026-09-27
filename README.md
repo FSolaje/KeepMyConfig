@@ -29,15 +29,17 @@ Permite respaldar, cifrar, purgar y restaurar configuraciones del sistema y apli
   - **Estado inicial limpio de primera ejecución:** la instalación arranca con 0 módulos activos en `modules.d/`. Si se ejecuta `--backup-all`, el sistema ofrece una orientación amigable sugiriendo activar plantillas o crear módulos propios en lugar de emitir un fallo técnico.
   - **Activación selectiva de ámbito:** las plantillas se pueden instanciar en el catálogo global (`modules.d/`) o de forma exclusiva en el perfil activo (`profiles/<id>/modules.d/`).
   - **Exportación y creación ágil:** permite promover cualquier módulo activo a la biblioteca de plantillas o redactar nuevas plantillas desde TUI y CLI.
-- **Módulos Atómicos con Sanitización Automática de Rutas (`modules.d/`):**
+- **Módulos Atómicos con Captura Guiada y Sanitización de Rutas (`modules.d/`):**
   - Cada aplicación o configuración es una receta independiente (`.conf`).
-  - Normalización inteligente de rutas en recetas (`$HOME/`, `~/`, `/home/<user>/` convertidos a rutas relativas).
+  - **Captura interactiva de rutas línea a línea:** Entrada asistida con confirmación por Enter, visualización de rutas acumuladas en pantalla y orientación sobre rutas relativas/$HOME.
+  - Normalización inteligente de rutas en recetas (`$HOME/`, `~/`, `/home/<user>/` convertidos a rutas relativas seguras).
   - Desacoplamiento de aplicaciones complejas en perfiles estándar y sensibles (ej. `vscode-standard` vs `vscode-sensitive`).
 - **Sistema de Etiquetas Dinámicas:**
   - Agrupación de respaldos y restauraciones por etiquetas (`dev`, `sensitive`, `system`, etc.).
 - **Gestión Efímera de Datos Sensibles (*Vault & Shred*):**
   - Cifrado simétrico robusto mediante **GPG (AES-256)**.
   - Purga segura en disco local mediante `shred -u -z -n 3` tras verificar el respaldo.
+  - Reporte interactivo detallado con rutas absolutas completas de origen, destino y ficheros destruidos.
   - Restauración instantánea de datos sensibles con una única orden al inicio de la jornada de trabajo.
 - **Seguridad de Dispositivo Anti-Escritura Fantasma:**
   - Comprobación mandatoria del archivo testigo (`.backup_storage_marker`) con validación jerárquica y creación atómica de subcarpetas.
@@ -45,10 +47,11 @@ Permite respaldar, cifrar, purgar y restaurar configuraciones del sistema y apli
   - Nomenclatura uniforme: `AAAAMMDD_HHMMSS`.
   - Generación de `manifest.log` con inventario de ficheros, hashes SHA-256 y bitácora `backup_history.log`.
 - **Modo Sandbox y Entorno Aislado de Pruebas (`--test-mode`, `--clean-sandbox`):**
-  - Entorno seguro y confinado en `user_data/sandbox/` para probar recetas, perfiles, asistentes y copias de seguridad sin alterar configuraciones de producción ni dejar rastros sin seguimiento (*untracked files*) en Git.
+  - **Home Virtual de Pruebas (`user_data/sandbox/home/`):** Confinamiento estricto de `TARGET_USER_HOME` con datos de prueba preconfigurados para todas las recetas (`.bashrc`, `.ssh/id_rsa`, `.config/Code/User/settings.json`, `.gitconfig`, etc.), permitiendo probar el borrado y purga con `shred -u` con total seguridad sin tocar el `$HOME` real.
+  - Entorno seguro y confinado en `user_data/sandbox/` para probar recetas, perfiles, asistentes y copias sin alterar configuraciones de producción ni dejar rastros sin seguimiento (*untracked files*) en Git.
   - Activación por flag (`--test-mode`, `--sandbox`) o variable de entorno (`KEEP_MY_CONFIG_TEST_MODE=true`).
   - Indicador visual `[SANDBOX]` en el menú interactivo de Whiptail y avisos de seguridad ANSI en consola.
-  - Comando de purga inmediata `--clean-sandbox` para resetear el entorno de pruebas.
+  - Comando de purga inmediata `--clean-sandbox` para resetear y regenerar limpiamente el entorno de pruebas.
 - **100% Nativo en Linux:**
   - Sin dependencias de compilación ni librerías de terceros (`bash`, `whiptail`, `tar`, `zstd`, `gpg`, `shred`).
 
@@ -74,6 +77,7 @@ KeepMyConfig/
 ├── markers/                 # Archivos testigo (.backup_storage_marker)
 ├── specs/                   # Especificaciones guiadas por requerimientos (SDD)
 ├── tests/                   # Suites de pruebas unitarias automatizadas
+│   └── fixtures/            # Semillas canónicas para el home virtual de sandbox
 ├── MANUAL_USUARIO.md        # Manual exhaustivo de usuario y administración
 ├── CHANGELOG.md             # Registro de cambios siguiendo SemVer
 ├── README.md                # Documentación del proyecto

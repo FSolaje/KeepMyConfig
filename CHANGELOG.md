@@ -14,13 +14,31 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - **Convención Zero-Config por Perfil:** Todo perfil secundario guarda de forma automática sus copias en el subdirectorio `<BACKUP_DESTINATION>/<id_perfil>` sin necesidad de parametrización manual, mientras que el perfil `default` preserva la raíz de `<BACKUP_DESTINATION>`.
 
 ### Added
+- **Home Virtual de Pruebas y Semillas Canónicas en Sandbox (`user_data/sandbox/home/`):**
+  - Confinamiento estricto de `TARGET_USER_HOME="${sandbox_base}/home"` en ejecuciones sandbox (`--test-mode`, `--sandbox`, `KEEP_MY_CONFIG_TEST_MODE=true`).
+  - Semillas canónicas de prueba reproducibles en `tests/fixtures/sandbox_home/` y auto-inicialización en `_sandbox_seed_virtual_home` para todas las recetas base (`.bashrc`, `.bash_aliases`, `.profile`, `.bash_logout`, `.ssh/id_rsa`, `.ssh/id_rsa.pub`, `.config/Code/User/settings.json`, `.config/Code/User/keybindings.json`, `.config/Code/User/sync/sync_state.json`, `.gitconfig`, `.config/git/ignore`, `.mozilla/firefox/*`, `.config/JetBrains/*`, `.thunderbird/*`, `.config/libreoffice/*`).
+  - Capacidad de verificar en vivo el ciclo completo de backup, descifrado y purga segura con `shred -u` con total seguridad sin poner en riesgo los datos de producción en `/home/$USER`.
+  - Regeneración automática del home virtual ante `--clean-sandbox` y nueva reactivación.
+- **Captura Interactiva de Rutas Línea a Línea (`whiptail_view_input_paths`):**
+  - Sustitución de la entrada en una sola línea separada por espacios por un diálogo guiado en bucle con confirmación por Enter y refresco visual de rutas acumuladas.
+  - Orientación explícita sobre rutas relativas respecto a `$HOME`, compatibilidad con `$HOME` o `~` y normalización automática.
+  - Finalización intuitiva pulsando Enter con el campo en blanco y soporte para nombres de carpetas con espacios.
+- **Feedback Detallado con Rutas Absolutas Completas en TUI:**
+  - Desglose detallado de rutas completas de origen (`${TARGET_USER_HOME}/...`) y de destino (`${backup_dir}/archives/...`) en cuadros de diálogo de confirmación.
+  - Detalle explícito de cada ruta destruida con `shred -u` en advertencias de seguridad antes y después de su ejecución.
+  - Desglose de rutas restituidas en los diálogos de restauración selectiva y global.
 - **Modo Sandbox y Entorno Aislado de Pruebas (Sub-Hito 12.4):**
   - **Aislamiento Total (`user_data/sandbox/`):** Confinamiento de todas las rutas de trabajo volátiles (`config/`, `modules.d/`, `profiles/` y `storage/`) en un directorio aislado protegido por `.gitignore`, garantizando 0 archivos sin seguimiento (*untracked files*) en Git tras pruebas manuales o desarrollo.
   - **Auto-Inicialización Transparente (`controller_enable_sandbox_mode`):** Despliegue automático de la estructura del sandbox, copia adaptada de `config/config.conf` (`INITIAL_SETUP_DONE="true"`, `ACTIVE_PROFILE="default"`, `BACKUP_DESTINATION="<sandbox>/storage"`), marcador de seguridad `.backup_storage_marker` y perfil base `profiles/default/profile.conf`.
   - **Banderas CLI y Variable de Entorno:** Soporte para `--test-mode`, `--sandbox` y variable `KEEP_MY_CONFIG_TEST_MODE=true` tanto para interfaz interactiva TUI como CLI, con filtrado temprano de argumentos para encadenar cualquier comando.
   - **Indicadores Visuales Explícitos:** Prefijo visual `[SANDBOX]` en el título de la TUI (`whiptail_view_main_menu`) y avisos de advertencia ANSI en consola para operaciones CLI.
   - **Comando de Purga Rápida (`--clean-sandbox`):** Eliminación total del directorio `user_data/sandbox/` mediante `controller_clean_sandbox` con confirmación formateada.
-  - **Nueva Suite de Pruebas Automatizadas:** 33 pruebas unitarias y de integración en `tests/test_sandbox_mode.sh`, verificando inicialización, redirección de variables, persistencia, aislamiento en Git y purga.
+  - **Suite de Pruebas Automatizadas Ampliada:** 50 pruebas unitarias y de integración en `tests/test_sandbox_mode.sh`, verificando inicialización, home virtual, purga con shred, cancelación en TUI y whiptail_view_input_paths.
+
+### Fixed
+- **Gestión de Cancelación Voluntaria en Menús TUI (Bugfix Exit Code 1):**
+  - Intercepción limpia de `VIEW_CANCEL` en `controller_handle_backup_module`, `controller_handle_backup_tag`, `controller_handle_restore_module`, `controller_handle_restore_all` y diálogos de contraseña GPG para retornar `0` en lugar de abortar la ejecución.
+  - Protección de todas las ramas de llamada en el bucle interactivo de `controller_run_tui` con `|| true` para evitar abortos imprevistos del shell bajo `set -e`.
 - **Ruta Universal de Almacenamiento y Notación Semántica (`device_model.sh`):**
   - Soporte unificado en `device_model_resolve_destination` para expansión de rutas locales (`~`, `$HOME`, `${HOME}`), rutas relativas y rutas externas montadas.
   - Soporte de notación semántica de conveniencia `@media/<LABEL>/...` para enlazar discos externos por su etiqueta sin depender de la ruta fija asignada por el entorno de escritorio.
