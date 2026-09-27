@@ -52,6 +52,8 @@ assert_contains "$help_out" "--list-templates" "--help debe documentar la opció
 assert_contains "$help_out" "--enable-template" "--help debe documentar la opción --enable-template"
 assert_contains "$help_out" "--export-template" "--help debe documentar la opción --export-template"
 assert_contains "$help_out" "--setup" "--help debe documentar la opción --setup"
+assert_contains "$help_out" "--test-mode" "--help debe documentar la opción --test-mode"
+assert_contains "$help_out" "--clean-sandbox" "--help debe documentar la opción --clean-sandbox"
 
 # Test 2: Invocación de --list-templates
 list_tmpl_out=$("${PROJECT_ROOT}/backup_manager.sh" --list-templates 2>&1)

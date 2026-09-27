@@ -44,6 +44,11 @@ Permite respaldar, cifrar, purgar y restaurar configuraciones del sistema y apli
 - **Histórico con Marcas de Tiempo y Auditoría:**
   - Nomenclatura uniforme: `AAAAMMDD_HHMMSS`.
   - Generación de `manifest.log` con inventario de ficheros, hashes SHA-256 y bitácora `backup_history.log`.
+- **Modo Sandbox y Entorno Aislado de Pruebas (`--test-mode`, `--clean-sandbox`):**
+  - Entorno seguro y confinado en `user_data/sandbox/` para probar recetas, perfiles, asistentes y copias de seguridad sin alterar configuraciones de producción ni dejar rastros sin seguimiento (*untracked files*) en Git.
+  - Activación por flag (`--test-mode`, `--sandbox`) o variable de entorno (`KEEP_MY_CONFIG_TEST_MODE=true`).
+  - Indicador visual `[SANDBOX]` en el menú interactivo de Whiptail y avisos de seguridad ANSI en consola.
+  - Comando de purga inmediata `--clean-sandbox` para resetear el entorno de pruebas.
 - **100% Nativo en Linux:**
   - Sin dependencias de compilación ni librerías de terceros (`bash`, `whiptail`, `tar`, `zstd`, `gpg`, `shred`).
 
@@ -126,6 +131,12 @@ Ejecutar sin argumentos para desplegar la interfaz visual en terminal (en el pri
 
 # Restaurar un módulo concreto a un punto histórico
 ./backup_manager.sh --restore-module vscode-standard --timestamp 20260918_130000
+
+# Entorno de pruebas y desarrollo aislado (Sandbox)
+./backup_manager.sh --test-mode                              # Iniciar interfaz TUI en modo sandbox
+./backup_manager.sh --test-mode --backup-all                 # Probar backup completo confinado en sandbox
+./backup_manager.sh --test-mode --enable-template bash-env   # Probar activación de recetas en sandbox
+./backup_manager.sh --clean-sandbox                          # Purgar por completo el entorno sandbox
 ```
 
 ---

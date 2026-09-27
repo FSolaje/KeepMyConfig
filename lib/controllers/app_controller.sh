@@ -10,6 +10,7 @@ CONTROLLER_INITIALIZED=0
 TARGET_SUBDIR_OVERRIDE=""
 ACTIVE_PROFILE_OVERRIDE=""
 CONTROLLER_CONFIG_FILE=""
+IS_SANDBOX_MODE="false"
 
 _controller_get_config_file() {
     echo "${CONTROLLER_CONFIG_FILE:-${CONTROLLER_BASE_DIR}/config/config.conf}"
@@ -31,7 +32,7 @@ _controller_get_module_dir() {
     if resolved_path=$(profile_model_resolve_module "$mod_id" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null); then
         dirname "$resolved_path"
     else
-        echo "${CONTROLLER_BASE_DIR}/modules.d"
+        echo "${MODULES_DIR:-${CONTROLLER_BASE_DIR}/modules.d}"
     fi
 }
 
@@ -98,8 +99,122 @@ controller_init() {
     # Asegurar rutas por defecto si no vienen fijadas
     TARGET_USER_HOME="${TARGET_USER_HOME:-$HOME}"
     MODULES_DIR="${MODULES_DIR:-${CONTROLLER_BASE_DIR}/modules.d}"
+    PROFILES_DIR="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}"
+    TEMPLATES_DIR="${TEMPLATES_DIR:-${CONTROLLER_BASE_DIR}/templates.d}"
 
     CONTROLLER_INITIALIZED=1
+    return 0
+}
+
+# ==============================================================================
+# Modo Sandbox y Entorno Aislado de Pruebas (--test-mode / --clean-sandbox)
+# ==============================================================================
+
+controller_enable_sandbox_mode() {
+    IS_SANDBOX_MODE="true"
+    local base_dir="${CONTROLLER_BASE_DIR:-}"
+    if [[ -z "$base_dir" ]]; then
+        base_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+        CONTROLLER_BASE_DIR="$base_dir"
+    fi
+
+    # Asegurar inicialización base del controlador y vistas
+    controller_init "$base_dir"
+
+    local sandbox_base="${base_dir}/user_data/sandbox"
+
+    # 1. Crear estructura de carpetas aislada
+    mkdir -p "$sandbox_base/config" \
+             "$sandbox_base/modules.d" \
+             "$sandbox_base/profiles/default" \
+             "$sandbox_base/storage/archives" \
+             "$sandbox_base/storage/logs"
+
+    # 2. Desplegar config/config.conf confinado en sandbox
+    if [[ ! -f "${sandbox_base}/config/config.conf" ]]; then
+        if [[ -f "${base_dir}/config/config.conf" ]]; then
+            sed -e "s|^BACKUP_DESTINATION=.*|BACKUP_DESTINATION=\"${sandbox_base}/storage\"|" \
+                -e 's|^INITIAL_SETUP_DONE=.*|INITIAL_SETUP_DONE="true"|' \
+                -e 's|^ACTIVE_PROFILE=.*|ACTIVE_PROFILE="default"|' \
+                "${base_dir}/config/config.conf" > "${sandbox_base}/config/config.conf"
+        else
+            cat <<EOF > "${sandbox_base}/config/config.conf"
+INITIAL_SETUP_DONE="true"
+REMEMBER_LAST_PROFILE="true"
+ACTIVE_PROFILE="default"
+TARGET_USER_HOME="\${TARGET_USER_HOME:-\${HOME}}"
+BACKUP_DESTINATION="${sandbox_base}/storage"
+APP_MARKER_FILE=".backup_app_marker"
+STORAGE_MARKER_FILE=".backup_storage_marker"
+COMPRESSION_ALGO="zstd"
+COMPRESSION_LEVEL="3"
+GPG_CIPHER="AES256"
+SHRED_ITERATIONS=3
+SHRED_ZERO_PASS=true
+EOF
+        fi
+    fi
+
+    # 3. Desplegar marcador de seguridad en storage del sandbox
+    if [[ ! -f "${sandbox_base}/storage/.backup_storage_marker" ]]; then
+        if [[ -f "${base_dir}/markers/.backup_storage_marker" ]]; then
+            cp "${base_dir}/markers/.backup_storage_marker" "${sandbox_base}/storage/.backup_storage_marker"
+        else
+            touch "${sandbox_base}/storage/.backup_storage_marker"
+        fi
+    fi
+
+    # 4. Desplegar perfil default canónico
+    if [[ ! -f "${sandbox_base}/profiles/default/profile.conf" ]]; then
+        if [[ -f "${base_dir}/profiles/default/profile.conf" ]]; then
+            cp "${base_dir}/profiles/default/profile.conf" "${sandbox_base}/profiles/default/profile.conf"
+        else
+            cat <<'EOF' > "${sandbox_base}/profiles/default/profile.conf"
+# ==============================================================================
+# KeepMyConfig - Perfil Predeterminado (Sandbox)
+# ==============================================================================
+PROFILE_ID="default"
+PROFILE_NAME="Perfil Global / Predeterminado"
+PROFILE_DESCRIPTION="Entorno general base de pruebas"
+TARGET_SUBDIR=""
+DISABLED_MODULES=()
+EOF
+        fi
+    fi
+
+    # 5. Redirigir variables operativas hacia el entorno sandbox
+    CONTROLLER_CONFIG_FILE="${sandbox_base}/config/config.conf"
+    export MODULES_DIR="${sandbox_base}/modules.d"
+    export PROFILES_DIR="${sandbox_base}/profiles"
+    export TEMPLATES_DIR="${base_dir}/templates.d"
+    export CONTROLLER_CONFIG_FILE
+    export IS_SANDBOX_MODE
+
+    # 6. Recargar la configuración para reflejar variables del sandbox
+    if [[ -f "$CONTROLLER_CONFIG_FILE" ]]; then
+        # shellcheck disable=SC1090
+        source "$CONTROLLER_CONFIG_FILE"
+    fi
+
+    return 0
+}
+
+controller_clean_sandbox() {
+    local base_dir="${CONTROLLER_BASE_DIR:-}"
+    if [[ -z "$base_dir" ]]; then
+        base_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+        CONTROLLER_BASE_DIR="$base_dir"
+    fi
+
+    controller_init "$base_dir"
+
+    local sandbox_base="${base_dir}/user_data/sandbox"
+    if [[ -d "$sandbox_base" ]]; then
+        rm -rf "$sandbox_base"
+        ansi_view_success "Entorno de pruebas sandbox purgado correctamente (${sandbox_base})."
+    else
+        ansi_view_info "El entorno sandbox no existe o ya está limpio (${sandbox_base})."
+    fi
     return 0
 }
 
@@ -1794,7 +1909,7 @@ controller_handle_profiles_admin() {
                     local scope="[Global]"
                     if [[ "$act_prof" != "default" ]]; then
                         if [[ -f "${profiles_dir}/${act_prof}/modules.d/${m}.conf" ]]; then
-                            if [[ -f "${CONTROLLER_BASE_DIR}/modules.d/${m}.conf" ]]; then
+                            if [[ -f "${MODULES_DIR:-${CONTROLLER_BASE_DIR}/modules.d}/${m}.conf" ]]; then
                                 scope="[Override]"
                             else
                                 scope="[Exclusivo]"
@@ -1816,7 +1931,7 @@ controller_handle_profiles_admin() {
                 fi
 
                 local global_mods
-                global_mods=$(module_model_list "${CONTROLLER_BASE_DIR}/modules.d") || true
+                global_mods=$(module_model_list "${MODULES_DIR:-${CONTROLLER_BASE_DIR}/modules.d}") || true
                 if [[ -z "$global_mods" ]]; then
                     whiptail_view_msgbox "Sin Módulos Globales" "No hay módulos registrados en el catálogo global (modules.d/) para excluir."
                     continue
@@ -1833,7 +1948,7 @@ controller_handle_profiles_admin() {
                 while IFS= read -r gm; do
                     [[ -n "$gm" ]] || continue
                     local ginfo
-                    ginfo=$(module_model_get "$gm" "${CONTROLLER_BASE_DIR}/modules.d" 2>/dev/null || true)
+                    ginfo=$(module_model_get "$gm" "${MODULES_DIR:-${CONTROLLER_BASE_DIR}/modules.d}" 2>/dev/null || true)
                     local gname
                     gname=$(echo "$ginfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$gm")
                     local state="OFF"
@@ -1936,7 +2051,7 @@ controller_run_tui() {
         local act_prof
         act_prof=$(_controller_get_active_profile)
         local choice
-        choice=$(whiptail_view_main_menu "$act_prof") || break
+        choice=$(whiptail_view_main_menu "$act_prof" "$IS_SANDBOX_MODE") || break
 
         case "$choice" in
             1) controller_handle_backup_all "true" "auto" ;;
@@ -2004,6 +2119,10 @@ controller_run_cli() {
                 echo "  --list-templates                               Listar plantillas disponibles en la biblioteca."
                 echo "  --enable-template <id> [--profile <perfil>]    Activar una plantilla en global o en un perfil."
                 echo "  --export-template <id>                         Exportar un módulo activo a la biblioteca de plantillas."
+                echo ""
+                echo "Entorno de Pruebas y Desarrollo (Sandbox):"
+                echo "  --test-mode, --sandbox                         Activar entorno aislado en user_data/sandbox/."
+                echo "  --clean-sandbox                                Purgar por completo el entorno user_data/sandbox/."
                 echo ""
                 echo "Ayuda:"
                 echo "  -h, --help                                     Mostrar este menú de ayuda."
@@ -2118,6 +2237,14 @@ controller_run_cli() {
                 param_val="${2:-}"
                 shift 2 || true
                 ;;
+            --test-mode|--sandbox)
+                controller_enable_sandbox_mode
+                shift
+                ;;
+            --clean-sandbox)
+                action="clean-sandbox"
+                shift
+                ;;
             *)
                 ansi_view_error "Opción no reconocida: $1"
                 echo "Ejecute '$0 --help' para ver las opciones disponibles."
@@ -2126,7 +2253,14 @@ controller_run_cli() {
         esac
     done
 
+    if [[ "$IS_SANDBOX_MODE" == "true" && -n "$action" && "$action" != "clean-sandbox" ]]; then
+        ansi_view_warning "Ejecutando en MODO TEST / SANDBOX (Rutas aisladas en user_data/sandbox/)"
+    fi
+
     case "$action" in
+        clean-sandbox)
+            controller_clean_sandbox
+            ;;
         backup-all)
             controller_handle_backup_all "false" "$purge_flag"
             ;;
@@ -2195,8 +2329,8 @@ controller_run_cli() {
                 msens=$(echo "$minfo" | grep '^IS_SENSITIVE=' | cut -d'=' -f2- || echo "false")
                 local scope="[Global]"
                 if [[ "$act_prof" != "default" ]]; then
-                    if [[ -f "${CONTROLLER_BASE_DIR}/profiles/${act_prof}/modules.d/${m}.conf" ]]; then
-                        if [[ -f "${CONTROLLER_BASE_DIR}/modules.d/${m}.conf" ]]; then
+                    if [[ -f "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}/${act_prof}/modules.d/${m}.conf" ]]; then
+                        if [[ -f "${MODULES_DIR:-${CONTROLLER_BASE_DIR}/modules.d}/${m}.conf" ]]; then
                             scope="[Override]"
                         else
                             scope="[Exclusivo]"

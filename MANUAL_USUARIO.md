@@ -29,6 +29,7 @@
    - [4.3 Automatización Desatendida con `PASSPHRASE`](#43-automatización-desatendida-con-passphrase)
    - [4.4 Integración con Tareas Programadas (`cron`)](#44-integración-con-tareas-programadas-cron)
    - [4.5 Tabla de Códigos de Salida UNIX](#45-tabla-de-códigos-de-salida-unix)
+   - [4.6 Entorno de Pruebas y Desarrollo (Modo Sandbox)](#46-entorno-de-pruebas-y-desarrollo-modo-sandbox)
 5. [Capítulo 5: Creación de Módulos, Recetas y Perfiles](#capítulo-5-creación-de-módulos-recetas-y-perfiles)
    - [5.1 Estructura Declarativa de una Receta](#51-estructura-declarativa-de-una-receta)
    - [5.2 Directivas Soportadas](#52-directivas-soportadas)
@@ -370,6 +371,8 @@ La interfaz de línea de comandos está optimizada para scripts bash, tareas pro
 | `--export-template` | `<id>` | Exporta y promueve un módulo activo como nueva plantilla en la biblioteca. |
 | `--list-modules` | *Ninguno* | Imprime en consola todos los módulos registrados y su confidencialidad/ámbito. |
 | `--list-tags` | *Ninguno* | Imprime el catálogo de etiquetas disponibles. |
+| `--test-mode, --sandbox` | *Ninguno* | Activa el entorno aislado de pruebas Sandbox (rutas confinadas en `user_data/sandbox/`). |
+| `--clean-sandbox` | *Ninguno* | Purga y elimina por completo el entorno aislado `user_data/sandbox/`. |
 | `-h, --help` | *Ninguno* | Muestra la ayuda rápida de sintaxis CLI. |
 
 ---
@@ -418,6 +421,59 @@ Para facilitar el control de flujo en scripts o pipelines de integración contin
 | **`4`** | **Error Criptográfico** | Contraseña GPG incorrecta o archivo vault dañado/corrupto. |
 | **`5`** | **Argumento Inválido** | Parámetros CLI faltantes o no reconocidos. |
 | **`10`** | **Dependencia Faltante** | `whiptail` u otra herramienta indispensable no está instalada en el sistema. |
+
+---
+
+### 4.6 Entorno de Pruebas y Desarrollo (Modo Sandbox)
+
+Para facilitar la verificación manual, desarrollo de nuevas recetas o pruebas de flujos completos sin alterar el repositorio Git ni contaminar los directorios de producción (`config/`, `modules.d/`, `profiles/`), **KeepMyConfig** incorpora el **Modo Sandbox / Test Mode**.
+
+#### 4.6.1 Activación del Modo Sandbox
+El modo sandbox puede activarse de tres formas equivalentes:
+1. **Flag CLI explícito:**
+   ```bash
+   ./backup_manager.sh --test-mode
+   # o bien:
+   ./backup_manager.sh --sandbox
+   ```
+2. **Combinado con cualquier comando CLI:**
+   ```bash
+   ./backup_manager.sh --test-mode --backup-all
+   ./backup_manager.sh --test-mode --enable-template firefox
+   ./backup_manager.sh --test-mode --create-profile docente
+   ./backup_manager.sh --test-mode --list-modules
+   ```
+3. **Variable de entorno:**
+   ```bash
+   KEEP_MY_CONFIG_TEST_MODE=true ./backup_manager.sh
+   ```
+
+#### 4.6.2 Arquitectura y Aislamiento de Rutas
+Al activarse, el sistema inicializa de forma transparente una réplica completa del entorno confinado bajo `user_data/sandbox/`:
+- **Configuración Aislada:** `user_data/sandbox/config/config.conf` (con `INITIAL_SETUP_DONE="true"` y `BACKUP_DESTINATION` apuntando a `user_data/sandbox/storage`).
+- **Módulos Aislados:** `user_data/sandbox/modules.d/` (inicia limpio; cualquier plantilla activada o receta creada se escribe aquí sin tocar las carpetas raíz del proyecto).
+- **Perfiles Aislados:** `user_data/sandbox/profiles/` (incluye perfil base `profiles/default/profile.conf`).
+- **Almacenamiento Aislado:** `user_data/sandbox/storage/` (con su propio marcador `.backup_storage_marker` y subcarpetas `archives/` y `logs/`).
+
+> [!NOTE]
+> La carpeta `user_data/` está excluida permanentemente en el archivo `.gitignore`. Ningún archivo generado durante las pruebas en sandbox figurará jamás en `git status`, evitando ensuciar el árbol de trabajo.
+
+#### 4.6.3 Indicadores Visuales
+- **Interfaz TUI (Whiptail):** El título del menú principal refleja explícitamente el entorno de pruebas:
+  ```text
+  KeepMyConfig [SANDBOX] [Perfil: default]
+  ```
+- **Línea de Comandos (CLI):** Cada ejecución emite una advertencia visual formateada:
+  ```text
+  [AVISO] Ejecutando en MODO TEST / SANDBOX (Rutas aisladas en user_data/sandbox/)
+  ```
+
+#### 4.6.4 Purga y Reseteo (`--clean-sandbox`)
+Para eliminar por completo el entorno sandbox y liberar espacio:
+```bash
+./backup_manager.sh --clean-sandbox
+```
+Este comando elimina la carpeta `user_data/sandbox/` y confirma la purga en la terminal.
 
 ---
 
