@@ -1,8 +1,8 @@
 # Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
-> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.2`** publicada en Releases. Sub-Hito 12.5 (Sistema de Empaquetado y Distribución Automatizada) en curso en la rama `dev/feature/packaging-distribution`. Fase 0 (Especificación SDD) y Fase 1 (Artefactos Visuales e Integración Freedesktop) completadas al 100% con 4 commits atómicos consolidados. Batería de 10 suites con **528/528 pruebas unitarias al 100%**, escáner SAST impecable y árbol de trabajo limpio.  
-> **Paso inmediato para la próxima sesión:** Iniciar la **Fase 2: Script Reproducible de Empaquetado y Checksums (`scripts/package.sh`)** bajo el flujo SDD estricto de la rama `dev/feature/packaging-distribution`.
+> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.2`** publicada en Releases. Sub-Hito 12.5 (Sistema de Empaquetado y Distribución Automatizada) en curso en la rama `dev/feature/packaging-distribution`. Fases 0 (Especificación SDD), 1 (Artefactos Visuales e Integración Freedesktop) y 2 (Empaquetado Dual y Checksums) completadas al 100% con 6 commits atómicos consolidados (`e67aabb`). Batería de 10 suites con **528/528 pruebas unitarias al 100%**, escáner SAST impecable y árbol de trabajo limpio.  
+> **Paso inmediato para la próxima sesión:** Iniciar la **Fase 3: Instalador y Desinstalador sin Privilegios (`install.sh` y `uninstall.sh`)** bajo el flujo SDD estricto de la rama `dev/feature/packaging-distribution`.
 
 ---
 
@@ -152,8 +152,8 @@
 - [x] Subfase 1.1: Aislamiento del directorio `dist/` en `.gitignore` (`128df06`).
 - [x] Subfase 1.2: Diseño e incorporación del icono vectorial SVG `assets/keepmyconfig.svg` (`22245b4`).
 - [x] Subfase 1.3: Creación de la plantilla de lanzador de escritorio Freedesktop `assets/keepmyconfig.desktop` validada con `desktop-file-validate` (`9c82bd0`).
-- [ ] **Fase 2 (En curso):** Script reproducible de empaquetado dual `scripts/package.sh` para generar `KeepMyConfig-vX.Y.Z.tar.gz` (edición estándar con instalador) y `KeepMyConfig-vX.Y.Z-portable.tar.gz` (edición portable plug-and-play con `.portable` y `keepmyconfig.sh`), sin tarbomb, permisos normalizados `0755`/`0644`, lista blanca estricta y `SHA256SUMS.txt`.
-- [ ] **Fase 3:** Script de instalación y desinstalación sin sudo `install.sh` y `uninstall.sh`.
+- [x] **Fase 2:** Script reproducible de empaquetado dual `scripts/package.sh` para generar `KeepMyConfig-vX.Y.Z.tar.gz` (edición estándar con instalador) y `KeepMyConfig-vX.Y.Z-portable.tar.gz` (edición portable plug-and-play con `.portable` y `keepmyconfig.sh`), sin tarbomb, permisos normalizados `0755`/`0644`, lista blanca estricta y `SHA256SUMS.txt` (`e67aabb`).
+- [ ] **Fase 3 (Siguiente paso):** Script de instalación y desinstalación sin sudo `install.sh` y `uninstall.sh`.
 - [ ] **Fase 4:** Suite de pruebas unitarias automatizadas `tests/test_packaging_and_distribution.sh`.
 - [ ] **Fase 5:** Actualización del workflow `.github/workflows/release.yml` para adjuntar los artefactos empaquetados oficiales (estándar y portable) en cada release de GitHub.
 - [ ] **Fase 6:** Sincronización mandatoria de documentación pública (`README.md`, `MANUAL_USUARIO.md`, `CHANGELOG.md`).
