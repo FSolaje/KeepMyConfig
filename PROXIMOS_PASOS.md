@@ -1,8 +1,8 @@
 # Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
-> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.2`** publicada en Releases. Sub-Hito 12.5 (Sistema de Empaquetado y Distribución Automatizada) completado al 100% en sus 6 fases en la rama `dev/feature/packaging-distribution` con 10 commits atómicos consolidados. Batería de 11 suites con **624/624 pruebas unitarias al 100%**, escáner SAST impecable y documentación pública plenamente sincronizada.  
-> **Paso inmediato para la próxima sesión:** Integración (merge) de `dev/feature/packaging-distribution` en `develop` y evaluación del Sub-Hito 12.6 (Blindaje Criptográfico de Integridad) o nueva versión alfa `v0.1.0-alpha.3`.
+> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.3`** publicada en Releases. Sub-Hito 12.5 (Sistema de Empaquetado y Distribución Automatizada) completado al 100% e integrado en `develop`. Batería de 11 suites con **624/624 pruebas unitarias al 100%**, escáner SAST impecable y documentación pública plenamente sincronizada.  
+> **Paso inmediato para la próxima sesión:** Iniciar el **Sub-Hito 12.6: Blindaje Criptográfico de Integridad y Protección de Código Bash ante Manipulación** en la rama `dev/feature/codebase-integrity` bajo flujo SDD estricto.
 
 ---
 
