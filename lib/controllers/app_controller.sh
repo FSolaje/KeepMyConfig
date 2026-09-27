@@ -110,6 +110,47 @@ controller_init() {
 # Modo Sandbox y Entorno Aislado de Pruebas (--test-mode / --clean-sandbox)
 # ==============================================================================
 
+# Inicializar fixtures y archivos de prueba en el home virtual de sandbox
+_sandbox_seed_virtual_home() {
+    local target_home="$1"
+    local base_dir="${2:-${CONTROLLER_BASE_DIR:-}}"
+
+    mkdir -p "$target_home"
+
+    if [[ -d "${base_dir}/tests/fixtures/sandbox_home" ]]; then
+        cp -r "${base_dir}/tests/fixtures/sandbox_home/." "$target_home/"
+    else
+        # Fallback de inicialización reproducible si la carpeta fixtures no está disponible
+        mkdir -p "$target_home/.ssh" \
+                 "$target_home/.config/Code/User/snippets" \
+                 "$target_home/.config/Code/User/globalStorage" \
+                 "$target_home/.config/Code/User/sync" \
+                 "$target_home/.config/git" \
+                 "$target_home/.config/JetBrains/IdeaIC2024.1/options" \
+                 "$target_home/.config/libreoffice/4/user" \
+                 "$target_home/.mozilla/firefox/testprofile.default" \
+                 "$target_home/.thunderbird/testprofile.default"
+
+        echo 'export EDITOR="nano"' > "$target_home/.bashrc"
+        echo 'alias gs="git status"' > "$target_home/.bash_aliases"
+        echo 'export PATH="$HOME/bin:$PATH"' > "$target_home/.profile"
+        echo 'clear' > "$target_home/.bash_logout"
+        echo 'mock-ssh-key' > "$target_home/.ssh/id_rsa"
+        echo 'mock-ssh-pub' > "$target_home/.ssh/id_rsa.pub"
+        echo '{"editor.fontSize": 14}' > "$target_home/.config/Code/User/settings.json"
+        echo '[]' > "$target_home/.config/Code/User/keybindings.json"
+        echo '{"version": 1}' > "$target_home/.config/Code/User/sync/sync_state.json"
+        echo '[user]' > "$target_home/.gitconfig"
+    fi
+
+    # Asegurar permisos seguros para claves privadas y directorios sensibles
+    chmod 700 "$target_home/.ssh" 2>/dev/null || true
+    chmod 600 "$target_home/.ssh/id_rsa" 2>/dev/null || true
+    chmod 600 "$target_home/.ssh/id_ed25519" 2>/dev/null || true
+
+    return 0
+}
+
 controller_enable_sandbox_mode() {
     IS_SANDBOX_MODE="true"
     local base_dir="${CONTROLLER_BASE_DIR:-}"
@@ -128,21 +169,28 @@ controller_enable_sandbox_mode() {
              "$sandbox_base/modules.d" \
              "$sandbox_base/profiles/default" \
              "$sandbox_base/storage/archives" \
-             "$sandbox_base/storage/logs"
+             "$sandbox_base/storage/logs" \
+             "$sandbox_base/home"
 
-    # 2. Desplegar config/config.conf confinado en sandbox
+    # 2. Desplegar Home Virtual de Pruebas con datos semilla
+    if [[ ! -f "${sandbox_base}/home/.bashrc" ]]; then
+        _sandbox_seed_virtual_home "${sandbox_base}/home" "$base_dir"
+    fi
+
+    # 3. Desplegar config/config.conf confinado en sandbox
     if [[ ! -f "${sandbox_base}/config/config.conf" ]]; then
         if [[ -f "${base_dir}/config/config.conf" ]]; then
             sed -e "s|^BACKUP_DESTINATION=.*|BACKUP_DESTINATION=\"${sandbox_base}/storage\"|" \
                 -e 's|^INITIAL_SETUP_DONE=.*|INITIAL_SETUP_DONE="true"|' \
                 -e 's|^ACTIVE_PROFILE=.*|ACTIVE_PROFILE="default"|' \
+                -e "s|^TARGET_USER_HOME=.*|TARGET_USER_HOME=\"${sandbox_base}/home\"|" \
                 "${base_dir}/config/config.conf" > "${sandbox_base}/config/config.conf"
         else
             cat <<EOF > "${sandbox_base}/config/config.conf"
 INITIAL_SETUP_DONE="true"
 REMEMBER_LAST_PROFILE="true"
 ACTIVE_PROFILE="default"
-TARGET_USER_HOME="\${TARGET_USER_HOME:-\${HOME}}"
+TARGET_USER_HOME="${sandbox_base}/home"
 BACKUP_DESTINATION="${sandbox_base}/storage"
 APP_MARKER_FILE=".backup_app_marker"
 STORAGE_MARKER_FILE=".backup_storage_marker"
@@ -155,7 +203,7 @@ EOF
         fi
     fi
 
-    # 3. Desplegar marcador de seguridad en storage del sandbox
+    # 4. Desplegar marcador de seguridad en storage del sandbox
     if [[ ! -f "${sandbox_base}/storage/.backup_storage_marker" ]]; then
         if [[ -f "${base_dir}/markers/.backup_storage_marker" ]]; then
             cp "${base_dir}/markers/.backup_storage_marker" "${sandbox_base}/storage/.backup_storage_marker"
@@ -164,7 +212,7 @@ EOF
         fi
     fi
 
-    # 4. Desplegar perfil default canónico
+    # 5. Desplegar perfil default canónico
     if [[ ! -f "${sandbox_base}/profiles/default/profile.conf" ]]; then
         if [[ -f "${base_dir}/profiles/default/profile.conf" ]]; then
             cp "${base_dir}/profiles/default/profile.conf" "${sandbox_base}/profiles/default/profile.conf"
@@ -182,15 +230,17 @@ EOF
         fi
     fi
 
-    # 5. Redirigir variables operativas hacia el entorno sandbox
+    # 6. Redirigir variables operativas hacia el entorno sandbox
+    TARGET_USER_HOME="${sandbox_base}/home"
     CONTROLLER_CONFIG_FILE="${sandbox_base}/config/config.conf"
+    export TARGET_USER_HOME
     export MODULES_DIR="${sandbox_base}/modules.d"
     export PROFILES_DIR="${sandbox_base}/profiles"
     export TEMPLATES_DIR="${base_dir}/templates.d"
     export CONTROLLER_CONFIG_FILE
     export IS_SANDBOX_MODE
 
-    # 6. Recargar la configuración para reflejar variables del sandbox
+    # 7. Recargar la configuración para reflejar variables del sandbox
     if [[ -f "$CONTROLLER_CONFIG_FILE" ]]; then
         # shellcheck disable=SC1090
         source "$CONTROLLER_CONFIG_FILE"
@@ -261,17 +311,26 @@ _controller_check_sensitive_purge_warning() {
 
     if [[ "$is_sensitive" == "true" && "$purge_after" == "false" ]]; then
         if [[ "$is_tui" == "true" ]]; then
-            local warn_msg="AVISO DE SEGURIDAD:\n\nEl módulo sensible '${mod_name}' se ha respaldado con éxito en el SSD,\npero sus ficheros aún permanecen en el almacenamiento local de este equipo.\n\n¿Desea eliminarlos de forma segura con shred ahora?"
+            local paths_raw
+            paths_raw=$(echo "$mod_info" | grep '^PATHS=' | cut -d'=' -f2- || true)
+            local paths=()
+            IFS='|' read -r -a paths <<< "$paths_raw"
+            local full_paths_txt=""
+            for p in "${paths[@]}"; do
+                [[ -n "$p" ]] || continue
+                full_paths_txt+="  • ${TARGET_USER_HOME}/${p}\n"
+            done
+
+            local warn_msg="AVISO DE SEGURIDAD:\n\nEl módulo sensible '${mod_name}' se ha respaldado con éxito en el destino,\npero sus ficheros originales aún permanecen en el equipo local:\n\n${full_paths_txt}\n¿Desea destruirlos de forma segura con 'shred -u' ahora?"
             if whiptail_view_yesno "Seguridad y Privacidad" "$warn_msg"; then
                 # Usuario aceptó purgar de forma interactiva
-                local paths_raw
-                paths_raw=$(echo "$mod_info" | grep '^PATHS=' | cut -d'=' -f2- || true)
-                local paths=()
-                IFS='|' read -r -a paths <<< "$paths_raw"
+                local shredded_txt=""
                 for p in "${paths[@]}"; do
+                    [[ -n "$p" ]] || continue
                     crypto_model_shred_path "${TARGET_USER_HOME}/${p}" 3 &>/dev/null || true
+                    shredded_txt+="  • ${TARGET_USER_HOME}/${p} [DESTRUIDO]\n"
                 done
-                whiptail_view_msgbox "Purga Completada" "Los ficheros locales de '${mod_name}' han sido destruidos con shred -u."
+                whiptail_view_msgbox "Purga Segura Completada" "Rutas locales destruidas con shred -u (3 pasadas + sobrescritura cero):\n\n${shredded_txt}"
             fi
         else
             ansi_view_warning "AVISO DE SEGURIDAD: El módulo sensible '${mod_name}' fue respaldado, pero sus ficheros originales continúan presentes en el equipo local."
@@ -334,7 +393,8 @@ controller_handle_backup_all() {
     local passphrase=""
     if [[ "$has_sensitive" == "true" ]]; then
         if [[ "$is_tui" == "true" ]]; then
-            passphrase=$(whiptail_view_password_confirm "Cifrado de Módulos Sensibles" "Introduzca la contraseña GPG AES-256 para proteger sus datos:") || return 1
+            passphrase=$(whiptail_view_password_confirm "Cifrado de Módulos Sensibles" "Introduzca la contraseña GPG AES-256 para proteger sus datos:") || return 0
+            [[ -z "$passphrase" ]] && return 0
         else
             if [[ -z "${PASSPHRASE:-}" ]]; then
                 passphrase=$(ansi_view_password "Introduzca la contraseña GPG para cifrar módulos sensibles")
@@ -381,7 +441,12 @@ controller_handle_backup_all() {
     done
 
     if [[ "$is_tui" == "true" ]]; then
-        whiptail_view_msgbox "Respaldo Completo Finalizado" "El proceso de respaldo ha concluido.\n\n$report"
+        local summary_msg="El proceso de respaldo completo ha concluido.\n\n"
+        summary_msg+="• Perfil Activo: $act_prof\n"
+        summary_msg+="• Directorio Destino: $backup_dir\n"
+        summary_msg+="• Home de Origen: $TARGET_USER_HOME\n\n"
+        summary_msg+="Detalle de los módulos respaldados:\n$report"
+        whiptail_view_msgbox "Respaldo Completo Finalizado" "$summary_msg"
     else
         echo "$report"
         ansi_view_success "Proceso de respaldo global completado."
@@ -404,7 +469,8 @@ controller_handle_backup_tag() {
             for t in $all_tags; do
                 tag_items+=("$t" "Etiqueta: $t" "OFF")
             done
-            tag=$(whiptail_view_radiolist "Seleccionar Etiqueta" "Elija la etiqueta a respaldar:" "${tag_items[@]}") || return 1
+            tag=$(whiptail_view_radiolist "Seleccionar Etiqueta" "Elija la etiqueta a respaldar:" "${tag_items[@]}") || return 0
+            [[ -z "$tag" ]] && return 0
         else
             ansi_view_error "Debe especificar una etiqueta para respaldar."
             return 5
@@ -449,7 +515,8 @@ controller_handle_backup_tag() {
     local passphrase=""
     if [[ "$has_sensitive" == "true" ]]; then
         if [[ "$is_tui" == "true" ]]; then
-            passphrase=$(whiptail_view_password_confirm "Cifrado GPG" "La etiqueta '$tag' contiene módulos sensibles. Introduzca contraseña:") || return 1
+            passphrase=$(whiptail_view_password_confirm "Cifrado GPG" "La etiqueta '$tag' contiene módulos sensibles. Introduzca contraseña:") || return 0
+            [[ -z "$passphrase" ]] && return 0
         else
             passphrase="${PASSPHRASE:-$(ansi_view_password "Introduzca la contraseña GPG para módulos sensibles")}"
         fi
@@ -485,7 +552,12 @@ controller_handle_backup_tag() {
     done
 
     if [[ "$is_tui" == "true" ]]; then
-        whiptail_view_msgbox "Respaldo por Etiqueta" "Respaldo de etiqueta '$tag' finalizado.\n\n$report"
+        local summary_msg="Respaldo de la etiqueta '$tag' finalizado.\n\n"
+        summary_msg+="• Perfil Activo: $act_prof\n"
+        summary_msg+="• Directorio Destino: $backup_dir\n"
+        summary_msg+="• Home de Origen: $TARGET_USER_HOME\n\n"
+        summary_msg+="Detalle de los módulos respaldados:\n$report"
+        whiptail_view_msgbox "Respaldo por Etiqueta" "$summary_msg"
     else
         echo "$report"
         ansi_view_success "Respaldo de etiqueta '$tag' concluido."
@@ -512,7 +584,8 @@ controller_handle_backup_module() {
                 mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
                 mod_items+=("$m" "$mname" "OFF")
             done
-            module_id=$(whiptail_view_radiolist "Seleccionar Módulo" "Elija el módulo individual a respaldar:" "${mod_items[@]}") || return 1
+            module_id=$(whiptail_view_radiolist "Seleccionar Módulo" "Elija el módulo individual a respaldar:" "${mod_items[@]}") || return 0
+            [[ -z "$module_id" ]] && return 0
         else
             ansi_view_error "Debe especificar el identificador del módulo."
             return 5
@@ -538,7 +611,8 @@ controller_handle_backup_module() {
     local passphrase=""
     if echo "$minfo" | grep -q 'IS_SENSITIVE=true'; then
         if [[ "$is_tui" == "true" ]]; then
-            passphrase=$(whiptail_view_password_confirm "Cifrado GPG" "Módulo sensible. Introduzca la contraseña GPG AES-256:") || return 1
+            passphrase=$(whiptail_view_password_confirm "Cifrado GPG" "Módulo sensible. Introduzca la contraseña GPG AES-256:") || return 0
+            [[ -z "$passphrase" ]] && return 0
         else
             passphrase="${PASSPHRASE:-$(ansi_view_password "Introduzca la contraseña GPG para cifrar '$module_id'")}"
         fi
@@ -561,7 +635,33 @@ controller_handle_backup_module() {
     _controller_check_sensitive_purge_warning "$module_id" "$is_tui"
 
     if [[ "$is_tui" == "true" ]]; then
-        whiptail_view_msgbox "Respaldo de Módulo" "Respaldo del módulo '$module_id' concluido.\n\n$report"
+        local archive_file=""
+        local is_purged=""
+        archive_file=$(echo "$report" | grep '^ARCHIVE_FILE=' | cut -d'=' -f2-)
+        is_purged=$(echo "$report" | grep '^PURGED=' | cut -d'=' -f2-)
+
+        local paths_raw
+        paths_raw=$(echo "$minfo" | grep '^PATHS=' | cut -d'=' -f2- || true)
+        local paths=()
+        IFS='|' read -r -a paths <<< "$paths_raw"
+        local full_sources=""
+        for p in "${paths[@]}"; do
+            [[ -n "$p" ]] || continue
+            full_sources+="  • ${TARGET_USER_HOME}/${p}\n"
+        done
+
+        local summary_msg="Respaldo del módulo '$module_id' concluido con éxito.\n\n"
+        summary_msg+="• Origen (Home Local):\n${full_sources}\n"
+        if [[ -n "$archive_file" ]]; then
+            summary_msg+="• Archivo de Destino:\n  $archive_file\n\n"
+        else
+            summary_msg+="• Directorio Destino:\n  ${backup_dir}/archives/${module_id}\n\n"
+        fi
+        if [[ "$is_purged" == "true" ]]; then
+            summary_msg+="• Purga Segura (Vault & Shred):\n  Ficheros locales destruidos con shred -u.\n\n"
+        fi
+        summary_msg+="Detalle técnico de la operación:\n$report"
+        whiptail_view_msgbox "Respaldo de Módulo Concluido" "$summary_msg"
     else
         echo "$report"
         ansi_view_success "Respaldo de '$module_id' completado."
@@ -585,7 +685,8 @@ controller_handle_restore_sensitive() {
 
     local passphrase=""
     if [[ "$is_tui" == "true" ]]; then
-        passphrase=$(whiptail_view_password "Restauración Exprés Sensible" "Introduzca la contraseña GPG para descifrar todos sus datos sensibles:") || return 1
+        passphrase=$(whiptail_view_password "Restauración Exprés Sensible" "Introduzca la contraseña GPG para descifrar todos sus datos sensibles:") || return 0
+        [[ -z "$passphrase" ]] && return 0
     else
         passphrase="${PASSPHRASE:-$(ansi_view_password "Introduzca la contraseña GPG para restaurar datos sensibles")}"
     fi
@@ -595,7 +696,11 @@ controller_handle_restore_sensitive() {
     ret=$?
 
     if [[ "$is_tui" == "true" ]]; then
-        whiptail_view_msgbox "Restauración Exprés Sensible" "Resultado de la restauración:\n\n$report"
+        local summary_msg="Restauración de Módulos Protegidos Concluida.\n\n"
+        summary_msg+="• Directorio Fuente: ${backup_dir}/archives\n"
+        summary_msg+="• Home Destino Restituido: $TARGET_USER_HOME\n\n"
+        summary_msg+="Detalle de los módulos procesados:\n$report"
+        whiptail_view_msgbox "Restauración Exprés Sensible" "$summary_msg"
     else
         echo "$report"
         ansi_view_success "Restauración de módulos protegidos completada."
@@ -631,7 +736,8 @@ controller_handle_restore_module() {
                 mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
                 mod_items+=("$m" "$mname" "OFF")
             done
-            module_id=$(whiptail_view_radiolist "Seleccionar Módulo" "Elija el módulo a restaurar:" "${mod_items[@]}") || return 1
+            module_id=$(whiptail_view_radiolist "Seleccionar Módulo" "Elija el módulo a restaurar:" "${mod_items[@]}") || return 0
+            [[ -z "$module_id" ]] && return 0
         else
             ansi_view_error "Debe especificar el identificador del módulo a restaurar."
             return 5
@@ -651,7 +757,8 @@ controller_handle_restore_module() {
         for ts in $history; do
             ts_items+=("$ts" "Respaldo: $ts")
         done
-        timestamp=$(whiptail_view_menu "Histórico de Respaldos" "Seleccione la versión a restaurar:" "${ts_items[@]}") || return 1
+        timestamp=$(whiptail_view_menu "Histórico de Respaldos" "Seleccione la versión a restaurar:" "${ts_items[@]}") || return 0
+        [[ -z "$timestamp" ]] && return 0
     fi
 
     local m_dir
@@ -673,7 +780,8 @@ controller_handle_restore_module() {
     local passphrase=""
     if [[ "$is_enc" == "true" ]]; then
         if [[ "$is_tui" == "true" ]]; then
-            passphrase=$(whiptail_view_password "Módulo Cifrado" "Introduzca la clave GPG para descifrar '$module_id':") || return 1
+            passphrase=$(whiptail_view_password "Módulo Cifrado" "Introduzca la clave GPG para descifrar '$module_id':") || return 0
+            [[ -z "$passphrase" ]] && return 0
         else
             passphrase="${PASSPHRASE:-$(ansi_view_password "Introduzca la clave GPG para descifrar '$module_id'")}"
         fi
@@ -684,7 +792,28 @@ controller_handle_restore_module() {
     ret=$?
 
     if [[ "$is_tui" == "true" ]]; then
-        whiptail_view_msgbox "Restauración Concluida" "Resultado de la restauración:\n\n$report"
+        local archive_file=""
+        archive_file=$(echo "$report" | grep '^ARCHIVE_FILE=' | cut -d'=' -f2-)
+        local minfo
+        minfo=$(_controller_get_module_info "$module_id" 2>/dev/null || true)
+        local paths_raw
+        paths_raw=$(echo "$minfo" | grep '^PATHS=' | cut -d'=' -f2- || true)
+        local paths=()
+        IFS='|' read -r -a paths <<< "$paths_raw"
+        local full_targets=""
+        for p in "${paths[@]}"; do
+            [[ -n "$p" ]] || continue
+            full_targets+="  • ${TARGET_USER_HOME}/${p}\n"
+        done
+
+        local summary_msg="Restauración del módulo '$module_id' concluida con éxito.\n\n"
+        if [[ -n "$archive_file" ]]; then
+            summary_msg+="• Archivo Fuente Restaurado:\n  $archive_file\n\n"
+        fi
+        summary_msg+="• Destino Restituido (Home Local):\n${full_targets}\n"
+        summary_msg+="Detalle técnico de la operación:\n$report"
+
+        whiptail_view_msgbox "Restauración Concluida" "$summary_msg"
     else
         echo "$report"
         ansi_view_success "Restauración de '$module_id' finalizada con éxito."
@@ -708,7 +837,7 @@ controller_handle_restore_all() {
 
     if [[ "$is_tui" == "true" ]]; then
         if ! whiptail_view_yesno "Restauración Total" "¿Está seguro de que desea restaurar TODOS los módulos respaldados en el SSD a su sistema local?"; then
-            return 1
+            return 0
         fi
     fi
 
@@ -718,7 +847,8 @@ controller_handle_restore_all() {
     sens_mods=$(module_model_filter_by_sensitivity "true") || true
     if [[ -n "$sens_mods" ]]; then
         if [[ "$is_tui" == "true" ]]; then
-            passphrase=$(whiptail_view_password "Clave Requerida" "Existen módulos cifrados. Introduzca la clave GPG global:") || return 1
+            passphrase=$(whiptail_view_password "Clave Requerida" "Existen módulos cifrados. Introduzca la clave GPG global:") || return 0
+            [[ -z "$passphrase" ]] && return 0
         else
             passphrase="${PASSPHRASE:-$(ansi_view_password "Introduzca la clave GPG para módulos protegidos")}"
         fi
@@ -729,7 +859,11 @@ controller_handle_restore_all() {
     ret=$?
 
     if [[ "$is_tui" == "true" ]]; then
-        whiptail_view_msgbox "Restauración Total Finalizada" "Reporte de restauración global:\n\n$report"
+        local summary_msg="Restauración Total Finalizada.\n\n"
+        summary_msg+="• Directorio Fuente: ${backup_dir}/archives\n"
+        summary_msg+="• Home Destino Restituido: $TARGET_USER_HOME\n\n"
+        summary_msg+="Detalle de los módulos procesados:\n$report"
+        whiptail_view_msgbox "Restauración Total Finalizada" "$summary_msg"
     else
         echo "$report"
         ansi_view_success "Restauración total completada."
@@ -1508,8 +1642,9 @@ controller_handle_modules_admin() {
                 local mod_name
                 mod_name=$(whiptail_view_input "Nuevo Módulo ($scope_desc)" "Nombre descriptivo (ej: Mi Aplicación):" "$mod_id") || continue
 
-                local mod_paths_str
-                mod_paths_str=$(whiptail_view_input "Rutas ($scope_desc)" "Rutas relativas a \$HOME separadas por espacio (ej: .config/app .apprc):") || continue
+                local paths_joined
+                paths_joined=$(whiptail_view_input_paths "Rutas del Módulo ($scope_desc)" "$mod_name") || continue
+                [[ -z "$paths_joined" ]] && continue
 
                 local all_tags
                 all_tags=$(module_model_get_all_tags) || true
@@ -1532,20 +1667,8 @@ controller_handle_modules_admin() {
                     fi
                 fi
 
-                local paths_arr=()
-                read -r -a paths_arr <<< "$mod_paths_str"
                 local tags_arr=()
                 read -r -a tags_arr <<< "$sel_tags"
-
-                local paths_joined=""
-                for p in "${paths_arr[@]}"; do
-                    [[ -n "$p" ]] || continue
-                    if [[ -n "$paths_joined" ]]; then
-                        paths_joined+="|$p"
-                    else
-                        paths_joined="$p"
-                    fi
-                done
 
                 local tags_joined=""
                 for t in "${tags_arr[@]}"; do
@@ -1574,8 +1697,9 @@ controller_handle_modules_admin() {
                 local tmpl_name
                 tmpl_name=$(whiptail_view_input "Nueva Plantilla" "Nombre descriptivo de la receta:" "$tmpl_id") || continue
 
-                local tmpl_paths_str
-                tmpl_paths_str=$(whiptail_view_input "Rutas de la Plantilla" "Rutas relativas a \$HOME separadas por espacio:") || continue
+                local paths_joined
+                paths_joined=$(whiptail_view_input_paths "Rutas de la Plantilla" "$tmpl_name") || continue
+                [[ -z "$paths_joined" ]] && continue
 
                 local all_tags
                 all_tags=$(module_model_get_all_tags) || true
@@ -1598,20 +1722,8 @@ controller_handle_modules_admin() {
                     fi
                 fi
 
-                local paths_arr=()
-                read -r -a paths_arr <<< "$tmpl_paths_str"
                 local tags_arr=()
                 read -r -a tags_arr <<< "$sel_tags"
-
-                local paths_joined=""
-                for p in "${paths_arr[@]}"; do
-                    [[ -n "$p" ]] || continue
-                    if [[ -n "$paths_joined" ]]; then
-                        paths_joined+="|$p"
-                    else
-                        paths_joined="$p"
-                    fi
-                done
 
                 local tags_joined=""
                 for t in "${tags_arr[@]}"; do
@@ -2054,17 +2166,17 @@ controller_run_tui() {
         choice=$(whiptail_view_main_menu "$act_prof" "$IS_SANDBOX_MODE") || break
 
         case "$choice" in
-            1) controller_handle_backup_all "true" "auto" ;;
-            2) controller_handle_backup_tag "" "true" "auto" ;;
-            3) controller_handle_backup_module "" "true" "auto" ;;
-            4) controller_handle_restore_sensitive "true" ;;
-            5) controller_handle_restore_module "" "" "true" ;;
-            6) controller_handle_restore_all "true" ;;
-            7) controller_handle_modules_admin "true" ;;
-            8) controller_handle_device_check "true" ;;
-            9) controller_handle_profiles_admin "true" ;;
+            1) controller_handle_backup_all "true" "auto" || true ;;
+            2) controller_handle_backup_tag "" "true" "auto" || true ;;
+            3) controller_handle_backup_module "" "true" "auto" || true ;;
+            4) controller_handle_restore_sensitive "true" || true ;;
+            5) controller_handle_restore_module "" "" "true" || true ;;
+            6) controller_handle_restore_all "true" || true ;;
+            7) controller_handle_modules_admin "true" || true ;;
+            8) controller_handle_device_check "true" || true ;;
+            9) controller_handle_profiles_admin "true" || true ;;
             0) break ;;
-            *) whiptail_view_error "Opción no reconocida" "La opción seleccionada no es válida." ;;
+            *) whiptail_view_error "Opción no reconocida" "La opción seleccionada no es válida." || true ;;
         esac
     done
 

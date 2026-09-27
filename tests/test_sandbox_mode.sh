@@ -182,6 +182,86 @@ clean_purge_out=$("${PROJECT_ROOT}/backup_manager.sh" --clean-sandbox 2>&1)
 assert_contains "$clean_purge_out" "purgado correctamente" "--clean-sandbox debe confirmar purga exitosa"
 assert_file_not_exists "${PROJECT_ROOT}/user_data/sandbox" "user_data/sandbox debe haber sido eliminado completamente"
 
+# Test 16: Home virtual de pruebas y semillas canónicas (FR-UX-002)
+controller_enable_sandbox_mode
+assert_eq "${PROJECT_ROOT}/user_data/sandbox/home" "$TARGET_USER_HOME" "TARGET_USER_HOME debe apuntar al home virtual de sandbox"
+assert_file_exists "${TARGET_USER_HOME}/.bashrc" ".bashrc debe existir en el home virtual"
+assert_file_exists "${TARGET_USER_HOME}/.bash_aliases" ".bash_aliases debe existir en el home virtual"
+assert_file_exists "${TARGET_USER_HOME}/.profile" ".profile debe existir en el home virtual"
+assert_file_exists "${TARGET_USER_HOME}/.ssh/id_rsa" ".ssh/id_rsa debe existir en el home virtual"
+assert_file_exists "${TARGET_USER_HOME}/.config/Code/User/settings.json" "settings.json debe existir en el home virtual"
+assert_file_exists "${TARGET_USER_HOME}/.gitconfig" ".gitconfig debe existir en el home virtual"
+assert_file_exists "${TARGET_USER_HOME}/.mozilla/firefox/testprofile.default/prefs.js" "Firefox prefs.js debe existir en home virtual"
+
+# Test 17: Regeneración fiel del home virtual tras --clean-sandbox
+"${PROJECT_ROOT}/backup_manager.sh" --clean-sandbox &>/dev/null
+assert_file_not_exists "${PROJECT_ROOT}/user_data/sandbox/home" "El home virtual debe eliminarse con --clean-sandbox"
+controller_enable_sandbox_mode
+assert_file_exists "${TARGET_USER_HOME}/.bashrc" ".bashrc debe regenerarse automáticamente al reactivar el sandbox"
+assert_file_exists "${TARGET_USER_HOME}/.ssh/id_rsa" ".ssh/id_rsa debe regenerarse automáticamente al reactivar el sandbox"
+
+# Test 18: Purga segura aislada con shred -u en Sandbox
+"${PROJECT_ROOT}/backup_manager.sh" --test-mode --enable-template ssh-keys &>/dev/null
+test_key_file="${TARGET_USER_HOME}/.ssh/id_rsa"
+echo "CLAVE_MOCK_SANDBOX_TEST" > "$test_key_file"
+chmod 600 "$test_key_file"
+
+# Ejecutar backup de ssh-keys con purge forzado en sandbox
+PASSPHRASE="TestPass123" "${PROJECT_ROOT}/backup_manager.sh" --test-mode --backup-module ssh-keys --purge &>/dev/null || true
+
+# Comprobar que el archivo del sandbox fue destruido
+assert_file_not_exists "$test_key_file" "El archivo .ssh/id_rsa en el sandbox debe haber sido destruido con shred -u"
+
+# Test 19: Comprobación de que la cancelación en TUI no arroja código 1 (FR-UX-001)
+# Mock de whiptail para simular que el usuario pulsa Cancelar (exit code 1)
+whiptail() {
+    return 1
+}
+
+cancel_mod_ret=0
+controller_handle_backup_module "" "true" "auto" || cancel_mod_ret=$?
+assert_eq "0" "$cancel_mod_ret" "Cancelar la selección de módulo individual en TUI debe retornar código 0"
+
+cancel_tag_ret=0
+controller_handle_backup_tag "" "true" "auto" || cancel_tag_ret=$?
+assert_eq "0" "$cancel_tag_ret" "Cancelar la selección de etiqueta en TUI debe retornar código 0"
+
+cancel_restore_ret=0
+controller_handle_restore_module "" "" "true" || cancel_restore_ret=$?
+assert_eq "0" "$cancel_restore_ret" "Cancelar la selección de módulo a restaurar en TUI debe retornar código 0"
+
+# Test 20: whiptail_view_input_paths con cancelación inmediata
+whiptail() {
+    return 1
+}
+cancel_paths_ret=0
+whiptail_view_input_paths "Test" "Desc" &>/dev/null || cancel_paths_ret=$?
+assert_eq "1" "$cancel_paths_ret" "whiptail_view_input_paths debe retornar 1 (VIEW_CANCEL) si se cancela sin rutas"
+
+# Test 21: whiptail_view_input_paths con captura acumulada línea a línea (FR-UX-003)
+INPUT_SIM_FILE="${PROJECT_ROOT}/user_data/sim_input.tmp"
+echo ".config/app" > "$INPUT_SIM_FILE"
+echo ".apprc" >> "$INPUT_SIM_FILE"
+echo "" >> "$INPUT_SIM_FILE"
+
+whiptail() {
+    local i=1
+    local next_input=""
+    if [[ -s "$INPUT_SIM_FILE" ]]; then
+        next_input=$(head -n 1 "$INPUT_SIM_FILE")
+        sed -i '1d' "$INPUT_SIM_FILE"
+    fi
+    echo "$next_input" >&2
+    return 0
+}
+
+captured_paths=$(whiptail_view_input_paths "Test Entrada" "Módulo Mock" 2>/dev/null)
+assert_eq ".config/app|.apprc" "$captured_paths" "whiptail_view_input_paths debe retornar las rutas acumuladas unidas por pipe"
+rm -f "$INPUT_SIM_FILE"
+
+# Purga final del sandbox para dejar el espacio limpio
+"${PROJECT_ROOT}/backup_manager.sh" --clean-sandbox &>/dev/null || true
+
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
 
