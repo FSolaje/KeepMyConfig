@@ -156,7 +156,18 @@ whiptail_view_password_confirm() {
 
 # Menú Principal del Gestor de Backup y Recuperación
 whiptail_view_main_menu() {
-    local title="SISTEMA DE BACKUP Y RECUPERACIÓN - LLIUREX 25"
+    local profile_name="${1:-}"
+    local is_sandbox="${2:-${IS_SANDBOX_MODE:-false}}"
+    local title="KeepMyConfig - Gestor de Backup y Recuperación"
+    if [[ "$is_sandbox" == "true" ]]; then
+        if [[ -n "$profile_name" ]]; then
+            title="KeepMyConfig [SANDBOX] [Perfil: $profile_name]"
+        else
+            title="KeepMyConfig [SANDBOX]"
+        fi
+    elif [[ -n "$profile_name" ]]; then
+        title="KeepMyConfig [Perfil: $profile_name]"
+    fi
     local prompt="Seleccione la operación que desea realizar:"
     local choice=""
     local status=0
@@ -171,7 +182,8 @@ whiptail_view_main_menu() {
         "5" "[RESTORE]  Restauración Selectiva (Módulo / Histórico)" \
         "6" "[RESTORE]  Restauración Total" \
         "7" "[MODULES]  Administrar Módulos y Etiquetas" \
-        "8" "[CONFIG]   Gestión de Almacenamiento y Diagnóstico" \
+        "8" "[STORAGE]  Gestión de Almacenamiento y Diagnóstico" \
+        "9" "[PROFILES] Gestión de Perfiles de Backup" \
         "0" "[SALIR]    Salir del gestor" \
         3>&1 1>&2 2>&3)
     status=$?
@@ -274,3 +286,88 @@ whiptail_view_gauge() {
     whiptail --title "$title" --gauge "$prompt" "$WT_HEIGHT" "$WT_WIDTH" "$initial_pct"
     return $?
 }
+
+# Captura interactiva de rutas línea a línea (Enter confirma y añade a la lista)
+# Retorna en stdout las rutas acumuladas separadas por '|'
+whiptail_view_input_paths() {
+    local title="${1:-Definir Rutas del Módulo}"
+    local context_desc="${2:-}"
+    local accumulated_paths=()
+
+    whiptail_view_calc_dimensions
+
+    while true; do
+        local count=${#accumulated_paths[@]}
+        local msg="Orientación sobre rutas de respaldo:\n"
+        msg+="• Las rutas se procesan relativas al directorio personal (\$HOME).\n"
+        msg+="• Se admiten relativas (ej: .config/app) o completas (\$HOME/.config/app, ~/.config/app).\n"
+        msg+="• El sistema las normaliza automáticamente para asegurar su portabilidad.\n\n"
+
+        if [[ -n "$context_desc" ]]; then
+            msg+="Receta: $context_desc\n\n"
+        fi
+
+        if (( count > 0 )); then
+            msg+="Rutas añadidas ($count):\n"
+            local max_display=6
+            local start_idx=0
+            if (( count > max_display )); then
+                start_idx=$(( count - max_display ))
+                msg+="  [... $start_idx rutas previas omitidas en vista ...]\n"
+            fi
+            for (( i=start_idx; i<count; i++ )); do
+                msg+="  $(( i + 1 )). ${accumulated_paths[i]}\n"
+            done
+            msg+="\n"
+            msg+="• Escriba otra ruta y pulse Enter / Aceptar para añadirla.\n"
+            msg+="• Deje en blanco y pulse Enter / Aceptar para FINALIZAR la lista.\n"
+            msg+="• Pulse Cancelar para finalizar o descartar."
+        else
+            msg+="(Aún no se ha añadido ninguna ruta)\n\n"
+            msg+="• Escriba la primera ruta y pulse Enter / Aceptar para añadirla.\n"
+            msg+="• Pulse Cancelar para cancelar el asistente."
+        fi
+
+        local current_input=""
+        local status=0
+        current_input=$(whiptail --title "$title" --inputbox "$msg" "$WT_HEIGHT" "$WT_WIDTH" 3>&1 1>&2 2>&3)
+        status=$?
+
+        if (( status == 0 )); then
+            local clean_input
+            clean_input=$(echo "$current_input" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            if [[ -n "$clean_input" ]]; then
+                accumulated_paths+=("$clean_input")
+            else
+                if (( count > 0 )); then
+                    break
+                else
+                    whiptail_view_error "$title" "Debe introducir al menos una ruta para continuar."
+                fi
+            fi
+        else
+            if (( count > 0 )); then
+                if whiptail_view_yesno "$title" "Ha introducido $count ruta(s). ¿Desea guardarlas y continuar? (Seleccione 'No' para descartar y cancelar)."; then
+                    break
+                else
+                    return "$VIEW_CANCEL"
+                fi
+            else
+                return "$VIEW_CANCEL"
+            fi
+        fi
+    done
+
+    local joined=""
+    for p in "${accumulated_paths[@]}"; do
+        if [[ -n "$joined" ]]; then
+            joined+="|$p"
+        else
+            joined="$p"
+        fi
+    done
+
+    echo "$joined"
+    return "$VIEW_OK"
+}
+

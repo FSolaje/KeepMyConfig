@@ -190,8 +190,113 @@ assert_exit_code "$DEV_OK" "$UPDATE_EXIT" "update_config_subdir debe retornar DE
 grep -q '^STORAGE_SUBDIR="Backups/SegundoEquipo"' "$LOCAL_CFG"
 assert_equals "0" "$?" "config.conf debe reflejar el nuevo STORAGE_SUBDIR"
 
+# Test 17: device_model_sanitize_subdir normaliza prefijos y bloquea traversal
+s_home=$(device_model_sanitize_subdir "\$HOME/Mis_Backups")
+assert_equals "Mis_Backups" "$s_home" "sanitize_subdir debe eliminar \$HOME"
+
+s_tilde=$(device_model_sanitize_subdir "~/Backups_Tilde//test/")
+assert_equals "Backups_Tilde/test" "$s_tilde" "sanitize_subdir debe normalizar tilde y barras dobles"
+
+s_user=$(device_model_sanitize_subdir "/home/usuario/Backups_Directos")
+assert_equals "Backups_Directos" "$s_user" "sanitize_subdir debe eliminar /home/<usuario>"
+
+set +e
+device_model_sanitize_subdir "Backups/../../etc" >/dev/null 2>&1
+s_trav_status=$?
+set -e
+assert_equals "1" "$s_trav_status" "sanitize_subdir debe rechazar directory traversal con '..'"
+
+# Test 18: validate_storage con auto-creación de subdirectorio nuevo si el almacenamiento ya contiene destinos válidos
+HIER_STORAGE="/tmp/test_hier_storage_$$"
+mkdir -p "$HIER_STORAGE/Backups/Existente"
+touch "$HIER_STORAGE/Backups/Existente/.backup_storage_marker"
+
+HIER_CFG="/tmp/test_hier_cfg_$$.conf"
+cat <<EOF > "$HIER_CFG"
+STORAGE_ID_TYPE="LOCAL_PATH"
+STORAGE_ID_VALUE="$HIER_STORAGE"
+STORAGE_SUBDIR="Backup/NuevoPerfil"
+EOF
+
+HIER_VAL_OUT=$(device_model_validate_storage "$HIER_CFG")
+HIER_VAL_EXIT=$?
+assert_exit_code "$DEV_OK" "$HIER_VAL_EXIT" "validate_storage debe auto-crear subdirectorio nuevo si el medio está verificado"
+[[ "$HIER_VAL_OUT" =~ STATUS=READY ]]
+assert_equals "0" "$?" "validate_storage debe retornar STATUS=READY para subcarpeta nueva en medio verificado"
+[[ -f "$HIER_STORAGE/Backup/NuevoPerfil/.backup_storage_marker" ]]
+assert_equals "0" "$?" "validate_storage debe auto-desplegar .backup_storage_marker en el nuevo subdirectorio"
+
+# Test 19: update_config_subdir sanitiza $HOME al actualizar config
+device_model_update_config_subdir "$HIER_CFG" "\$HOME/Backups_Sanitizados"
+grep -q '^STORAGE_SUBDIR="Backups_Sanitizados"' "$HIER_CFG"
+assert_equals "0" "$?" "update_config_subdir debe sanitizar \$HOME a ruta relativa limpia"
+
+rm -rf "$HIER_STORAGE" "$HIER_CFG"
+
 # Limpieza de temporales LOCAL_PATH
 rm -rf "$LOCAL_TARGET_DIR" "$LOCAL_CFG"
+
+# Test 20: device_model_resolve_destination normaliza rutas universales
+res_tilde=$(device_model_resolve_destination "~/Backups/KMCTest" "/home/usuario")
+assert_equals "/home/usuario/Backups/KMCTest" "$res_tilde" "resolve_destination debe expandir ~"
+
+res_home=$(device_model_resolve_destination "\$HOME/Backups/KMCTest" "/home/usuario")
+assert_equals "/home/usuario/Backups/KMCTest" "$res_home" "resolve_destination debe expandir \$HOME"
+
+res_rel=$(device_model_resolve_destination "Backups/KMCTest" "/home/usuario")
+assert_equals "/home/usuario/Backups/KMCTest" "$res_rel" "resolve_destination debe resolver ruta relativa respecto a HOME"
+
+res_abs=$(device_model_resolve_destination "/tmp/backups_directo" "/home/usuario")
+assert_equals "/tmp/backups_directo" "$res_abs" "resolve_destination debe respetar rutas absolutas"
+
+set +e
+device_model_resolve_destination "../escape" "/home/usuario" >/dev/null 2>&1
+res_trav_code=$?
+set -e
+assert_equals "1" "$res_trav_code" "resolve_destination debe rechazar directory traversal con '..'"
+
+# Test 21: device_model_detect_external_drives ejecuta con DEV_OK
+device_model_detect_external_drives >/dev/null 2>&1
+det_exit=$?
+assert_exit_code "$DEV_OK" "$det_exit" "detect_external_drives debe retornar DEV_OK"
+
+# Test 22: device_model_update_config_destination actualiza BACKUP_DESTINATION
+UNIV_CFG="/tmp/test_univ_cfg_$$.conf"
+cat <<EOF > "$UNIV_CFG"
+ACTIVE_PROFILE="default"
+BACKUP_DESTINATION="~/Backups/Inicial"
+EOF
+
+device_model_update_config_destination "$UNIV_CFG" "~/Backups/Actualizado"
+upd_dest_exit=$?
+assert_exit_code "$DEV_OK" "$upd_dest_exit" "update_config_destination debe retornar DEV_OK"
+grep -q '^BACKUP_DESTINATION="~/Backups/Actualizado"' "$UNIV_CFG"
+assert_equals "0" "$?" "config.conf debe contener el nuevo BACKUP_DESTINATION"
+
+# Test 23: device_model_validate_storage con BACKUP_DESTINATION nativo
+UNIV_DIR="/tmp/test_univ_storage_$$"
+mkdir -p "$UNIV_DIR"
+touch "$UNIV_DIR/.backup_storage_marker"
+
+cat <<EOF > "$UNIV_CFG"
+ACTIVE_PROFILE="default"
+BACKUP_DESTINATION="$UNIV_DIR"
+EOF
+
+UNIV_VAL_OUT=$(device_model_validate_storage "$UNIV_CFG")
+UNIV_VAL_EXIT=$?
+assert_exit_code "$DEV_OK" "$UNIV_VAL_EXIT" "validate_storage con BACKUP_DESTINATION nativo debe retornar DEV_OK"
+[[ "$UNIV_VAL_OUT" =~ STATUS=READY ]]
+assert_equals "0" "$?" "validate_storage con BACKUP_DESTINATION debe retornar STATUS=READY"
+
+# Test 24: validate_storage con BACKUP_DESTINATION y subcarpeta de perfil auto-creada
+UNIV_VAL_PROF_OUT=$(device_model_validate_storage "$UNIV_CFG" "PerfilDocente")
+UNIV_VAL_PROF_EXIT=$?
+assert_exit_code "$DEV_OK" "$UNIV_VAL_PROF_EXIT" "validate_storage con subdirectorio de perfil debe retornar DEV_OK"
+[[ -f "$UNIV_DIR/PerfilDocente/.backup_storage_marker" ]]
+assert_equals "0" "$?" "validate_storage debe desplegar el marcador en el destino de perfil"
+
+rm -rf "$UNIV_DIR" "$UNIV_CFG"
 
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."

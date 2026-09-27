@@ -1,4 +1,4 @@
-# Manual de Usuario y Administración: BackupConfig
+# Manual de Usuario y Administración: KeepMyConfig
 
 > **Versión:** 0.1.0-alpha.1  
 > **Sistema Operativo Objetivo:** Lliurex 25 / Ubuntu 24.04 LTS  
@@ -21,7 +21,7 @@
 3. [Capítulo 3: Guía de Uso - Interfaz Interactiva TUI (`whiptail`)](#capítulo-3-guía-de-uso---interfaz-interactiva-tui-whiptail)
    - [3.1 Inicio de la Interfaz Gráfica de Terminal](#31-inicio-de-la-interfaz-gráfica-de-terminal)
    - [3.2 Esquema del Menú Principal](#32-esquema-del-menú-principal)
-   - [3.3 Recorrido Detallado por las 8 Opciones](#33-recorrido-detallado-por-las-8-opciones)
+   - [3.3 Recorrido Detallado por las 9 Opciones](#33-recorrido-detallado-por-las-9-opciones)
    - [3.4 El Flujo "Vault & Shred" y Advertencias de Seguridad](#34-el-flujo-vault--shred-y-advertencias-de-seguridad)
 4. [Capítulo 4: Guía de Uso - Interfaz de Comandos CLI (Headless / Cron)](#capítulo-4-guía-de-uso---interfaz-de-comandos-cli-headless--cron)
    - [4.1 Sintaxis General y Modos de Operación](#41-sintaxis-general-y-modos-de-operación)
@@ -29,11 +29,14 @@
    - [4.3 Automatización Desatendida con `PASSPHRASE`](#43-automatización-desatendida-con-passphrase)
    - [4.4 Integración con Tareas Programadas (`cron`)](#44-integración-con-tareas-programadas-cron)
    - [4.5 Tabla de Códigos de Salida UNIX](#45-tabla-de-códigos-de-salida-unix)
-5. [Capítulo 5: Creación de Módulos y Recetas (`modules.d/*.conf`)](#capítulo-5-creación-de-módulos-y-recetas-modulesdconf)
+   - [4.6 Entorno de Pruebas y Desarrollo (Modo Sandbox)](#46-entorno-de-pruebas-y-desarrollo-modo-sandbox)
+5. [Capítulo 5: Creación de Módulos, Recetas y Perfiles](#capítulo-5-creación-de-módulos-recetas-y-perfiles)
    - [5.1 Estructura Declarativa de una Receta](#51-estructura-declarativa-de-una-receta)
    - [5.2 Directivas Soportadas](#52-directivas-soportadas)
    - [5.3 Ejemplos Oficiales de Producción](#53-ejemplos-oficiales-de-producción)
    - [5.4 Hooks Post-Restauración (`POST_RESTORE_HOOK`)](#54-hooks-post-restauración-post_restore_hook)
+   - [5.5 Sistema de Perfiles de Backup y Scoped Modules](#55-sistema-de-perfiles-de-backup-y-scoped-modules)
+   - [5.6 Biblioteca de Plantillas (`templates.d/`) y Exclusiones en Perfiles](#56-biblioteca-de-plantillas-templatesd-y-exclusiones-en-perfiles)
 6. [Capítulo 6: Auditoría, Logs y Resolución de Problemas (Troubleshooting)](#capítulo-6-auditoría-logs-y-resolución-de-problemas-troubleshooting)
    - [6.1 Árbol de Directorios en la Unidad Externa](#61-árbol-de-directorios-en-la-unidad-externa)
    - [6.2 Registro Histórico y Manifiestos de Integridad](#62-registro-histórico-y-manifiestos-de-integridad)
@@ -56,7 +59,7 @@ En entornos educativos basados en **Lliurex 25 / Ubuntu 24.04 LTS** (como aulas 
 - Credenciales temporales, claves SSH para repositorios Git y tokens de acceso.
 - Configuraciones de shell (`.bashrc`, `.bash_aliases`, scripts personales en `~/bin`).
 
-**BackupConfig** ha sido diseñado para resolver este problema permitiendo a docentes y alumnos:
+**KeepMyConfig** ha sido diseñado para resolver este problema permitiendo a docentes y alumnos:
 1. Respaldar selectivamente sus herramientas y configuraciones a una unidad externa (SSD o pendrive USB).
 2. Proteger con cifrado militar (GPG AES-256) cualquier dato privado o llave de seguridad.
 3. Purgar del ordenador del aula los datos sensibles mediante borrado seguro irrecuperable (`shred -u`), eliminando el riesgo de que otros alumnos o usuarios accedan a sus credenciales.
@@ -128,54 +131,47 @@ Para evitar esto, **BackupConfig** exige la presencia de un archivo testigo deno
 
 ---
 
-### 2.2 Paso a Paso: Inicialización de la Unidad Externa
+### 2.2 Inicialización del Almacenamiento y Asistente de Onboarding
 
-Supongamos que dispone de un disco SSD externo etiquetado como `DISCO_BACKUP`.
+KeepMyConfig incluye un **Asistente de Configuración Inicial (Onboarding Wizard)** diseñado para preparar el entorno de copias en menos de un minuto sin necesidad de comandos manuales.
 
-#### Paso 1: Localizar la unidad y su punto de montaje
-Conecte su disco y ejecute:
+#### Método 1: Asistente Automático de Primera Ejecución (Recomendado)
+Al ejecutar por primera vez la aplicación sin haber completado la configuración (`INITIAL_SETUP_DONE="false"`):
 ```bash
-lsblk -f
+./backup_manager.sh
 ```
-Identifique el identificador `LABEL` (ejemplo: `SSD_BACKUP`) o su `UUID` (ejemplo: `UUID`), así como el punto de montaje (ejemplo: `/media/$USER/SSD_BACKUP` o `/mnt/SSD_BACKUP`).
+El sistema detecta el primer arranque e inicia automáticamente el asistente en pantalla:
+1. **Auditoría de hardware y medios montados:** Escanea particiones externas y unidades USB en `/media/$USER/` o `/run/media/$USER/`.
+2. **Selección guiada de destino:**
+   - **Almacenamiento Local (Por defecto):** Configura `~/Backups/KeepMyConfig`. Ideal para ordenadores personales o estaciones con almacenamiento persistente.
+   - **Dispositivos Externos Detectados:** Muestra una lista con las memorias USB o discos SSD externos conectados para seleccionarlos directamente.
+   - **Ruta Personalizada:** Permite ingresar manualmente cualquier ruta del sistema o montaje de red.
+3. **Despliegue del Marcador de Seguridad:** Crea automáticamente las carpetas `archives/` y `logs/` e instala el archivo testigo `.backup_storage_marker` para prevenir escrituras accidentales.
+4. **Preferencia de Sesión (`REMEMBER_LAST_PROFILE`):** Pregunta si desea que la aplicación recuerde el último perfil utilizado en cada sesión o si prefiere iniciar siempre en el perfil `default`.
 
-#### Paso 2: Crear la estructura de directorios y el marcador de seguridad
+> [!TIP]
+> Puede relanzar este asistente de configuración guiada en cualquier momento mediante la opción de línea de comandos:
+> ```bash
+> ./backup_manager.sh --setup
+> ```
+> O desde la **Opción 8** del menú interactivo TUI.
 
-**Método Automático (Recomendado):**
-Puede inicializar cualquier subdirectorio de destino en el almacenamiento con una sola orden CLI o mediante la **Opción 8** de la TUI:
+#### Método 2: Inicialización Manual o de Rutas Personalizadas
+Si desea inicializar manualmente un destino en un disco externo o carpeta específica:
 ```bash
-# Inicializar la carpeta para un equipo específico y fijarla como activa
-./backup_manager.sh --init-target "Backups/Personal_PC" --set-default
-```
-Esta orden crea automáticamente `archives/`, `logs/`, despliega `.backup_storage_marker` y actualiza `config/config.conf`.
-
-**Método Manual Alternativo:**
-Si prefiere crearlo manualmente en su disco externo:
-```bash
-mkdir -p /media/$USER/DISCO_BACKUP/Backups/Lliurex25/archives
-mkdir -p /media/$USER/DISCO_BACKUP/Backups/Lliurex25/logs
-cp markers/.backup_storage_marker /media/$USER/DISCO_BACKUP/Backups/Lliurex25/.backup_storage_marker
+mkdir -p "$HOME/Backups/KeepMyConfig/archives" "$HOME/Backups/KeepMyConfig/logs"
+cp markers/.backup_storage_marker "$HOME/Backups/KeepMyConfig/.backup_storage_marker"
 ```
 
 ---
 
 ### 2.3 Configuración Central (`config/config.conf`)
 
-Edite el archivo `config/config.conf` para vincular su método preferido de detección de la unidad o carpeta:
+La configuración central de **KeepMyConfig** se administra a través del archivo `config/config.conf`:
 
 ```bash
-# Métodos de identificación soportados:
-#   - LABEL       : Busca la etiqueta de partición mediante lsblk / blkid
-#   - UUID        : Busca el identificador único universal de partición
-#   - STATIC_PATH : Usa una ruta fija de punto de montaje
-#   - LOCAL_PATH  : Usa cualquier carpeta o disco local del equipo (o montaje de red)
-STORAGE_ID_TYPE="LABEL"
-
-# Valor de búsqueda correspondiente al método anterior
-STORAGE_ID_VALUE="DISCO_BACKUP"
-
-# Subdirectorio activo dentro del almacenamiento donde residen las copias
-STORAGE_SUBDIR="Backups/Lliurex25"
+# Ruta universal de almacenamiento (carpeta local, disco externo o notación @media)
+BACKUP_DESTINATION="~/Backups/KeepMyConfig"
 
 # Algoritmo de cifrado simétrico GPG (AES256 recomendado)
 CIPHER_ALGO="AES256"
@@ -185,11 +181,29 @@ COMPRESSION_ALGO="zstd"
 
 # Días de retención de registros antes de purga automática
 LOG_RETENTION_DAYS=90
+
+# Estado del asistente de configuración inicial
+INITIAL_SETUP_DONE="true"
+
+# Perfil de backup activo
+ACTIVE_PROFILE="default"
+
+# Memoria de sesión: recordar último perfil activo utilizado (true/false)
+REMEMBER_LAST_PROFILE="true"
 ```
 
-> [!TIP]
-> - **Para discos externos móviles:** Se recomienda **`STORAGE_ID_TYPE="LABEL"`** o **`"UUID"`**, ya que detectará automáticamente el punto de montaje sin importar la ruta asignada por el sistema.
-> - **Para copias en carpetas locales o montajes de red (SSHFS / NFS / SMB):** Use **`STORAGE_ID_TYPE="LOCAL_PATH"`** y defina `STORAGE_ID_VALUE="/ruta/a/mi/carpeta"`. El sistema validará los permisos y el marcador sin exigir que sea una partición externa independiente.
+#### Formatos Soportados para `BACKUP_DESTINATION`
+El sistema normaliza y resuelve de forma inteligente los siguientes formatos de ruta:
+- **Ruta local con tilde o `$HOME`:** `~/Backups/KeepMyConfig` o `$HOME/Copias`.
+- **Rutas de discos externos montados:** `/media/$USER/DISCO_BACKUP/Backups`.
+- **Notación semántica de conveniencia:** `@media/<ETIQUETA>/...` (ej. `@media/DISCO_BACKUP/Backups`), que busca automáticamente la unidad cuya etiqueta coincida en `/media/$USER/` o `/run/media/$USER/`.
+- **Rutas absolutas fijas o montajes de red (NFS/SMB/SSHFS):** `/mnt/servidor_backup/datos`.
+
+#### Convención Zero-Config por Perfil
+KeepMyConfig organiza las copias de seguridad de múltiples perfiles sin requerir configuraciones complejas:
+- **Perfil Predeterminado (`default`):** Almacena sus archivos directamente en la raíz de `BACKUP_DESTINATION`.
+- **Perfiles Secundarios (`docente`, `desarrollo`, etc.):** Por convención automática Zero-Config, almacenan sus copias en `<BACKUP_DESTINATION>/<id_perfil>`.
+- **Validación Jerárquica del Marcador:** No es necesario copiar manualmente el marcador `.backup_storage_marker` en cada subcarpeta de perfil. El sistema valida la presencia del marcador en la raíz del destino o en cualquier carpeta ascendente y crea automáticamente la estructura necesaria.
 
 ---
 
@@ -210,28 +224,29 @@ El sistema verificará la presencia de `whiptail` y abrirá el menú principal d
 ### 3.2 Esquema del Menú Principal
 
 ```text
-┌────────────────────────── GESTOR DE BACKUP Y RECUPERACIÓN ──────────────────────────┐
-│                                                                                     │
-│ Bienvenido al gestor integral de copias y recuperación modular en Bash.             │
-│ Seleccione una operación:                                                           │
-│                                                                                     │
-│    1 [BACKUP] Realizar Backup Completo                                              │
-│    2 [BACKUP] Realizar Backup por Etiquetas (Tags)                                  │
-│    3 [BACKUP] Realizar Backup por Módulo Individual                                 │
-│    4 [RESTORE] Restauración Rápida de Datos Sensibles                               │
-│    5 [RESTORE] Restauración Selectiva (Módulo / Histórico AAAAMMDD_HHMMSS)          │
-│    6 [RESTORE] Restauración Total                                                   │
-│    7 [MODULES] Administrar Módulos y Etiquetas (Asistente TUI)                      │
-│    8 [CONFIG] Gestión de Almacenamiento y Diagnóstico                               │
-│    0 Salir                                                                          │
-│                                                                                     │
-│                             <Aceptar>      <Cancelar>                               │
-└─────────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────── KeepMyConfig [Perfil: default] ──────────────────────┐
+│                                                                             │
+│ Bienvenido al gestor integral de copias y recuperación modular en Bash.     │
+│ Seleccione la operación que desea realizar:                                 │
+│                                                                             │
+│    1 [BACKUP]   Realizar Backup Completo                                    │
+│    2 [BACKUP]   Realizar Backup por Etiquetas (Tags)                        │
+│    3 [BACKUP]   Realizar Backup por Módulo Individual                       │
+│    4 [RESTORE]  Restauración Rápida de Datos Sensibles                      │
+│    5 [RESTORE]  Restauración Selectiva (Módulo / Histórico AAAAMMDD_HHMMSS) │
+│    6 [RESTORE]  Restauración Total                                          │
+│    7 [MODULES]  Administrar Módulos y Etiquetas                             │
+│    8 [STORAGE]  Gestión de Almacenamiento y Diagnóstico                     │
+│    9 [PROFILES] Gestión de Perfiles de Backup                               │
+│    0 [SALIR]    Salir del gestor                                            │
+│                                                                             │
+│                             <Aceptar>      <Cancelar>                       │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### 3.3 Recorrido Detallado por las 8 Opciones
+### 3.3 Recorrido Detallado por las 9 Opciones
 
 #### Opción 1: `[BACKUP] Realizar Backup Completo`
 - **¿Qué hace?:** Escanea todos los archivos de configuración registrados en `modules.d/*.conf`. Empaqueta, comprime y almacena cada módulo en la carpeta `archives/` del SSD externo.
@@ -260,19 +275,39 @@ El sistema verificará la presencia de `whiptail` y abrirá el menú principal d
 #### Opción 6: `[RESTORE] Restauración Total`
 - **¿Qué hace?:** Reconstruye completamente el entorno del usuario, procesando secuencialmente el snapshot más reciente de todos los módulos registrados en el almacenamiento.
 
-#### Opción 7: `[MODULES] Administrar Módulos y Etiquetas`
+#### Opción 7: `[MODULES] Administrar Módulos, Plantillas y Etiquetas`
 - **¿Qué hace?:** Abre un subasistente interactivo que permite:
-  - **Inspeccionar módulos:** Ver las rutas, etiquetas y estado de purga de cualquier módulo.
-  - **Crear un nuevo módulo:** Asistente paso a paso que pide el identificador, rutas a respaldar, etiquetas y nivel de seguridad, generando automáticamente el archivo `.conf` en `modules.d/`.
-  - **Eliminar un módulo:** Da de baja un archivo de receta.
+  - **Inspeccionar módulos:** Ver las rutas, etiquetas, nivel de seguridad y estado de purga de cualquier módulo disponible para el perfil activo, etiquetado visualmente como `[Global]` o `[Perfil: <id>]`.
+  - **Activar módulo desde plantilla:** Explora la biblioteca `templates.d/` con recetas preconfiguradas listas para usar (Firefox, VSCode, Git, SSH, IntelliJ, etc.), permitiendo instanciarlas en el catálogo global o en el perfil activo.
+  - **Crear un nuevo módulo con selector de ámbito y captura guiada:** Asistente paso a paso que solicita identificador, nombre descriptivo, nivel de seguridad y etiquetas. Si el perfil activo es distinto de `default`, permite elegir si el módulo se registra en el **Catálogo Global (`modules.d/`)** o como **Exclusivo del Perfil Activo (`profiles/<activo>/modules.d/`)**.
+  - **Captura interactiva de rutas línea a línea (Enter para confirmar):** Las rutas no se introducen agrupadas por espacios, sino una a una en un cuadro de diálogo dinámico:
+    - Cada pulsación de Enter confirma y añade la ruta a una lista acumulada visible en pantalla.
+    - Se ofrece orientación explícita: las rutas se procesan relativas a `$HOME` (admitiendo rutas relativas como `.config/app` o completas con `$HOME` / `~`, que el sistema normaliza automáticamente).
+    - Un Enter en campo en blanco finaliza la recogida de rutas.
+  - **Crear nueva plantilla en la biblioteca:** Asistente interactivo para redactar una receta directamente en la biblioteca reutilizable `templates.d/` con el mismo flujo guiado de captura de rutas línea a línea.
+  - **Exportar módulo activo a la biblioteca de plantillas:** Permite promover cualquier receta activa validada del usuario al catálogo general `templates.d/`.
+  - **Sanitización automática de rutas:** Al ingresar rutas de ficheros (ej. `$HOME/Documentos`, `~/Descargas/`), el sistema normaliza automáticamente las rutas a formato relativo respecto a `$HOME`, eliminando barras redundantes y bloqueando intentos de directory traversal (`..`).
+  - **Eliminar un módulo:** Da de baja un archivo de receta de su ámbito correspondiente (`modules.d/` o `profiles/<activo>/modules.d/`).
   - **Añadir etiquetas:** Enriquecer el catálogo `config/default_tags.conf`.
 
-#### Opción 8: `[CONFIG] Gestión de Almacenamiento y Diagnóstico`
-- **¿Qué hace?:** Abre un submenú para controlar el almacenamiento y los perfiles de máquina:
-  1. **Ver diagnóstico de almacenamiento y espacio libre:** Audita la conexión, valida el marcador `.backup_storage_marker` y muestra el espacio disponible.
-  2. **Listar carpetas de equipo en el almacenamiento:** Muestra todas las carpetas con marcador identificando cuál es la activa actualmente.
-  3. **Cambiar carpeta de equipo activa (`STORAGE_SUBDIR`):** Permite conmutar interactivamente el destino predeterminado en `config/config.conf`.
-  4. **Inicializar nueva carpeta de equipo en el almacenamiento:** Asistente que crea la estructura completa (`archives/`, `logs/`) y el marcador de seguridad (sugiriendo `Backups/$(hostname)`).
+#### Opción 8: `[STORAGE] Gestión de Almacenamiento y Diagnóstico`
+- **¿Qué hace?:** Abre un submenú integral para controlar el destino universal de copias y auditar su integridad:
+  1. **Ver diagnóstico de almacenamiento y espacio libre:** Audita la conexión a la ruta resuelta de `BACKUP_DESTINATION`, valida el marcador de seguridad jerárquico `.backup_storage_marker` y muestra el espacio disponible en disco.
+  2. **Cambiar ruta de destino de backup (`BACKUP_DESTINATION`):** Permite reconfigurar interactivamente la directiva canónica en `config/config.conf` (admitiendo rutas relativas, absolutas, con tilde `~` o notación `@media/<LABEL>/...`).
+  3. **Asistente de configuración guiada (Onboarding):** Re-ejecuta el flujo interactivo de primera ejecución para detectar discos conectados y seleccionar un destino con despliegue automático del marcador.
+  4. **Desplegar marcador de seguridad en destino actual:** Crea automáticamente la estructura de directorios (`archives/`, `logs/`) e instala el archivo testigo `.backup_storage_marker` en la ruta resuelta de `BACKUP_DESTINATION`.
+
+#### Opción 9: `[PROFILES] Gestión de Perfiles de Backup`
+- **¿Qué hace?:** Abre el gestor modular de perfiles (`profiles/`):
+  1. **Ver detalles del perfil activo:** Inspecciona identificador, nombre, descripción y la ruta física resuelta donde se almacenan sus copias (aplicando la convención Zero-Config: `<BACKUP_DESTINATION>/<id_perfil>`).
+  2. **Cambiar perfil activo:** Conmuta el perfil en `config/config.conf` de manera atómica mediante un selector interactivo.
+  3. **Crear un nuevo perfil:** Asistente paso a paso para definir un nuevo entorno (`ID`, nombre, descripción y carpeta destino asociada opcional).
+  4. **Listar recetas y módulos del perfil activo:** Muestra la lista deduplicada de módulos indicando su alcance exacto: `[Global]`, `[Override]` o `[Exclusivo]`.
+  5. **Gestionar exclusiones de módulos globales (`DISABLED_MODULES`):** Para perfiles particulares, abre una checklist interactiva que permite desactivar selectivamente módulos globales para que no se ejecuten en ese perfil.
+  6. **Eliminar un perfil:** Borrado seguro de un perfil y sus módulos específicos (con protección para impedir borrar `default` o el perfil en uso).
+
+> [!NOTE]
+> El perfil `default` (`profiles/default/profile.conf`) es persistente y dispone de un mecanismo de **auto-reparación preventiva (*auto-healing*)**: si el archivo fuera eliminado de forma accidental, KeepMyConfig lo regenerará automáticamente con su estructura canónica al arrancar.
 
 ---
 
@@ -315,6 +350,7 @@ La interfaz de línea de comandos está optimizada para scripts bash, tareas pro
 
 | Parámetro | Argumento | Descripción |
 | :--- | :--- | :--- |
+| `--setup` | *Ninguno* | Inicia el asistente interactivo de configuración inicial (Onboarding Wizard). |
 | `--backup-all` | *Ninguno* | Realiza el respaldo de todos los módulos registrados. |
 | `--backup-tag` | `<tag>` | Respalda únicamente los módulos asociados a la etiqueta `<tag>`. |
 | `--backup-module` | `<id>` | Respalda el módulo especificado por su `<id>`. |
@@ -324,14 +360,23 @@ La interfaz de línea de comandos está optimizada para scripts bash, tareas pro
 | `--timestamp` | `<TS>` | *(Opcional)* Especifica la marca de tiempo `AAAAMMDD_HHMMSS` a restaurar. |
 | `--purge` | *Ninguno* | Fuerza la purga segura con `shred -u` tras el backup (ignora receta). |
 | `--no-purge` | *Ninguno* | Desactiva la purga tras el backup aunque la receta lo tenga activo. |
-| `--check-device` | *Ninguno* | Comprueba la detección del almacenamiento y el marcador de seguridad. |
-| `--init-target` | `<subdir>` | Inicializa la subcarpeta en el almacenamiento (directorios y marcador). |
+| `--check-device` | *Ninguno* | Comprueba la accesibilidad del almacenamiento y el marcador de seguridad en `BACKUP_DESTINATION`. |
+| `--init-target` | `<subdir>` | Inicializa una subcarpeta en el almacenamiento (directorios y marcador). |
 | `--set-default` | *Ninguno* | Flag modificador para `--init-target` que lo fija en `config/config.conf`. |
 | `--list-targets`| *Ninguno* | Lista todos los destinos y subcarpetas con marcador en el soporte. |
 | `--set-active-target` | `<subdir>` | Establece el subdirectorio activo en `config/config.conf`. |
 | `--target-subdir` | `<subdir>` | Redirige temporalmente la operación actual a ese subdirectorio. |
-| `--list-modules` | *Ninguno* | Imprime en consola todos los módulos registrados y su confidencialidad. |
+| `--profile` | `<id>` | Aplica un perfil específico de forma temporal para la operación actual. |
+| `--list-profiles` | *Ninguno* | Lista todos los perfiles de backup configurados en el sistema. |
+| `--set-active-profile` | `<id>` | Establece el perfil activo de forma persistente en `config/config.conf`. |
+| `--create-profile` | `<id>` | Crea un nuevo perfil de backup y su estructura de módulos. |
+| `--list-templates` | *Ninguno* | Lista todas las recetas predefinidas en la biblioteca de plantillas (`templates.d/`). |
+| `--enable-template` | `<id>` | Activa la plantilla indicada en el perfil activo (o global si es default). |
+| `--export-template` | `<id>` | Exporta y promueve un módulo activo como nueva plantilla en la biblioteca. |
+| `--list-modules` | *Ninguno* | Imprime en consola todos los módulos registrados y su confidencialidad/ámbito. |
 | `--list-tags` | *Ninguno* | Imprime el catálogo de etiquetas disponibles. |
+| `--test-mode, --sandbox` | *Ninguno* | Activa el entorno aislado de pruebas Sandbox (rutas confinadas en `user_data/sandbox/`). |
+| `--clean-sandbox` | *Ninguno* | Purga y elimina por completo el entorno aislado `user_data/sandbox/`. |
 | `-h, --help` | *Ninguno* | Muestra la ayuda rápida de sintaxis CLI. |
 
 ---
@@ -380,6 +425,69 @@ Para facilitar el control de flujo en scripts o pipelines de integración contin
 | **`4`** | **Error Criptográfico** | Contraseña GPG incorrecta o archivo vault dañado/corrupto. |
 | **`5`** | **Argumento Inválido** | Parámetros CLI faltantes o no reconocidos. |
 | **`10`** | **Dependencia Faltante** | `whiptail` u otra herramienta indispensable no está instalada en el sistema. |
+
+---
+
+### 4.6 Entorno de Pruebas y Desarrollo (Modo Sandbox)
+
+Para facilitar la verificación manual, desarrollo de nuevas recetas o pruebas de flujos completos sin alterar el repositorio Git ni contaminar los directorios de producción (`config/`, `modules.d/`, `profiles/`), **KeepMyConfig** incorpora el **Modo Sandbox / Test Mode**.
+
+#### 4.6.1 Activación del Modo Sandbox
+El modo sandbox puede activarse de tres formas equivalentes:
+1. **Flag CLI explícito:**
+   ```bash
+   ./backup_manager.sh --test-mode
+   # o bien:
+   ./backup_manager.sh --sandbox
+   ```
+2. **Combinado con cualquier comando CLI:**
+   ```bash
+   ./backup_manager.sh --test-mode --backup-all
+   ./backup_manager.sh --test-mode --enable-template firefox
+   ./backup_manager.sh --test-mode --create-profile docente
+   ./backup_manager.sh --test-mode --list-modules
+   ```
+3. **Variable de entorno:**
+   ```bash
+   KEEP_MY_CONFIG_TEST_MODE=true ./backup_manager.sh
+   ```
+
+#### 4.6.2 Arquitectura y Aislamiento de Rutas
+Al activarse, el sistema inicializa de forma transparente una réplica completa del entorno confinado bajo `user_data/sandbox/`:
+- **Home Virtual de Pruebas (`user_data/sandbox/home/`):**
+  - Confinamiento estricto de `TARGET_USER_HOME="${sandbox_base}/home"`.
+  - El sistema siembra automáticamente datos de prueba sintéticos para todas las recetas base:
+    - **Bash y Entorno:** `.bashrc`, `.bash_aliases`, `.profile`, `.bash_logout`.
+    - **SSH (Vault & Shred):** `.ssh/id_rsa`, `.ssh/id_rsa.pub`, `.ssh/id_ed25519`, `.ssh/id_ed25519.pub`, `.ssh/config`, `.ssh/known_hosts`.
+    - **VSCode:** `.config/Code/User/settings.json`, `keybindings.json`, `snippets/bash.json`, `globalStorage/state.vscdb`, `sync/sync_state.json`.
+    - **Desarrollo y Navegación:** `.gitconfig`, `.config/git/ignore`, `.mozilla/firefox/testprofile.default/prefs.js`, `.config/JetBrains/IdeaIC2024.1/idea.properties`, `.thunderbird/testprofile.default/prefs.js`, `.config/libreoffice/4/user/registrymodifications.xcu`.
+  - **Pruebas Seguras de Purga Sensible (`shred -u`):** Permite verificar en vivo la destrucción irrecuperable de claves y archivos confidenciales sin poner en riesgo jamás los datos reales de `/home/$USER`.
+  - **Regeneración Idempotente:** Ante una purga con `--clean-sandbox`, la siguiente invocación con `--test-mode` vuelve a reconstruir el home virtual íntegro con sus archivos semilla originales.
+- **Configuración Aislada:** `user_data/sandbox/config/config.conf` (con `INITIAL_SETUP_DONE="true"` y `BACKUP_DESTINATION` apuntando a `user_data/sandbox/storage`).
+- **Módulos Aislados:** `user_data/sandbox/modules.d/` (inicia limpio; cualquier plantilla activada o receta creada se escribe aquí sin tocar las carpetas raíz del proyecto).
+- **Perfiles Aislados:** `user_data/sandbox/profiles/` (incluye perfil base `profiles/default/profile.conf`).
+- **Almacenamiento Aislado:** `user_data/sandbox/storage/` (con su propio marcador `.backup_storage_marker` y subcarpetas `archives/` y `logs/`).
+
+> [!NOTE]
+> La carpeta `user_data/` está excluida permanentemente en el archivo `.gitignore`. Ningún archivo generado durante las pruebas en sandbox figurará jamás en `git status`, evitando ensuciar el árbol de trabajo.
+
+#### 4.6.3 Indicadores Visuales y Trazabilidad de Rutas
+- **Interfaz TUI (Whiptail):** El título del menú principal refleja explícitamente el entorno de pruebas:
+  ```text
+  KeepMyConfig [SANDBOX] [Perfil: default]
+  ```
+  Al completar operaciones de backup, restauración o purga, los cuadros de diálogo muestran **rutas absolutas completas** del home virtual (`user_data/sandbox/home/...`), del archivo generado en `storage/archives/` y de los ficheros eliminados con `shred -u`.
+- **Línea de Comandos (CLI):** Cada ejecución emite una advertencia visual formateada:
+  ```text
+  [AVISO] Ejecutando en MODO TEST / SANDBOX (Rutas aisladas en user_data/sandbox/)
+  ```
+
+#### 4.6.4 Purga y Reseteo (`--clean-sandbox`)
+Para eliminar por completo el entorno sandbox y liberar espacio:
+```bash
+./backup_manager.sh --clean-sandbox
+```
+Este comando elimina la carpeta `user_data/sandbox/` (incluyendo su home virtual y almacenamiento de prueba) y confirma la purga en la terminal.
 
 ---
 
@@ -490,6 +598,138 @@ POST_RESTORE_HOOK() {
 
 ---
 
+### 5.5 Sistema de Perfiles de Backup y Scoped Modules
+
+KeepMyConfig incluye un sistema de perfiles que permite aislar entornos de trabajo (por ejemplo: `docente`, `desarrollo`, `administracion`) adaptando qué recetas se procesan y a qué carpeta de almacenamiento se destinan.
+
+#### Estructura de un Perfil (`profiles/<perfil_id>/`)
+Cada perfil reside en un subdirectorio propio dentro de `profiles/`:
+```text
+profiles/
+├── default/                  # Perfil base conceptual
+└── docente/
+    ├── profile.conf          # Metadatos y destino específico
+    └── modules.d/            # Módulos propios del perfil
+        ├── custom-eval.conf  # Módulo exclusivo (solo visible en 'docente')
+        └── bash-env.conf     # Módulo sobrescrito (Override sobre el global)
+```
+
+#### Fichero de Metadatos (`profile.conf`)
+```ini
+PROFILE_ID="docente"
+PROFILE_NAME="Perfil Docente"
+PROFILE_DESCRIPTION="Entorno educativo para docencia de FP"
+TARGET_SUBDIR="Backups/Docente"
+# Módulos globales excluidos específicamente en este perfil:
+DISABLED_MODULES=("firefox" "thunderbird")
+```
+
+#### Resolución en Cascada de Módulos
+Cuando se ejecuta una operación bajo un perfil activo:
+1. **Exclusión de Módulos Globales:** Si un módulo global está listado en `DISABLED_MODULES` dentro del `profile.conf` del perfil activo, es omitido automáticamente de los listados y de las operaciones de respaldo colectivas (`--backup-all`, `--backup-tag`).
+2. **Sobrescritura (*Override*):** Si existe `profiles/<perfil>/modules.d/<modulo>.conf`, prevalece sobre la versión global `modules.d/<modulo>.conf`.
+3. **Módulo Exclusivo:** Si un módulo solo existe dentro de `profiles/<perfil>/modules.d/`, solo será visible y ejecutable cuando ese perfil esté activo.
+4. **Módulo Global:** Las recetas definidas en `modules.d/` están siempre disponibles como base para todos los perfiles salvo que sean sobrescritas o excluidas.
+5. **Deduplicación:** Las operaciones colectivas (`--backup-all`, `--list-modules`) presentan una vista unificada sin duplicados, indicando el ámbito `[Global]`, `[Override]` o `[Exclusivo]`.
+
+#### Uso desde CLI
+```bash
+# Crear un nuevo perfil
+./backup_manager.sh --create-profile docente
+
+# Establecerlo como predeterminado
+./backup_manager.sh --set-active-profile docente
+
+# Ejecutar una operación puntual bajo un perfil temporal
+./backup_manager.sh --profile dev --backup-all
+```
+
+---
+
+### 5.6 Biblioteca de Plantillas (`templates.d/`) y Exclusiones en Perfiles
+
+#### Principio de Estado Inicial Limpio
+Por diseño, una nueva instalación de **KeepMyConfig** arranca sin ningún módulo activo en `modules.d/`. Esto previene respaldos accidentales indeseados antes de que el usuario haya seleccionado conscientemente qué aplicaciones desea proteger. Si se invoca `--backup-all` sin módulos configurados, la herramienta no falla ni arroja un error crítico; en su lugar, despliega una guía amigable indicando cómo activar recetas desde la biblioteca de plantillas.
+
+#### Catálogo Oficial de Recetas Predefinidas (`templates.d/`)
+El directorio `templates.d/` incluye plantillas listas para su activación inmediata:
+
+| Receta de Plantilla | ID | Descripción | Sensible / Purga | Etiquetas |
+| :--- | :--- | :--- | :---: | :--- |
+| `bash-env.conf` | `bash-env` | Entorno Bash (`.bashrc`, `.bash_aliases`, `~/.local/bin`) | No / No | `system`, `shell`, `dev` |
+| `firefox.conf` | `firefox` | Marcadores y perfiles de Mozilla Firefox | No / No | `browser`, `web`, `user` |
+| `git-config.conf` | `git-config` | Configuración global Git (`.gitconfig`, `.gitignore_global`) | No / No | `git`, `dev`, `tools` |
+| `intellij.conf` | `intellij` | Preferencias y configuraciones de IDEs JetBrains / IntelliJ | No / No | `ide`, `dev`, `jetbrains` |
+| `libreoffice.conf` | `libreoffice` | Perfiles de usuario y plantillas de LibreOffice | No / No | `office`, `desktop`, `docs` |
+| `ssh-keys.conf` | `ssh-keys` | Llaves privadas/públicas SSH y config (`~/.ssh/`) | **Sí / Sí** | `security`, `ssh`, `keys`, `sensitive` |
+| `thunderbird.conf` | `thunderbird` | Perfiles de correo de Mozilla Thunderbird | No / No | `mail`, `desktop`, `user` |
+| `vscode-sensitive.conf` | `vscode-sensitive` | Credenciales, tokens y auth de Visual Studio Code | **Sí / Sí** | `editor`, `vscode`, `sensitive` |
+| `vscode-standard.conf` | `vscode-standard` | Ajustes, atajos y snippets de Visual Studio Code | No / No | `editor`, `vscode`, `dev` |
+| `template-skeleton.conf` | N/A | Esqueleto canónico exhaustivamente comentado para crear nuevas recetas | N/A | N/A |
+
+#### Esqueleto Canónico (`template-skeleton.conf`)
+Para desarrolladores o administradores de aula que deseen crear nuevas recetas, se incluye `templates.d/template-skeleton.conf`:
+```bash
+# Identificador único (minúsculas, números y guiones)
+MODULE_ID="mi-herramienta"
+
+# Nombre legible para interfaces TUI/CLI
+MODULE_NAME="Mi Herramienta de Trabajo"
+
+# Etiquetas para agrupación por lotes (--backup-tag)
+MODULE_TAGS=("dev" "tools")
+
+# Rutas relativas al $HOME del usuario (NUNCA incluir /home/<user> ni $HOME)
+MODULE_PATHS=(
+    ".config/mi-herramienta/config.json"
+    ".mi-herramienta/plugins"
+)
+
+# Confidencialidad: true si requiere cifrado GPG AES-256
+IS_SENSITIVE=false
+
+# Purga segura: true si debe eliminarse con 'shred -u' del equipo de origen tras respaldar
+PURGE_AFTER_BACKUP=false
+
+# Hook opcional en Bash tras la restauración (ej. restablecer permisos)
+POST_RESTORE_HOOK=""
+```
+
+#### Activación de Plantillas en TUI y CLI
+
+**Desde la TUI (Interfaz Interactiva):**
+1. Acceda a la **Opción 7: `[MODULES] Administrar Módulos, Plantillas y Etiquetas`**.
+2. Seleccione la acción **`Activar módulo desde plantilla`**.
+3. El sistema listará todas las plantillas disponibles con sus descripciones y nivel de seguridad.
+4. Elija la plantilla deseada.
+5. Si el perfil activo es distinto de `default`, el sistema le preguntará si desea activarla a nivel **Global** (visible para todos los perfiles) o **Exclusivo del Perfil Activo**.
+
+**Desde la CLI (Línea de Comandos):**
+```bash
+# 1. Explorar el catálogo de plantillas
+./backup_manager.sh --list-templates
+
+# 2. Activar una plantilla en el catálogo global (cuando el perfil es default)
+./backup_manager.sh --enable-template firefox
+
+# 3. Activar una plantilla para un perfil específico (ej. docente)
+./backup_manager.sh --profile docente --enable-template git-config
+
+# 4. Promover un módulo activo personalizado a la biblioteca de plantillas
+./backup_manager.sh --export-template mi-modulo-personal
+```
+
+#### Gestión de Exclusiones en Perfiles (`DISABLED_MODULES`)
+
+Cuando un módulo global (como `firefox` o `thunderbird`) no sea necesario o no deba respaldarse en un perfil especializado (por ejemplo, en un perfil de sólo código o de administración):
+1. Inicie la TUI y vaya a la **Opción 9: `[PROFILES] Gestión de Perfiles de Backup`**.
+2. Seleccione la opción **`5) Gestionar exclusiones de módulos globales`**.
+3. Marque en la checklist interactiva qué módulos globales deben quedar desactivados en el perfil actual.
+4. El sistema guardará la directiva `DISABLED_MODULES=("...")` en el `profile.conf` del perfil.
+5. Al invocar backups bajo ese perfil, los módulos excluidos serán ignorados de forma transparente.
+
+---
+
 ## Capítulo 6: Auditoría, Logs y Resolución de Problemas (Troubleshooting)
 
 ### 6.1 Árbol de Directorios en la Unidad Externa
@@ -528,12 +768,13 @@ Una vez realizadas las primeras copias, la carpeta configurada en su unidad exte
 ### 6.3 Matriz de Resolución de Incidencias
 
 #### Caso 1: Error `STORAGE_MARKER_MISSING` (Código de salida `2`)
-- **Síntoma:** El sistema muestra: `No se detectó el SSD externo de backup o falta el marcador de seguridad.`
-- **Causa:** El disco no está conectado, está montado bajo otra etiqueta, o no se ha creado el archivo testigo.
+- **Síntoma:** El sistema muestra: `No se detectó el almacenamiento de backup o falta el marcador de seguridad.`
+- **Causa:** La ruta definida en `BACKUP_DESTINATION` no es accesible, el disco externo no está montado, o la carpeta no contiene el archivo testigo `.backup_storage_marker`.
 - **Solución:**
-  1. Compruebe la conexión del disco con `lsblk -f`.
-  2. Verifique que `config/config.conf` apunte a la etiqueta correcta.
-  3. Asegúrese de que el archivo `.backup_storage_marker` exista dentro del subdirectorio configurado (`Backups/Lliurex25/.backup_storage_marker`).
+  1. Ejecute `./backup_manager.sh --check-device` para auditar la ruta configurada.
+  2. Si utiliza un disco externo, compruebe con `lsblk -f` que esté montado en `/media/$USER/` o `/run/media/$USER/`.
+  3. Ejecute `./backup_manager.sh --setup` para inicializar automáticamente la carpeta y desplegar el marcador de seguridad.
+  4. Desde el menú interactivo, acceda a la **Opción 8** y seleccione *Inicializar nueva subcarpeta en el almacenamiento*.
 
 #### Caso 2: Error de Cifrado o Descifrado GPG (Código de salida `4`)
 - **Síntoma:** `Fallo al descifrar el módulo. Compruebe la contraseña introducida.`
