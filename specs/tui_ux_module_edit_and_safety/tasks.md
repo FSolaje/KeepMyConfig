@@ -117,11 +117,11 @@
 ---
 
 ## Fase 8: Sincronización Mandatoria de Documentación Pública
-- [ ] Actualizar [`README.md`](../../README.md) reflejando el menú híbrido, temas visuales y asistente de edición.
-- [ ] Actualizar [`MANUAL_USUARIO.md`](../../MANUAL_USUARIO.md) con los nuevos diagramas de flujo TUI, temas de color y pre-flight gate.
-- [ ] Actualizar [`CHANGELOG.md`](../../CHANGELOG.md) bajo la sección `[Unreleased]`.
-- [ ] Actualizar [`PROXIMOS_PASOS.md`](../../PROXIMOS_PASOS.md).
-- [ ] Ejecutar escáner SAST obligatorio.
+- [x] Actualizar [`README.md`](../../README.md) reflejando el menú híbrido, temas visuales y asistente de edición.
+- [x] Actualizar [`MANUAL_USUARIO.md`](../../MANUAL_USUARIO.md) con los nuevos diagramas de flujo TUI, temas de color y pre-flight gate.
+- [x] Actualizar [`CHANGELOG.md`](../../CHANGELOG.md) bajo la sección `[Unreleased]`.
+- [x] Actualizar [`PROXIMOS_PASOS.md`](../../PROXIMOS_PASOS.md).
+- [x] Ejecutar escáner SAST obligatorio.
 - [ ] **Hito de Commit 8 (docs - aislado):**
   ```bash
   docs: documentar menu universal, edicion de modulos, safety gate y temas TUI en manual y changelog
