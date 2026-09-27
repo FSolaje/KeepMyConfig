@@ -151,6 +151,38 @@ _sandbox_seed_virtual_home() {
     return 0
 }
 
+_sandbox_seed_modules() {
+    local target_modules_dir="$1"
+    local base_dir="$2"
+    local tmpl_dir="${base_dir}/templates.d"
+    local global_mods_dir="${base_dir}/modules.d"
+
+    # Verificar si el catálogo de modules.d del sandbox ya tiene recetas .conf
+    local count=0
+    if [[ -d "$target_modules_dir" ]]; then
+        count=$(find "$target_modules_dir" -maxdepth 1 -name "*.conf" 2>/dev/null | wc -l)
+    fi
+
+    if (( count == 0 )); then
+        local g_count=0
+        if [[ -d "$global_mods_dir" ]]; then
+            g_count=$(find "$global_mods_dir" -maxdepth 1 -name "*.conf" 2>/dev/null | wc -l)
+        fi
+        if (( g_count > 0 )); then
+            cp "$global_mods_dir"/*.conf "$target_modules_dir/" 2>/dev/null || true
+        elif [[ -d "$tmpl_dir" ]]; then
+            # Sembrar recetas canónicas de prueba desde templates.d
+            local seed_templates=("bash-env.conf" "ssh-keys.conf" "vscode-standard.conf" "vscode-sensitive.conf" "git-config.conf")
+            for tmpl in "${seed_templates[@]}"; do
+                if [[ -f "$tmpl_dir/$tmpl" ]]; then
+                    cp "$tmpl_dir/$tmpl" "$target_modules_dir/" 2>/dev/null || true
+                fi
+            done
+        fi
+    fi
+    return 0
+}
+
 controller_enable_sandbox_mode() {
     IS_SANDBOX_MODE="true"
     local base_dir="${CONTROLLER_BASE_DIR:-}"
@@ -229,6 +261,9 @@ DISABLED_MODULES=()
 EOF
         fi
     fi
+
+    # 5.1. Desplegar recetas de prueba en modules.d del sandbox si está vacío
+    _sandbox_seed_modules "${sandbox_base}/modules.d" "$base_dir"
 
     # 6. Redirigir variables operativas hacia el entorno sandbox
     TARGET_USER_HOME="${sandbox_base}/home"
@@ -469,6 +504,10 @@ controller_handle_backup_tag() {
             for t in $all_tags; do
                 tag_items+=("$t" "Etiqueta: $t" "OFF")
             done
+            if [[ ${#tag_items[@]} -eq 0 ]]; then
+                whiptail_view_msgbox "Sin Etiquetas" "No hay etiquetas configuradas en el sistema.\n\nPuede asignar etiquetas a los módulos desde la administración de módulos."
+                return 0
+            fi
             tag=$(whiptail_view_radiolist "Seleccionar Etiqueta" "Elija la etiqueta a respaldar:" "${tag_items[@]}") || return 0
             [[ -z "$tag" ]] && return 0
         else
@@ -584,6 +623,12 @@ controller_handle_backup_module() {
                 mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
                 mod_items+=("$m" "$mname" "OFF")
             done
+            if [[ ${#mod_items[@]} -eq 0 ]]; then
+                local act_prof
+                act_prof=$(_controller_get_active_profile)
+                whiptail_view_msgbox "Sin Módulos Activos" "No hay módulos configurados para respaldar en el perfil '$act_prof'.\n\nPuede activar recetas desde la administración de módulos y plantillas."
+                return 0
+            fi
             module_id=$(whiptail_view_radiolist "Seleccionar Módulo" "Elija el módulo individual a respaldar:" "${mod_items[@]}") || return 0
             [[ -z "$module_id" ]] && return 0
         else
@@ -736,6 +781,12 @@ controller_handle_restore_module() {
                 mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
                 mod_items+=("$m" "$mname" "OFF")
             done
+            if [[ ${#mod_items[@]} -eq 0 ]]; then
+                local act_prof
+                act_prof=$(_controller_get_active_profile)
+                whiptail_view_msgbox "Sin Módulos" "No hay módulos registrados en el perfil activo '$act_prof'.\n\nPuede activar recetas desde la administración de módulos."
+                return 0
+            fi
             module_id=$(whiptail_view_radiolist "Seleccionar Módulo" "Elija el módulo a restaurar:" "${mod_items[@]}") || return 0
             [[ -z "$module_id" ]] && return 0
         else
