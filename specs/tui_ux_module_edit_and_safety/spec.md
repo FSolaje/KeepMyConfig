@@ -34,9 +34,9 @@ Los objetivos fundamentales de esta especificación son:
   - La regla de que rutas relativas (ej. `Trabajo/Docente`) se alojan dentro del destino base.
   - La regla de que rutas absolutas (`/...`) o con tilde (`~/...`) se tratan como destinos independientes.
 
-### RF-03: Asistente de Edición de Módulos en TUI
+### RF-03: Asistente de Edición de Módulos y Control de Estado (Flag Activo/Inactivo)
 - **RF-03.1:** Incorporar la opción `2) ✏️ [MÓDULOS] Modificar un Módulo Existente` en el menú de administración de módulos.
-- **RF-03.2:** Mostrar selector de módulos activos indicando su ámbito (`[Global]` o `[Perfil: <id>]`).
+- **RF-03.2:** Mostrar selector de módulos activos indicando su ámbito (`[Global]` o `[Perfil: <id>]`) y su estado (`[ON]` o `[OFF]`).
 - **RF-03.3:** Si el usuario selecciona un módulo global estando en un perfil específico (no `default`), preguntar si desea crear un *Override* exclusivo para su perfil o modificar la receta global compartida.
 - **RF-03.4:** Precargar los valores actuales del módulo:
   - Nombre descriptivo (caja de texto).
@@ -44,9 +44,28 @@ Los objetivos fundamentales de esta especificación son:
   - Etiquetas asignadas (checklist con etiquetas actuales en `ON`).
   - Sensibilidad (`IS_SENSITIVE`): Sí/No.
   - Purga automática post-backup (`PURGE_AFTER_BACKUP`): Sí/No (solo si es sensible).
-- **RF-03.5:** Persistencia atómica mediante `module_model_save`.
+  - Estado del módulo (`MODULE_ENABLED`): Activo (Sí) / Inactivo (No).
+- **RF-03.5:** Persistencia atómica mediante `module_model_save` o funciones de actualización de campo.
+- **RF-03.6 (Directiva `MODULE_ENABLED` en recetas):**
+  - Cada receta `.conf` admite `MODULE_ENABLED="true"` o `MODULE_ENABLED="false"`.
+  - Si la variable no está presente, se asume `"true"` por retrocompatibilidad.
+  - Los módulos con `MODULE_ENABLED="false"` se consideran inactivos globalmente y se ignoran en operaciones colectivas (`--backup-all`, `--restore-all`).
+- **RF-03.7 (Gestión CLI y TUI de Activación/Desactivación):**
+  - CLI: Subcomandos `--enable-module <id>` y `--disable-module <id>`.
+  - TUI: Conmutación rápida de estado desde el menú de módulos.
+- **RF-03.8 (Desbloqueo de `DISABLED_MODULES` en Perfil `default`):**
+  - Levantar la restricción que impedía al perfil `default` registrar exclusiones en `DISABLED_MODULES`.
+  - Permitir que el perfil `default` excluya módulos globales sin requerir su eliminación física de `modules.d/`.
+- **RF-03.9 (Sincronización Inteligente de Etiqueta Sensitive y Cifrado GPG):**
+  - Si el usuario selecciona la etiqueta `sensitive` en el checklist, se activa directamente el cifrado GPG (`IS_SENSITIVE="true"`) sin formular preguntas redundantes.
+  - Si el usuario NO selecciona la etiqueta `sensitive`, no se formula la pregunta conceptual sobre datos sensibles, pero se ofrece directamente la opción técnica: *"¿Desea cifrar este módulo con GPG (AES-256) por seguridad?"*. Si el usuario acepta, se fija `IS_SENSITIVE="true"` y se añade automáticamente la etiqueta `sensitive` al módulo. Si rechaza, `IS_SENSITIVE="false"`.
+- **RF-03.10 (Consentimiento Activo y Disponibilidad Universal para Purga `shred -u`):**
+  - La opción de purga automática post-backup (`PURGE_AFTER_BACKUP="true"`) se ofertará universalmente para cualquier módulo, **tanto si está marcado como sensible/cifrado como si no lo está**.
+  - La purga destructiva de archivos en origen requiere siempre y sin excepción la aceptación activa, deliberada y afirmativa del usuario. Jamás se asumirá la purga por inferencia o de forma silenciosa.
+  - En la creación o edición interactiva de módulos, la consulta sobre activación de purga debe configurarse con foco predeterminado obligatorio en **[NO]** (`whiptail_view_confirm_critical` / `--defaultno`).
+  - Al activar plantillas que contengan `PURGE_AFTER_BACKUP="true"` de fábrica (ej. `ssh-keys`), el asistente alertará del riesgo y solicitará consentimiento activo con foco en **[NO]** para conservar la purga; si el usuario pulsa `[NO]` o cancela, el módulo se activará con `PURGE_AFTER_BACKUP="false"` para proteger los archivos locales.
 
-### RF-04: Resolución Inteligente de Colisiones en Plantillas
+### RF-04: Resolución Inteligente de Colisiones y Activación Guiada de Plantillas
 - **RF-04.1:** Al activar una plantilla (`controller_handle_enable_template`), si ya existe un módulo con ese ID en el destino:
   - Mostrar un menú de 3 opciones:
     1. *Clonar / Derivar con nuevo nombre:* Solicitar nuevo ID y nombre (sugiriendo `<id>-copia` o `<id>-<perfil>`).
@@ -56,6 +75,10 @@ Los objetivos fundamentales de esta especificación son:
   - Flag `--as-module <nuevo_id>`: Asigna el identificador derivado directamente.
   - Flag `--force`: Sobrescribe sin confirmación interactiva.
 - **RF-04.3:** Comportamiento simétrico al exportar un módulo activo a la biblioteca de plantillas si colisiona con una existente.
+- **RF-04.4 (Ficha Técnica y Confirmación Previa de Activación):**
+  - Antes de activar una plantilla, presentar al usuario una ficha técnica con su resumen completo (ID, Nombre, Descripción, Rutas a respaldar, Etiquetas, Cifrado GPG y Purga Shred), solicitando confirmación explícita para proceder.
+- **RF-04.5 (Selector Universal de Ámbito de Activación):**
+  - Al activar una plantilla desde cualquier perfil (incluido `default`), ofrecer siempre la opción de registrarla en el *Catálogo Global* (`modules.d/`) o como *Exclusiva del Perfil Activo* (`profiles/<perfil>/modules.d/`).
 
 ### RF-05: Pre-Flight Safety Gate y Matriz de Acciones Críticas
 - **RF-05.1:** Antes de iniciar cualquier copia (`backup-all`, `backup-tag`, `backup-module`), generar la matriz pre-flight de módulos:
