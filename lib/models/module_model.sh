@@ -65,7 +65,7 @@ module_model_get() {
 
     # Carga segura y validación de tipos en subshell aislada
     (
-        unset MODULE_ID MODULE_NAME MODULE_TAGS MODULE_PATHS IS_SENSITIVE PURGE_AFTER_BACKUP POST_RESTORE_HOOK
+        unset MODULE_ID MODULE_NAME MODULE_TAGS MODULE_PATHS IS_SENSITIVE PURGE_AFTER_BACKUP POST_RESTORE_HOOK MODULE_ENABLED
         # shellcheck disable=SC1090
         source "$conf_file" || exit "$MOD_ERR_SYNTAX"
 
@@ -88,6 +88,9 @@ module_model_get() {
         [[ "${IS_SENSITIVE:-}" =~ ^(true|false)$ ]] || exit "$MOD_ERR_MISSING_FIELD"
         [[ "${PURGE_AFTER_BACKUP:-}" =~ ^(true|false)$ ]] || exit "$MOD_ERR_MISSING_FIELD"
 
+        local enabled_val="${MODULE_ENABLED:-true}"
+        [[ "$enabled_val" =~ ^(true|false)$ ]] || enabled_val="true"
+
         local tags_joined
         tags_joined=$(IFS=,; echo "${MODULE_TAGS[*]}")
 
@@ -100,6 +103,7 @@ module_model_get() {
         echo "PATHS=$paths_joined"
         echo "IS_SENSITIVE=$IS_SENSITIVE"
         echo "PURGE_AFTER_BACKUP=$PURGE_AFTER_BACKUP"
+        echo "ENABLED=$enabled_val"
         echo "POST_RESTORE_HOOK=${POST_RESTORE_HOOK:-}"
         exit "$MOD_OK"
     )
@@ -194,6 +198,72 @@ module_model_filter_by_sensitivity() {
 
     [[ $found -eq 1 ]] && return "$MOD_OK"
     return "$MOD_ERR_NOT_FOUND"
+}
+
+# ------------------------------------------------------------------------------
+# Función: module_model_is_enabled
+# Descripción: Determina si un módulo está habilitado en su archivo .conf.
+# Parámetros:
+#   $1 - ID del módulo o ruta al archivo .conf
+#   $2 - (Opcional) Directorio de módulos alternativo
+# Retorno:
+#   0 si está habilitado (true o ausente), 1 si está deshabilitado (false).
+# ------------------------------------------------------------------------------
+module_model_is_enabled() {
+    local mod_input="${1:-}"
+    local modules_dir="${2:-${MODULES_DIR:-$_MODULE_MODEL_DEFAULT_DIR}}"
+    local conf_file="$mod_input"
+
+    if [[ ! -f "$conf_file" ]]; then
+        conf_file="$modules_dir/${mod_input}.conf"
+    fi
+    [[ -f "$conf_file" && -r "$conf_file" ]] || return 1
+
+    local enabled_val
+    enabled_val=$( (
+        unset MODULE_ENABLED
+        # shellcheck disable=SC1090
+        source "$conf_file" 2>/dev/null || true
+        echo "${MODULE_ENABLED:-true}"
+    ) )
+
+    [[ "$enabled_val" != "false" ]]
+}
+
+# ------------------------------------------------------------------------------
+# Función: module_model_set_enabled
+# Descripción: Conmuta de forma atómica la directiva MODULE_ENABLED en el archivo .conf.
+# Parámetros:
+#   $1 - ID del módulo o ruta al archivo .conf
+#   $2 - true o false
+#   $3 - (Opcional) Directorio de módulos alternativo
+# Retorno:
+#   0 en éxito, código de error en fallo.
+# ------------------------------------------------------------------------------
+module_model_set_enabled() {
+    local mod_input="${1:-}"
+    local new_val="${2:-true}"
+    local modules_dir="${3:-${MODULES_DIR:-$_MODULE_MODEL_DEFAULT_DIR}}"
+    local conf_file="$mod_input"
+
+    if [[ ! -f "$conf_file" ]]; then
+        conf_file="$modules_dir/${mod_input}.conf"
+    fi
+    [[ -f "$conf_file" && -w "$conf_file" ]] || return "$MOD_ERR_NOT_FOUND"
+    [[ "$new_val" =~ ^(true|false)$ ]] || return "$MOD_ERR_CONFIG"
+
+    if grep -q '^MODULE_ENABLED=' "$conf_file"; then
+        sed -i "s|^MODULE_ENABLED=.*|MODULE_ENABLED=\"$new_val\"|" "$conf_file"
+    else
+        if grep -q '^MODULE_NAME=' "$conf_file"; then
+            sed -i "/^MODULE_NAME=/a MODULE_ENABLED=\"$new_val\"" "$conf_file"
+        else
+            echo "MODULE_ENABLED=\"$new_val\"" >> "$conf_file"
+        fi
+    fi
+
+    bash -n "$conf_file" 2>/dev/null || return "$MOD_ERR_SYNTAX"
+    return "$MOD_OK"
 }
 
 # ------------------------------------------------------------------------------
@@ -306,6 +376,7 @@ module_model_save() {
     local purge_after="${6:-false}"
     local hook="${7:-}"
     local modules_dir="${8:-$_MODULE_MODEL_DEFAULT_DIR}"
+    local is_enabled="${9:-true}"
 
     module_model_validate_id "$mod_id" || return "$MOD_ERR_INVALID_ID"
     [[ -n "$name" ]] || return "$MOD_ERR_CONFIG"
@@ -354,6 +425,7 @@ module_model_save() {
 
 MODULE_ID="$mod_id"
 MODULE_NAME="$name"
+MODULE_ENABLED="$is_enabled"
 MODULE_TAGS=($tags_formatted)
 
 MODULE_PATHS=(

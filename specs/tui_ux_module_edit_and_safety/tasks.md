@@ -41,19 +41,19 @@
 ---
 
 ## Fase 3: Asistente de Edición de Módulos y Control de Estado (Flag Activo/Inactivo)
-- [ ] Implementar `module_model_is_enabled` y `module_model_set_enabled` en `lib/models/module_model.sh`.
-- [ ] Desbloquear `DISABLED_MODULES` para el perfil `default` en `lib/models/profile_model.sh`.
-- [ ] Implementar subcomandos CLI `--enable-module <id>` y `--disable-module <id>` en `lib/controllers/app_controller.sh` y `backup_manager.sh`.
-- [ ] Implementar sincronización inteligente entre etiqueta `sensitive` y cifrado GPG en creación y edición de módulos (activación directa si marcada; consulta técnica directa si no marcada).
-- [ ] Aplicar consentimiento activo obligatorio con foco en `[NO]` (`whiptail_view_confirm_critical`) para la opción de purga (`shred -u`) al crear o editar módulos, ofertándola universalmente para módulos sensibles y no sensibles.
-- [ ] Implementar `controller_handle_edit_module` en `lib/controllers/app_controller.sh`.
-- [ ] Añadir selector de módulo activo con indicación de ámbito (`[Global]` o `[Perfil: <id>]`) y estado (`[ON]` o `[OFF]`).
-- [ ] Implementar bifurcación de *Override* si se edita un módulo global desde un perfil específico.
-- [ ] Precargar y permitir editar: nombre descriptivo, rutas (con `whiptail_view_input_paths`), etiquetas (checklist), sensible (GPG), purga (`shred -u`) y estado (`MODULE_ENABLED`).
-- [ ] Integrar la opción `2) ✏️ [MÓDULOS] Modificar un Módulo Existente` y conmutador rápido de estado en el menú de módulos.
-- [ ] Adaptar `--backup-all` y `--restore-all` para ignorar módulos con `MODULE_ENABLED="false"`.
-- [ ] Verificar edición interactiva y persistencia correcta en el archivo `.conf`.
-- [ ] **Hito de Commit 3 (feat):**
+- [x] Implementar `module_model_is_enabled` y `module_model_set_enabled` en `lib/models/module_model.sh`.
+- [x] Desbloquear `DISABLED_MODULES` para el perfil `default` en `lib/models/profile_model.sh`.
+- [x] Implementar subcomandos CLI `--enable-module <id>` y `--disable-module <id>` en `lib/controllers/app_controller.sh` y `backup_manager.sh`.
+- [x] Implementar sincronización inteligente entre etiqueta `sensitive` y cifrado GPG en creación y edición de módulos (activación directa si marcada; consulta técnica directa si no marcada).
+- [x] Aplicar consentimiento activo obligatorio con foco en `[NO]` (`whiptail_view_confirm_critical`) para la opción de purga (`shred -u`) al crear o editar módulos, ofertándola universalmente para módulos sensibles y no sensibles.
+- [x] Implementar `controller_handle_edit_module` en `lib/controllers/app_controller.sh`.
+- [x] Añadir selector de módulo activo con indicación de ámbito (`[Global]` o `[Perfil: <id>]`) y estado (`[ON]` o `[OFF]`).
+- [x] Implementar bifurcación de *Override* si se edita un módulo global desde un perfil específico.
+- [x] Precargar y permitir editar: nombre descriptivo, rutas (con `whiptail_view_input_paths`), etiquetas (checklist), sensible (GPG), purga (`shred -u`) y estado (`MODULE_ENABLED`).
+- [x] Integrar la opción `2) ✏️ [MÓDULOS] Modificar un Módulo Existente` y conmutador rápido de estado en el menú de módulos.
+- [x] Adaptar `--backup-all` y `--restore-all` para ignorar módulos con `MODULE_ENABLED="false"`.
+- [x] Verificar edición interactiva y persistencia correcta en el archivo `.conf`.
+- [x] **Hito de Commit 3 (feat):**
   ```bash
   feat(modules): implementar asistente de edicion interactiva de modulos y flag de estado
   ```
