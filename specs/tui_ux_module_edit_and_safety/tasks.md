@@ -90,12 +90,12 @@
 ---
 
 ## Fase 6: Arquitectura Universal de Menús TUI y Paletas de Color
-- [ ] Implementar `whiptail_view_apply_theme` en `lib/views/whiptail_view.sh` con el catálogo `NEWT_COLORS` (`midnight`, `cyberdark`, `aubergine`, `amber`, `default`).
-- [ ] Cargar `TUI_THEME` desde `config/config.conf` e inicializar tema al arranque de la TUI.
-- [ ] Reestructurar `controller_run_tui` aplicando el Menú Principal híbrido (Menú 1).
-- [ ] Implementar los Submenús 2 (Opciones de Respaldo), 3 (Recuperación) y 7 (Ajustes y Temas).
-- [ ] Homogeneizar los Submenús 4 (Perfiles), 5 (Módulos) y 6 (Almacenamiento) con badges alineados, iconografía Unicode y atajos numéricos homogéneos.
-- [ ] **Hito de Commit 6 (feat):**
+- [x] Implementar `whiptail_view_apply_theme` en `lib/views/whiptail_view.sh` con el catálogo `NEWT_COLORS` (`midnight`, `cyberdark`, `aubergine`, `amber`, `default`).
+- [x] Cargar `TUI_THEME` desde `config/config.conf` e inicializar tema al arranque de la TUI.
+- [x] Reestructurar `controller_run_tui` aplicando el Menú Principal híbrido (Menú 1).
+- [x] Implementar los Submenús 2 (Opciones de Respaldo), 3 (Recuperación) y 7 (Ajustes y Temas).
+- [x] Homogeneizar los Submenús 4 (Perfiles), 5 (Módulos) y 6 (Almacenamiento) con badges alineados, iconografía Unicode y atajos numéricos homogéneos.
+- [x] **Hito de Commit 6 (feat):**
   ```bash
   feat(tui): aplicar arquitectura universal de menus con badges y paletas de color NEWT_COLORS
   ```
