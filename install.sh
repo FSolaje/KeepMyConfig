@@ -1,0 +1,383 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# KeepMyConfig - Script de Instalación sin Privilegios (Non-Root)
+#
+# Despliega KeepMyConfig en el espacio de usuario cumpliendo los estándares XDG:
+# - Directorio de aplicación : ~/.local/share/KeepMyConfig
+# - Enlace ejecutable en PATH: ~/.local/bin/keepmyconfig
+# - Lanzador de escritorio   : ~/.local/share/applications/keepmyconfig.desktop
+# - Icono SVG escalable      : ~/.local/share/icons/hicolor/scalable/apps/keepmyconfig.svg
+#
+# Cumple con la especificación técnica SDD: specs/packaging_and_distribution/spec.md
+# ==============================================================================
+set -euo pipefail
+
+SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ------------------------------------------------------------------------------
+# Paleta de Colores ANSI (Respetando NO_COLOR)
+# ------------------------------------------------------------------------------
+if [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]]; then
+    COLOR_RESET="\033[0m"
+    COLOR_BOLD="\033[1m"
+    COLOR_GREEN="\033[32m"
+    COLOR_RED="\033[31m"
+    COLOR_YELLOW="\033[33m"
+    COLOR_CYAN="\033[36m"
+else
+    COLOR_RESET=""
+    COLOR_BOLD=""
+    COLOR_GREEN=""
+    COLOR_RED=""
+    COLOR_YELLOW=""
+    COLOR_CYAN=""
+fi
+
+log_info() {
+    echo -e "${COLOR_CYAN}[INFO]${COLOR_RESET} $*"
+}
+
+log_success() {
+    echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} $*"
+}
+
+log_warning() {
+    echo -e "${COLOR_YELLOW}[AVISO]${COLOR_RESET} $*"
+}
+
+log_error() {
+    echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} $*" >&2
+}
+
+show_help() {
+    cat << 'EOF'
+Uso: ./install.sh [OPCIONES]
+
+Instalador en espacio de usuario para KeepMyConfig (no requiere sudo).
+
+Opciones:
+  -y, --yes, --silent     Modo desatendido (no solicita confirmación interactiva)
+  -f, --force             Sobrescribir configuraciones previas existentes
+  -t, --target-dir <dir>  Directorio de destino (por defecto: ~/.local/share/KeepMyConfig)
+  -b, --bin-dir <dir>     Directorio de ejecutables (por defecto: ~/.local/bin)
+  -h, --help              Mostrar esta ayuda y salir
+
+Códigos de salida:
+  0  Instalación completada con éxito
+  1  Error de permisos, directorios o cancelación por el usuario
+  2  Dependencias faltantes del sistema no satisfechas
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Comprobación de Dependencias del Sistema (FR-PKG-004)
+# ------------------------------------------------------------------------------
+check_system_dependencies() {
+    local missing_critical=()
+    local missing_optional=()
+
+    # Dependencias críticas indispensables
+    local critical_deps=("bash" "tar" "gpg" "shred" "sha256sum")
+    for dep in "${critical_deps[@]}"; do
+        if ! command -v "$dep" >/dev/null 2>&1; then
+            missing_critical+=("$dep")
+        fi
+    done
+
+    if [[ ${#missing_critical[@]} -gt 0 ]]; then
+        log_error "Dependencias críticas no encontradas en el sistema: ${missing_critical[*]}"
+        log_error "Por favor, instala los paquetes requeridos antes de continuar."
+        exit 2
+    fi
+
+    # Dependencias opcionales de alto rendimiento y TUI
+    if ! command -v whiptail >/dev/null 2>&1; then
+        missing_optional+=("whiptail (requerido para la interfaz gráfica de terminal TUI)")
+    fi
+    if ! command -v zstd >/dev/null 2>&1; then
+        missing_optional+=("zstd (recomendado para compresión ultra-rápida)")
+    fi
+
+    if [[ ${#missing_optional[@]} -gt 0 ]]; then
+        log_warning "Componentes recomendados no detectados:"
+        for opt in "${missing_optional[@]}"; do
+            echo -e "  • ${COLOR_YELLOW}${opt}${COLOR_RESET}"
+        done
+        log_warning "La aplicación funcionará en modo consola CLI, pero se aconseja instalar las dependencias anteriores."
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Detección del Emulador de Terminal para el Lanzador .desktop (FR-PKG-005)
+# ------------------------------------------------------------------------------
+detect_terminal_emulator() {
+    local term_exec="x-terminal-emulator -e keepmyconfig"
+
+    if command -v x-terminal-emulator >/dev/null 2>&1; then
+        term_exec="x-terminal-emulator -e keepmyconfig"
+    elif command -v gnome-terminal >/dev/null 2>&1; then
+        term_exec="gnome-terminal -- keepmyconfig"
+    elif command -v ptyxis >/dev/null 2>&1; then
+        term_exec="ptyxis -- keepmyconfig"
+    elif command -v konsole >/dev/null 2>&1; then
+        term_exec="konsole -e keepmyconfig"
+    elif command -v xfce4-terminal >/dev/null 2>&1; then
+        term_exec="xfce4-terminal -e keepmyconfig"
+    elif command -v xterm >/dev/null 2>&1; then
+        term_exec="xterm -e keepmyconfig"
+    fi
+
+    echo "$term_exec"
+}
+
+# ------------------------------------------------------------------------------
+# Despliegue de Ficheros en el Directorio Destino
+# ------------------------------------------------------------------------------
+deploy_application_files() {
+    local target_dir="$1"
+    local force="$2"
+
+    mkdir -p "$target_dir"
+    mkdir -p "${target_dir}/config"
+    mkdir -p "${target_dir}/modules.d"
+    mkdir -p "${target_dir}/templates.d"
+    mkdir -p "${target_dir}/profiles/default/modules.d"
+    mkdir -p "${target_dir}/markers"
+    mkdir -p "${target_dir}/assets"
+
+    # 1. Entrypoint ejecutable y desinstalador
+    cp "${SRC_DIR}/backup_manager.sh" "${target_dir}/backup_manager.sh"
+    chmod 755 "${target_dir}/backup_manager.sh"
+
+    if [[ -f "${SRC_DIR}/uninstall.sh" ]]; then
+        cp "${SRC_DIR}/uninstall.sh" "${target_dir}/uninstall.sh"
+        chmod 755 "${target_dir}/uninstall.sh"
+    fi
+
+    # 2. Librerías MVC
+    cp -r "${SRC_DIR}/lib" "${target_dir}/"
+    find "${target_dir}/lib" -type d -exec chmod 755 {} +
+    find "${target_dir}/lib" -type f -exec chmod 644 {} +
+
+    # 3. Configuración inicial (protección contra sobrescritura)
+    if [[ ! -f "${target_dir}/config/config.conf" || "$force" == true ]]; then
+        cp "${SRC_DIR}/config/config.conf" "${target_dir}/config/config.conf"
+        chmod 644 "${target_dir}/config/config.conf"
+    else
+        log_info "Preservando configuración existente en: ${target_dir}/config/config.conf"
+    fi
+
+    if [[ ! -f "${target_dir}/config/default_tags.conf" || "$force" == true ]]; then
+        cp "${SRC_DIR}/config/default_tags.conf" "${target_dir}/config/default_tags.conf"
+        chmod 644 "${target_dir}/config/default_tags.conf"
+    fi
+
+    # 4. Catálogo de plantillas
+    if [[ -d "${SRC_DIR}/templates.d" ]]; then
+        cp -r "${SRC_DIR}/templates.d"/* "${target_dir}/templates.d/"
+        find "${target_dir}/templates.d" -type f -exec chmod 644 {} +
+    fi
+
+    # 5. Perfil default canónico (preservando si existe)
+    if [[ ! -f "${target_dir}/profiles/default/profile.conf" || "$force" == true ]]; then
+        if [[ -f "${SRC_DIR}/profiles/default/profile.conf" ]]; then
+            cp "${SRC_DIR}/profiles/default/profile.conf" "${target_dir}/profiles/default/profile.conf"
+            chmod 644 "${target_dir}/profiles/default/profile.conf"
+        fi
+    fi
+
+    # 6. Marcadores de seguridad e integridad
+    if [[ -f "${SRC_DIR}/markers/.backup_storage_marker" ]]; then
+        cp "${SRC_DIR}/markers/.backup_storage_marker" "${target_dir}/markers/.backup_storage_marker"
+        chmod 644 "${target_dir}/markers/.backup_storage_marker"
+    fi
+    if [[ -f "${SRC_DIR}/.backup_app_marker" ]]; then
+        cp "${SRC_DIR}/.backup_app_marker" "${target_dir}/.backup_app_marker"
+        chmod 644 "${target_dir}/.backup_app_marker"
+    fi
+
+    # 7. Recursos gráficos
+    if [[ -f "${SRC_DIR}/assets/keepmyconfig.svg" ]]; then
+        cp "${SRC_DIR}/assets/keepmyconfig.svg" "${target_dir}/assets/"
+        chmod 644 "${target_dir}/assets/keepmyconfig.svg"
+    fi
+    if [[ -f "${SRC_DIR}/assets/keepmyconfig.desktop" ]]; then
+        cp "${SRC_DIR}/assets/keepmyconfig.desktop" "${target_dir}/assets/"
+        chmod 644 "${target_dir}/assets/keepmyconfig.desktop"
+    fi
+
+    # 8. Documentación pública
+    for doc in "README.md" "MANUAL_USUARIO.md" "CHANGELOG.md" "LICENSE"; do
+        if [[ -f "${SRC_DIR}/${doc}" ]]; then
+            cp "${SRC_DIR}/${doc}" "${target_dir}/${doc}"
+            chmod 644 "${target_dir}/${doc}"
+        fi
+    done
+}
+
+# ------------------------------------------------------------------------------
+# Configuración del Entorno XDG y Enlaces de Escritorio
+# ------------------------------------------------------------------------------
+setup_xdg_integration() {
+    local target_dir="$1"
+    local bin_dir="$2"
+    local terminal_cmd="$3"
+
+    # 1. Enlace en PATH (~/.local/bin/keepmyconfig)
+    mkdir -p "$bin_dir"
+    ln -sf "${target_dir}/backup_manager.sh" "${bin_dir}/keepmyconfig"
+    log_success "Enlace ejecutable creado: ${bin_dir}/keepmyconfig -> ${target_dir}/backup_manager.sh"
+
+    # 2. Instalación de Icono SVG escalable
+    local icon_dir="${HOME}/.local/share/icons/hicolor/scalable/apps"
+    mkdir -p "$icon_dir"
+    if [[ -f "${target_dir}/assets/keepmyconfig.svg" ]]; then
+        cp "${target_dir}/assets/keepmyconfig.svg" "${icon_dir}/keepmyconfig.svg"
+        chmod 644 "${icon_dir}/keepmyconfig.svg"
+        log_success "Icono de aplicación instalado en: ${icon_dir}/keepmyconfig.svg"
+    fi
+
+    # Actualizar caché de iconos si gtk-update-icon-cache está presente
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -f -t "${HOME}/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+    fi
+
+    # 3. Instalación de Lanzador Freedesktop (.desktop)
+    local app_dir="${HOME}/.local/share/applications"
+    mkdir -p "$app_dir"
+    local desktop_dest="${app_dir}/keepmyconfig.desktop"
+
+    cat << EOF > "$desktop_dest"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=KeepMyConfig
+GenericName=Gestor de Backup y Recuperación
+Comment=Copias de seguridad y recuperación modular para terminal
+Exec=${terminal_cmd}
+Icon=keepmyconfig
+Terminal=true
+Categories=Utility;Archiving;System;
+Keywords=backup;copia;seguridad;lliurex;configuracion;
+StartupNotify=false
+EOF
+    chmod 644 "$desktop_dest"
+    log_success "Lanzador de escritorio instalado en: ${desktop_dest}"
+
+    # Validar con desktop-file-validate si está presente
+    if command -v desktop-file-validate >/dev/null 2>&1; then
+        desktop-file-validate "$desktop_dest" >/dev/null 2>&1 || true
+    fi
+
+    # Actualizar base de datos de aplicaciones XDG si procede
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database "$app_dir" >/dev/null 2>&1 || true
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Comprobación de Variable $PATH y Asistencia al Usuario
+# ------------------------------------------------------------------------------
+audit_user_path() {
+    local bin_dir="$1"
+
+    # Comprobar si bin_dir forma parte de PATH
+    case ":${PATH}:" in
+        *":${bin_dir}:"*)
+            log_success "El directorio '${bin_dir}' ya forma parte de tu \$PATH."
+            ;;
+        *)
+            echo ""
+            log_warning "El directorio '${bin_dir}' NO está incluido en tu variable \$PATH."
+            echo -e "${COLOR_YELLOW}Para poder ejecutar 'keepmyconfig' directamente desde cualquier terminal, añade la siguiente línea a tu archivo ~/.bashrc:${COLOR_RESET}"
+            echo -e "${COLOR_BOLD}  export PATH=\"${bin_dir}:\$PATH\"${COLOR_RESET}"
+            echo ""
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Entrypoint Principal
+# ------------------------------------------------------------------------------
+main() {
+    local TARGET_DIR="${HOME}/.local/share/KeepMyConfig"
+    local BIN_DIR="${HOME}/.local/bin"
+    local UNATTENDED=false
+    local FORCE=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -y|--yes|--silent)
+                UNATTENDED=true
+                shift 1
+                ;;
+            -f|--force)
+                FORCE=true
+                shift 1
+                ;;
+            -t|--target-dir)
+                [[ $# -lt 2 ]] && { log_error "Falta el valor para --target-dir"; exit 1; }
+                TARGET_DIR="$2"
+                shift 2
+                ;;
+            -b|--bin-dir)
+                [[ $# -lt 2 ]] && { log_error "Falta el valor para --bin-dir"; exit 1; }
+                BIN_DIR="$2"
+                shift 2
+                ;;
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            *)
+                log_error "Opción desconocida: '$1'"
+                show_help
+                exit 1
+                ;;
+        esac
+    done
+
+    echo -e "${COLOR_BOLD}======================================================${COLOR_RESET}"
+    echo -e "${COLOR_BOLD}⚙️   KeepMyConfig - Instalador sin Privilegios (Non-Root)${COLOR_RESET}"
+    echo -e "${COLOR_BOLD}======================================================${COLOR_RESET}"
+    log_info "Ruta de instalación : ${COLOR_BOLD}${TARGET_DIR}${COLOR_RESET}"
+    log_info "Directorio de binarios: ${COLOR_BOLD}${BIN_DIR}${COLOR_RESET}"
+
+    # 1. Comprobar dependencias
+    check_system_dependencies
+
+    # 2. Confirmación interactiva si no es modo desatendido
+    if [[ "$UNATTENDED" == false ]]; then
+        echo ""
+        read -r -p "¿Deseas proceder con la instalación en tu cuenta de usuario? [S/n]: " answer
+        answer="${answer:-S}"
+        if [[ ! "$answer" =~ ^[sS]$ ]]; then
+            log_warning "Instalación cancelada por el usuario."
+            exit 1
+        fi
+    fi
+
+    # 3. Detectar comando de terminal
+    local terminal_cmd
+    terminal_cmd="$(detect_terminal_emulator)"
+    log_info "Terminal detectada para escritorio: ${COLOR_BOLD}${terminal_cmd}${COLOR_RESET}"
+
+    # 4. Desplegar ficheros de la aplicación
+    log_info "Copiando componentes de KeepMyConfig..."
+    deploy_application_files "$TARGET_DIR" "$FORCE"
+
+    # 5. Configurar integración XDG (PATH, icono y lanzador)
+    log_info "Configurando integración con el escritorio..."
+    setup_xdg_integration "$TARGET_DIR" "$BIN_DIR" "$terminal_cmd"
+
+    # 6. Auditar PATH
+    audit_user_path "$BIN_DIR"
+
+    echo -e "${COLOR_BOLD}======================================================${COLOR_RESET}"
+    log_success "¡Instalación completada exitosamente!"
+    echo -e "Puedes iniciar la aplicación ejecutando: ${COLOR_BOLD}keepmyconfig${COLOR_RESET}"
+    echo -e "O abriendo 'KeepMyConfig' desde el menú de aplicaciones de tu escritorio."
+    echo -e "${COLOR_BOLD}======================================================${COLOR_RESET}"
+}
+
+main "$@"
