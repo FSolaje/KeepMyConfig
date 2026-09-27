@@ -8,6 +8,11 @@
 # - Lanzador de escritorio   : ~/.local/share/applications/keepmyconfig.desktop
 # - Icono SVG escalable      : ~/.local/share/icons/hicolor/scalable/apps/keepmyconfig.svg
 #
+# Asistente de configuración inicial (OOBE):
+# - Ruta de instalación personalizada (-t, --target-dir)
+# - Destino global de backups (--backup-dest) con detección de unidades externas
+# - Perfil inicial personalizado (--initial-profile)
+#
 # Cumple con la especificación técnica SDD: specs/packaging_and_distribution/spec.md
 # ==============================================================================
 set -euo pipefail
@@ -56,11 +61,13 @@ Uso: ./install.sh [OPCIONES]
 Instalador en espacio de usuario para KeepMyConfig (no requiere sudo).
 
 Opciones:
-  -y, --yes, --silent     Modo desatendido (no solicita confirmación interactiva)
-  -f, --force             Sobrescribir configuraciones previas existentes
-  -t, --target-dir <dir>  Directorio de destino (por defecto: ~/.local/share/KeepMyConfig)
-  -b, --bin-dir <dir>     Directorio de ejecutables (por defecto: ~/.local/bin)
-  -h, --help              Mostrar esta ayuda y salir
+  -y, --yes, --silent       Modo desatendido (no solicita confirmación interactiva)
+  -f, --force               Sobrescribir configuraciones previas existentes
+  -t, --target-dir <dir>    Directorio de instalación (por defecto: ~/.local/share/KeepMyConfig)
+  -b, --bin-dir <dir>       Directorio de ejecutables (por defecto: ~/.local/bin)
+  --backup-dest <dir>       Ruta de almacenamiento global para las copias de seguridad
+  --initial-profile <name>  Nombre del perfil inicial a crear y activar (por defecto: default)
+  -h, --help                Mostrar esta ayuda y salir
 
 Códigos de salida:
   0  Instalación completada con éxito
@@ -216,6 +223,53 @@ deploy_application_files() {
 }
 
 # ------------------------------------------------------------------------------
+# Configuración Inicial Personalizada (Destino de Backup y Perfil)
+# ------------------------------------------------------------------------------
+configure_initial_settings() {
+    local target_dir="$1"
+    local backup_dest="$2"
+    local initial_profile="$3"
+
+    local config_file="${target_dir}/config/config.conf"
+    [[ -f "$config_file" ]] || return 0
+
+    # 1. Configurar destino de backups si se especificó
+    if [[ -n "$backup_dest" ]]; then
+        # Expandir ~ si se utilizó
+        backup_dest="${backup_dest/#\~/$HOME}"
+        mkdir -p "$backup_dest"
+        # Desplegar marcador de seguridad anti-escritura fantasma
+        touch "${backup_dest}/.backup_storage_marker"
+        chmod 644 "${backup_dest}/.backup_storage_marker"
+
+        sed -i "s|^BACKUP_DESTINATION=.*|BACKUP_DESTINATION=\"${backup_dest}\"|" "$config_file"
+        sed -i "s|^INITIAL_SETUP_DONE=.*|INITIAL_SETUP_DONE=\"true\"|" "$config_file"
+        log_success "Destino de backups inicializado en: ${backup_dest}"
+    fi
+
+    # 2. Configurar perfil inicial si es distinto de default
+    if [[ -n "$initial_profile" && "$initial_profile" != "default" ]]; then
+        local prof_dir="${target_dir}/profiles/${initial_profile}"
+        mkdir -p "${prof_dir}/modules.d"
+        touch "${prof_dir}/modules.d/.gitkeep"
+
+        cat << EOF > "${prof_dir}/profile.conf"
+# ==============================================================================
+# Configuración del Perfil: ${initial_profile}
+# Creado durante la instalación inicial
+# ==============================================================================
+PROFILE_NAME="${initial_profile^}"
+TARGET_SUBDIR=""
+DISABLED_MODULES=()
+EOF
+        chmod 644 "${prof_dir}/profile.conf"
+
+        sed -i "s|^ACTIVE_PROFILE=.*|ACTIVE_PROFILE=\"${initial_profile}\"|" "$config_file"
+        log_success "Perfil inicial '${initial_profile}' creado y configurado como activo."
+    fi
+}
+
+# ------------------------------------------------------------------------------
 # Configuración del Entorno XDG y Enlaces de Escritorio
 # ------------------------------------------------------------------------------
 setup_xdg_integration() {
@@ -302,6 +356,8 @@ audit_user_path() {
 main() {
     local TARGET_DIR="${HOME}/.local/share/KeepMyConfig"
     local BIN_DIR="${HOME}/.local/bin"
+    local BACKUP_DEST=""
+    local INITIAL_PROFILE="default"
     local UNATTENDED=false
     local FORCE=false
 
@@ -325,6 +381,16 @@ main() {
                 BIN_DIR="$2"
                 shift 2
                 ;;
+            --backup-dest)
+                [[ $# -lt 2 ]] && { log_error "Falta el valor para --backup-dest"; exit 1; }
+                BACKUP_DEST="$2"
+                shift 2
+                ;;
+            --initial-profile|--profile)
+                [[ $# -lt 2 ]] && { log_error "Falta el valor para --initial-profile"; exit 1; }
+                INITIAL_PROFILE="$2"
+                shift 2
+                ;;
             -h|--help)
                 show_help
                 exit 0
@@ -340,13 +406,11 @@ main() {
     echo -e "${COLOR_BOLD}======================================================${COLOR_RESET}"
     echo -e "${COLOR_BOLD}⚙️   KeepMyConfig - Instalador sin Privilegios (Non-Root)${COLOR_RESET}"
     echo -e "${COLOR_BOLD}======================================================${COLOR_RESET}"
-    log_info "Ruta de instalación : ${COLOR_BOLD}${TARGET_DIR}${COLOR_RESET}"
-    log_info "Directorio de binarios: ${COLOR_BOLD}${BIN_DIR}${COLOR_RESET}"
 
     # 1. Comprobar dependencias
     check_system_dependencies
 
-    # 2. Confirmación interactiva si no es modo desatendido
+    # 2. Asistente interactivo guiado (si no es modo desatendido)
     if [[ "$UNATTENDED" == false ]]; then
         echo ""
         read -r -p "¿Deseas proceder con la instalación en tu cuenta de usuario? [S/n]: " answer
@@ -355,7 +419,89 @@ main() {
             log_warning "Instalación cancelada por el usuario."
             exit 1
         fi
+
+        # Paso 1: Ruta personalizada de la aplicación
+        echo ""
+        echo -e "${COLOR_BOLD}--- Paso 1: Ubicación de la Aplicación ---${COLOR_RESET}"
+        read -r -p "Directorio de instalación [default: ${TARGET_DIR}]: " user_target
+        if [[ -n "$user_target" ]]; then
+            user_target="${user_target/#\~/$HOME}"
+            TARGET_DIR="$user_target"
+        fi
+
+        # Paso 2: Destino global de las copias de seguridad
+        if [[ -z "$BACKUP_DEST" ]]; then
+            echo ""
+            echo -e "${COLOR_BOLD}--- Paso 2: Destino Global de Copias de Seguridad ---${COLOR_RESET}"
+            local ext_drives=()
+            for d in /media/"$USER"/* /run/media/"$USER"/*; do
+                [[ -d "$d" ]] && ext_drives+=("$d")
+            done
+
+            echo "Selecciona la ubicación predeterminada para tus respaldos:"
+            echo "  [1] Ruta local estándar (~/Backups/KeepMyConfig)"
+            local idx=2
+            for d in "${ext_drives[@]}"; do
+                echo "  [$idx] Unidad externa: $d/Backups/KeepMyConfig"
+                ((idx++))
+            done
+            echo "  [p] Introducir otra ruta personalizada"
+            echo "  [o] Omitir configuración (se solicitará al iniciar la aplicación)"
+            read -r -p "Opción [1]: " dest_opt
+            dest_opt="${dest_opt:-1}"
+
+            case "$dest_opt" in
+                1)
+                    BACKUP_DEST="${HOME}/Backups/KeepMyConfig"
+                    ;;
+                [2-9]|[1-9][0-9])
+                    local target_idx=$((dest_opt - 2))
+                    if [[ $target_idx -ge 0 && $target_idx -lt ${#ext_drives[@]} ]]; then
+                        BACKUP_DEST="${ext_drives[$target_idx]}/Backups/KeepMyConfig"
+                    else
+                        BACKUP_DEST="${HOME}/Backups/KeepMyConfig"
+                    fi
+                    ;;
+                p|P)
+                    read -r -p "Introduce la ruta para tus backups: " custom_dest
+                    BACKUP_DEST="$custom_dest"
+                    ;;
+                o|O)
+                    BACKUP_DEST=""
+                    ;;
+                *)
+                    BACKUP_DEST="${HOME}/Backups/KeepMyConfig"
+                    ;;
+            esac
+        fi
+
+        # Paso 3: Perfil inicial
+        if [[ "$INITIAL_PROFILE" == "default" ]]; then
+            echo ""
+            echo -e "${COLOR_BOLD}--- Paso 3: Perfil Inicial ---${COLOR_RESET}"
+            echo "¿Deseas crear un perfil inicial específico (ej. 'docente', 'alumno', 'trabajo') o comenzar con 'default'?"
+            read -r -p "Nombre del perfil inicial [default]: " user_prof
+            user_prof="${user_prof:-default}"
+            INITIAL_PROFILE="$user_prof"
+        fi
     fi
+
+    # Normalizar ruta de instalación
+    TARGET_DIR="${TARGET_DIR/#\~/$HOME}"
+    BIN_DIR="${BIN_DIR/#\~/$HOME}"
+
+    # Validar identificador de perfil
+    if [[ "$INITIAL_PROFILE" != "default" && ! "$INITIAL_PROFILE" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        log_warning "Identificador de perfil '$INITIAL_PROFILE' inválido. Usando 'default'."
+        INITIAL_PROFILE="default"
+    fi
+
+    log_info "Ruta de instalación : ${COLOR_BOLD}${TARGET_DIR}${COLOR_RESET}"
+    log_info "Directorio de binarios: ${COLOR_BOLD}${BIN_DIR}${COLOR_RESET}"
+    if [[ -n "$BACKUP_DEST" ]]; then
+        log_info "Destino de backups  : ${COLOR_BOLD}${BACKUP_DEST}${COLOR_RESET}"
+    fi
+    log_info "Perfil inicial      : ${COLOR_BOLD}${INITIAL_PROFILE}${COLOR_RESET}"
 
     # 3. Detectar comando de terminal
     local terminal_cmd
@@ -366,11 +512,14 @@ main() {
     log_info "Copiando componentes de KeepMyConfig..."
     deploy_application_files "$TARGET_DIR" "$FORCE"
 
-    # 5. Configurar integración XDG (PATH, icono y lanzador)
+    # 5. Configurar destino de backups y perfil inicial
+    configure_initial_settings "$TARGET_DIR" "$BACKUP_DEST" "$INITIAL_PROFILE"
+
+    # 6. Configurar integración XDG (PATH, icono y lanzador)
     log_info "Configurando integración con el escritorio..."
     setup_xdg_integration "$TARGET_DIR" "$BIN_DIR" "$terminal_cmd"
 
-    # 6. Auditar PATH
+    # 7. Auditar PATH
     audit_user_path "$BIN_DIR"
 
     echo -e "${COLOR_BOLD}======================================================${COLOR_RESET}"
