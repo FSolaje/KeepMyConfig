@@ -92,6 +92,17 @@ whiptail_view_yesno() {
     return $?
 }
 
+# Diálogo de confirmación crítica con foco predeterminado obligatorio en NO (--defaultno)
+# Retorna 0 si el usuario pulsa deliberadamente "Sí", 1 si pulsa "No" o Cancelar
+whiptail_view_confirm_critical() {
+    local title="${1:-¡Alerta de Seguridad!}"
+    local question="${2:-¿Está seguro de continuar?}"
+
+    whiptail_view_calc_dimensions
+    whiptail --title "⚠️  $title" --defaultno --yesno "$question" "$WT_HEIGHT" "$WT_WIDTH"
+    return $?
+}
+
 # Cuadro de entrada de texto simple (--inputbox)
 whiptail_view_input() {
     local title="${1:-Entrada de datos}"
