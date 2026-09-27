@@ -46,16 +46,16 @@
 ---
 
 ## Fase 2: Script Reproducible de Empaquetado Dual y Checksums
-- [ ] Crear directorio `scripts/` y el script `scripts/package.sh` con permisos `0755`.
-- [ ] Implementar resolución automática de versión (flag `--version`, git tags SemVer o fallback de `CHANGELOG.md`).
-- [ ] Implementar soporte para selector de tipo de paquete `--type all|standard|portable` (por defecto `all`).
-- [ ] Implementar mecanismo de lista blanca estricta con directorios temporales de preparación (*staging*) diferenciados.
-- [ ] Implementar generación de edición estándar (`KeepMyConfig-${VERSION}`) y edición portable (`KeepMyConfig-${VERSION}-portable`) con marcador `.portable` y lanzador `keepmyconfig.sh`.
-- [ ] Implementar normalización de permisos UNIX (`0755` directorios y ejecutables, `0644` ficheros regulares).
-- [ ] Implementar compresión sin tarbomb en `.tar.gz` y `.tar.zst` si está disponible.
-- [ ] Implementar generación automática unificada de `SHA256SUMS.txt`.
-- [ ] Implementar smoke test integrado para verificar integridad de ambas ediciones y respuesta de `--help`.
-- [ ] **Hito de Commit 2 (feat):**
+- [x] Crear directorio `scripts/` y el script `scripts/package.sh` con permisos `0755`.
+- [x] Implementar resolución automática de versión (flag `--version`, git tags SemVer o fallback de `CHANGELOG.md`).
+- [x] Implementar soporte para selector de tipo de paquete `--type all|standard|portable` (por defecto `all`).
+- [x] Implementar mecanismo de lista blanca estricta con directorios temporales de preparación (*staging*) diferenciados.
+- [x] Implementar generación de edición estándar (`KeepMyConfig-${VERSION}`) y edición portable (`KeepMyConfig-${VERSION}-portable`) con marcador `.portable` y lanzador `keepmyconfig.sh`.
+- [x] Implementar normalización de permisos UNIX (`0755` directorios y ejecutables, `0644` ficheros regulares).
+- [x] Implementar compresión sin tarbomb en `.tar.gz` y `.tar.zst` si está disponible.
+- [x] Implementar generación automática unificada de `SHA256SUMS.txt`.
+- [x] Implementar smoke test integrado para verificar integridad de ambas ediciones y respuesta de `--help`.
+- [x] **Hito de Commit 2 (feat):** Consolidado en `e67aabb`.
   ```bash
   feat(packaging): implementar empaquetado reproducible dual y generacion de checksums
   ```
