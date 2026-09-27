@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Filtro de sombra general -->
+    <filter id="shieldShadow" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#020617" flood-opacity="0.65" />
+    </filter>
+    <filter id="glowCyan" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#38bdf8" flood-opacity="0.6" />
+    </filter>
+
+    <!-- Gradientes Principales -->
+    <linearGradient id="shieldBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="40%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+
+    <linearGradient id="shieldBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#0ea5e9" />
+    </linearGradient>
+
+    <linearGradient id="terminalBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0d1117" />
+      <stop offset="100%" stop-color="#161b22" />
+    </linearGradient>
+
+    <linearGradient id="syncGradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+
+    <linearGradient id="syncGradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+
+    <linearGradient id="accentGreen" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#34d399" />
+    </linearGradient>
+  </defs>
+
+  <!-- Fondo Transparente con Escudo Central -->
+  <g id="appIcon" filter="url(#shieldShadow)">
+    <!-- Silueta del Escudo Protector Exterior -->
+    <path d="M 256,36 
+             C 346,74 416,84 446,98 
+             C 450,186 446,310 256,472 
+             C 66,310 62,186 66,98 
+             C 96,84 166,74 256,36 Z" 
+          fill="url(#shieldBg)" 
+          stroke="url(#shieldBorder)" 
+          stroke-width="8" 
+          stroke-linejoin="round" />
+
+    <!-- Aro / Flechas Circulares de Respaldo y Sincronización (Sync & Backup) -->
+    <!-- Flecha Superior (Arco Horario) -->
+    <path d="M 160,200 
+             A 120,120 0 0,1 364,180" 
+          fill="none" 
+          stroke="url(#syncGradient1)" 
+          stroke-width="14" 
+          stroke-linecap="round" 
+          opacity="0.85" />
+    <polygon points="360,160 388,186 352,204" 
+             fill="#38bdf8" 
+             opacity="0.95" />
+
+    <!-- Flecha Inferior (Arco Antihorario de retorno) -->
+    <path d="M 352,312 
+             A 120,120 0 0,1 148,332" 
+          fill="none" 
+          stroke="url(#syncGradient2)" 
+          stroke-width="14" 
+          stroke-linecap="round" 
+          opacity="0.85" />
+    <polygon points="152,352 124,326 160,308" 
+             fill="#10b981" 
+             opacity="0.95" />
+
+    <!-- Ventana de Consola / Terminal Centrada -->
+    <g id="terminalWindow" transform="translate(136, 172)">
+      <!-- Marco de la Ventana -->
+      <rect x="0" y="0" width="240" height="168" rx="14" ry="14" 
+            fill="url(#terminalBg)" 
+            stroke="#334155" 
+            stroke-width="3" />
+
+      <!-- Barra de Título con Puntos de Control -->
+      <path d="M 0,14 A 14,14 0 0,1 14,0 L 226,0 A 14,14 0 0,1 240,14 L 240,32 L 0,32 Z" 
+            fill="#1e293b" />
+      <line x1="0" y1="32" x2="240" y2="32" stroke="#334155" stroke-width="2" />
+
+      <!-- Botones de la Ventana (Rojo, Amarillo, Verde) -->
+      <circle cx="20" cy="16" r="5" fill="#ef4444" />
+      <circle cx="36" cy="16" r="5" fill="#f59e0b" />
+      <circle cx="52" cy="16" r="5" fill="#10b981" />
+
+      <!-- Título de la pestaña de consola -->
+      <text x="120" y="20" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="600" fill="#94a3b8">keepmyconfig</text>
+
+      <!-- Contenido de la Terminal: Prompt >_ -->
+      <!-- Signo > -->
+      <path d="M 28,62 L 48,76 L 28,90" 
+            fill="none" 
+            stroke="url(#accentGreen)" 
+            stroke-width="6" 
+            stroke-linecap="round" 
+            stroke-linejoin="round" 
+            filter="url(#glowCyan)" />
+
+      <!-- Cursor Bloque _ -->
+      <rect x="62" y="82" width="24" height="8" rx="2" 
+            fill="#38bdf8" 
+            filter="url(#glowCyan)" />
+
+      <!-- Líneas de configuración simuladas -->
+      <rect x="28" y="112" width="86" height="6" rx="3" fill="#475569" opacity="0.7" />
+      <rect x="124" y="112" width="54" height="6" rx="3" fill="#0284c7" opacity="0.6" />
+      <rect x="28" y="132" width="130" height="6" rx="3" fill="#334155" opacity="0.7" />
+      <circle cx="176" cy="135" r="4" fill="#10b981" />
+    </g>
+
+    <!-- Candado de Seguridad / Verificación Criptográfica GPG (Miniatura inferior derecha de la consola) -->
+    <g id="securityLock" transform="translate(328, 304)">
+      <!-- Arco del candado -->
+      <path d="M 12,12 L 12,8 A 8,8 0 0,1 28,8 L 28,12" 
+            fill="none" 
+            stroke="#f59e0b" 
+            stroke-width="3" 
+            stroke-linecap="round" />
+      <!-- Cuerpo del candado -->
+      <rect x="6" y="12" width="28" height="22" rx="5" 
+            fill="#d97706" 
+            stroke="#b45309" 
+            stroke-width="1.5" />
+      <!-- Ojo de la cerradura -->
+      <circle cx="20" cy="21" r="2.5" fill="#78350f" />
+      <rect x="19" y="22" width="2" height="5" fill="#78350f" />
+    </g>
+  </g>
+</svg>
