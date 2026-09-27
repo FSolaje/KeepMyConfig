@@ -103,6 +103,16 @@ whiptail_view_confirm_critical() {
     return $?
 }
 
+# Diálogo Pre-Flight de Seguridad con resumen de módulos a procesar
+whiptail_view_preflight_summary() {
+    local title="${1:-Pre-Flight Safety Gate}"
+    local summary_text="${2:-¿Desea continuar con la operación?}"
+
+    whiptail_view_calc_dimensions
+    whiptail --title "🛡️  $title" --yesno "$summary_text" "$WT_HEIGHT" "$WT_WIDTH"
+    return $?
+}
+
 # Cuadro de entrada de texto simple (--inputbox)
 whiptail_view_input() {
     local title="${1:-Entrada de datos}"

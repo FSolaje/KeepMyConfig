@@ -411,6 +411,167 @@ _controller_check_sensitive_purge_warning() {
 }
 
 # ==============================================================================
+# Pre-Flight Safety Gate (RF-05)
+# ==============================================================================
+
+# Construye la matriz pre-flight para una lista de módulos
+# Salida por stdout: una línea por módulo con formato:
+# ID|NOMBRE|AMBITO|IS_SENSITIVE|PURGE_ACTIVE|PATHS|DESTINO
+_controller_build_preflight_matrix() {
+    local mod_list=("$@")
+    local act_prof
+    act_prof=$(_controller_get_active_profile)
+    local backup_dest
+    backup_dest=$(_controller_get_backup_dir 2>/dev/null || echo "Almacenamiento")
+
+    for m in "${mod_list[@]}"; do
+        [[ -n "$m" ]] || continue
+        local minfo
+        minfo=$(_controller_get_module_info "$m" 2>/dev/null) || continue
+
+        local mname msens mpurge mpaths
+        mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
+        msens=$(echo "$minfo" | grep '^IS_SENSITIVE=' | cut -d'=' -f2- || echo "false")
+        mpurge=$(echo "$minfo" | grep '^PURGE_AFTER_BACKUP=' | cut -d'=' -f2- || echo "false")
+        mpaths=$(echo "$minfo" | grep '^PATHS=' | cut -d'=' -f2- || echo "")
+
+        local m_path
+        m_path=$(profile_model_resolve_module "$m" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null || true)
+        local mscope="[Global]"
+        if [[ "$m_path" =~ /profiles/ ]]; then
+            mscope="[Perfil: $act_prof]"
+        fi
+
+        echo "${m}|${mname}|${mscope}|${msens}|${mpurge}|${mpaths}|${backup_dest}"
+    done
+}
+
+# Ejecuta el Pre-Flight Safety Gate antes de cualquier operación de respaldo
+# Retorna 0 si el usuario confirma (o si --yes), 1 si cancela
+_controller_run_preflight_gate() {
+    local op_title="${1:-Respaldo}"
+    local mod_list_str="${2:-}"
+    local is_tui="${3:-false}"
+    local purge_override="${4:-auto}"
+    local assume_yes="${CLI_ASSUME_YES:-false}"
+    if [[ "${IS_SANDBOX_MODE:-false}" == "true" || "${KEEP_MY_CONFIG_TEST_MODE:-false}" == "true" ]]; then
+        assume_yes="true"
+    fi
+
+    local mod_arr=()
+    read -r -a mod_arr <<< "$mod_list_str"
+    [[ ${#mod_arr[@]} -gt 0 ]] || return 0
+
+    local matrix_lines=()
+    local has_purge="false"
+    local purge_paths=()
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        local mid mname mscope msens mpurge mpaths mdest
+        IFS='|' read -r mid mname mscope msens mpurge mpaths mdest <<< "$line"
+
+        # Aplicar purge_override si se especificó
+        local eff_purge="$mpurge"
+        if [[ "$purge_override" == "true" ]]; then
+            eff_purge="true"
+        elif [[ "$purge_override" == "false" ]]; then
+            eff_purge="false"
+        fi
+
+        if [[ "$eff_purge" == "true" ]]; then
+            has_purge="true"
+            local p_arr=()
+            IFS='|' read -r -a p_arr <<< "$mpaths"
+            for p in "${p_arr[@]}"; do
+                [[ -n "$p" ]] || continue
+                purge_paths+=("${TARGET_USER_HOME}/${p}")
+            done
+        fi
+
+        local sens_txt="No"
+        [[ "$msens" == "true" ]] && sens_txt="SÍ"
+        local purge_txt="No"
+        [[ "$eff_purge" == "true" ]] && purge_txt="SÍ"
+
+        matrix_lines+=("${mid}|${mname}|${mscope}|${sens_txt}|${purge_txt}|${mdest}")
+    done < <(_controller_build_preflight_matrix "${mod_arr[@]}")
+
+    if [[ "$is_tui" == "true" ]]; then
+        # 1. Resumen Pre-Flight en Whiptail
+        local summary_txt="MATRIZ DE OPERACIÓN:\n\n"
+        local header_fmt
+        printf -v header_fmt "%-16s %-10s %-12s %-14s\n" "MÓDULO" "ÁMBITO" "GPG" "PURGA SHRED"
+        summary_txt+="$header_fmt"
+        summary_txt+="--------------------------------------------------------\n"
+        for row in "${matrix_lines[@]}"; do
+            local mid mname mscope sens_txt purge_txt mdest
+            IFS='|' read -r mid mname mscope sens_txt purge_txt mdest <<< "$row"
+            local line_fmt
+            printf -v line_fmt "%-16s %-10s %-12s %-14s\n" "$mid" "$mscope" "$sens_txt" "$purge_txt"
+            summary_txt+="$line_fmt"
+        done
+        summary_txt+="\n¿Desea autorizar y ejecutar esta operación de respaldo?"
+
+        if ! whiptail_view_preflight_summary "Pre-Flight: $op_title" "$summary_txt"; then
+            return 1
+        fi
+
+        # 2. Alarma crítica si hay purga shred activa
+        if [[ "$has_purge" == "true" ]]; then
+            local purge_list_txt=""
+            for pp in "${purge_paths[@]}"; do
+                purge_list_txt+="  • $pp\n"
+            done
+            local critical_msg="¡ADVERTENCIA CRÍTICA DE SEGURIDAD!\n\n"
+            critical_msg+="La operación incluye módulos con PURGA AUTOMÁTICA ACTIVA (shred -u).\n"
+            critical_msg+="Los siguientes archivos y carpetas locales SERÁN DESTRUIDOS de forma permanente e irreversible tras empaquetarse:\n\n"
+            critical_msg+="$purge_list_txt\n"
+            critical_msg+="¿Está TOTALMENTE SEGURO de continuar y DESTRUIR estos archivos originales de su equipo?"
+
+            if ! whiptail_view_confirm_critical "PELIGRO: DESTRUCCIÓN IRREVERSIBLE" "$critical_msg"; then
+                return 1
+            fi
+        fi
+
+    else
+        # Modo CLI
+        ansi_view_preflight_table "${matrix_lines[@]}"
+
+        if [[ "$has_purge" == "true" ]]; then
+            echo ""
+            echo -e "\033[41;97;1m ======================================================================================== \033[0m"
+            echo -e "\033[41;97;1m  ¡PELIGRO: DESTRUCCIÓN IRREVERSIBLE DE ARCHIVOS ORIGINALES CON SHRED -U!                  \033[0m"
+            echo -e "\033[41;97;1m ======================================================================================== \033[0m"
+            echo -e "${ANSI_RED}${ANSI_BOLD}Los siguientes archivos en su equipo local serán purgados y destruidos tras el respaldo:${ANSI_RESET}"
+            for pp in "${purge_paths[@]}"; do
+                echo -e "  • ${ANSI_BOLD}${pp}${ANSI_RESET}"
+            done
+            echo ""
+            if [[ "$assume_yes" == "true" ]]; then
+                ansi_view_warning "Flag --yes detectado: Se asume confirmación de purga desatendida."
+            else
+                if ! ansi_view_confirm_critical "Para confirmar la DESTRUCCIÓN de estos archivos originales, escriba 'SI' y pulse ENTER"; then
+                    ansi_view_error "Operación cancelada por el usuario ante advertencia de purga."
+                    return 1
+                fi
+            fi
+        else
+            if [[ "$assume_yes" != "true" ]]; then
+                if [[ -t 0 ]]; then
+                    if ! ansi_view_confirm "¿Desea proceder con el respaldo de estos módulos?" "S"; then
+                        ansi_view_info "Operación cancelada por el usuario."
+                        return 1
+                    fi
+                fi
+            fi
+        fi
+    fi
+
+    return 0
+}
+
+# ==============================================================================
 # Manejadores de Casos de Uso (Handlers)
 # ==============================================================================
 
@@ -449,6 +610,11 @@ controller_handle_backup_all() {
             ansi_view_error "$err_txt"
         fi
         return 2
+    fi
+
+    # Pre-Flight Safety Gate (RF-05)
+    if ! _controller_run_preflight_gate "Respaldo Completo" "${active_mods[*]}" "$is_tui" "$purge_override"; then
+        return 0
     fi
 
     # Verificar si hay módulos sensibles en el perfil activo
@@ -588,6 +754,11 @@ controller_handle_backup_tag() {
         return 2
     fi
 
+    # Pre-Flight Safety Gate (RF-05)
+    if ! _controller_run_preflight_gate "Respaldo por Etiqueta '$tag'" "${tag_mods[*]}" "$is_tui" "$purge_override"; then
+        return 0
+    fi
+
     local passphrase=""
     if [[ "$has_sensitive" == "true" ]]; then
         if [[ "$is_tui" == "true" ]]; then
@@ -690,6 +861,11 @@ controller_handle_backup_module() {
         return 3
     }
 
+    # Pre-Flight Safety Gate (RF-05)
+    if ! _controller_run_preflight_gate "Respaldo de Módulo '$module_id'" "$module_id" "$is_tui" "$purge_override"; then
+        return 0
+    fi
+
     local passphrase=""
     if echo "$minfo" | grep -q 'IS_SENSITIVE=true'; then
         if [[ "$is_tui" == "true" ]]; then
@@ -763,6 +939,54 @@ controller_handle_restore_sensitive() {
         local err_txt="No se detectó el SSD externo de backup o falta el marcador de seguridad."
         [[ "$is_tui" == "true" ]] && whiptail_view_error "Disco No Disponible" "$err_txt" || ansi_view_error "$err_txt"
         return 2
+    fi
+
+    local assume_yes="${CLI_ASSUME_YES:-false}"
+    if [[ "${IS_SANDBOX_MODE:-false}" == "true" || "${KEEP_MY_CONFIG_TEST_MODE:-false}" == "true" ]]; then
+        assume_yes="true"
+    fi
+    local sensitive_modules
+    sensitive_modules=$(module_model_filter_by_sensitivity "true") || true
+    local sens_paths=()
+    while IFS= read -r sm; do
+        [[ -n "$sm" ]] || continue
+        if restore_model_find_archive "$sm" "$backup_dir" "" >/dev/null 2>&1; then
+            local sinfo
+            sinfo=$(_controller_get_module_info "$sm" 2>/dev/null || true)
+            local spaths_raw
+            spaths_raw=$(echo "$sinfo" | grep '^PATHS=' | cut -d'=' -f2- || true)
+            local spaths=()
+            IFS='|' read -r -a spaths <<< "$spaths_raw"
+            for p in "${spaths[@]}"; do
+                [[ -n "$p" ]] || continue
+                sens_paths+=("${TARGET_USER_HOME}/${p}")
+            done
+        fi
+    done <<< "$sensitive_modules"
+
+    if [[ ${#sens_paths[@]} -gt 0 ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            local warn_msg="ATENCIÓN: Se van a restaurar los siguientes archivos sensibles en su equipo local.\n"
+            warn_msg+="Cualquier contenido local existente en estas rutas será SOBRESCRITO:\n\n"
+            for sp in "${sens_paths[@]}"; do
+                warn_msg+="  • $sp\n"
+            done
+            warn_msg+="\n¿Desea continuar con la restauración?"
+            if ! whiptail_view_yesno "Advertencia de Sobrescritura" "$warn_msg"; then
+                return 0
+            fi
+        else
+            if [[ "$assume_yes" != "true" && -t 0 ]]; then
+                ansi_view_warning "Los siguientes archivos sensibles locales serán SOBRESCRITOS:"
+                for sp in "${sens_paths[@]}"; do
+                    echo "  • $sp"
+                done
+                if ! ansi_view_confirm "¿Desea continuar con la restauración?" "N"; then
+                    ansi_view_info "Operación cancelada."
+                    return 0
+                fi
+            fi
+        fi
     fi
 
     local passphrase=""
@@ -875,6 +1099,46 @@ controller_handle_restore_module() {
         fi
     fi
 
+    local assume_yes="${CLI_ASSUME_YES:-false}"
+    if [[ "${IS_SANDBOX_MODE:-false}" == "true" || "${KEEP_MY_CONFIG_TEST_MODE:-false}" == "true" ]]; then
+        assume_yes="true"
+    fi
+    local minfo
+    minfo=$(_controller_get_module_info "$module_id" 2>/dev/null || true)
+    local paths_raw
+    paths_raw=$(echo "$minfo" | grep '^PATHS=' | cut -d'=' -f2- || true)
+    local paths=()
+    IFS='|' read -r -a paths <<< "$paths_raw"
+    local mod_targets=()
+    for p in "${paths[@]}"; do
+        [[ -n "$p" ]] || continue
+        mod_targets+=("${TARGET_USER_HOME}/${p}")
+    done
+
+    if [[ ${#mod_targets[@]} -gt 0 ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            local warn_msg="ATENCIÓN: La restauración del módulo '$module_id' SOBRESCRIBIRÁ los archivos locales actuales en:\n\n"
+            for mt in "${mod_targets[@]}"; do
+                warn_msg+="  • $mt\n"
+            done
+            warn_msg+="\n¿Desea proceder con la restauración y sobrescribir los datos locales?"
+            if ! whiptail_view_yesno "Advertencia de Sobrescritura" "$warn_msg"; then
+                return 0
+            fi
+        else
+            if [[ "$assume_yes" != "true" && -t 0 ]]; then
+                ansi_view_warning "La restauración de '$module_id' SOBRESCRIBIRÁ los siguientes archivos locales:"
+                for mt in "${mod_targets[@]}"; do
+                    echo "  • $mt"
+                done
+                if ! ansi_view_confirm "¿Desea proceder con la restauración?" "N"; then
+                    ansi_view_info "Operación cancelada."
+                    return 0
+                fi
+            fi
+        fi
+    fi
+
     local report
     report=$(restore_model_restore_module "$module_id" "$backup_dir" "$TARGET_USER_HOME" "$timestamp" "$passphrase" "$m_dir")
     ret=$?
@@ -923,9 +1187,25 @@ controller_handle_restore_all() {
         return 2
     fi
 
+    local assume_yes="${CLI_ASSUME_YES:-false}"
+    if [[ "${IS_SANDBOX_MODE:-false}" == "true" || "${KEEP_MY_CONFIG_TEST_MODE:-false}" == "true" ]]; then
+        assume_yes="true"
+    fi
     if [[ "$is_tui" == "true" ]]; then
-        if ! whiptail_view_yesno "Restauración Total" "¿Está seguro de que desea restaurar TODOS los módulos respaldados en el SSD a su sistema local?"; then
+        local warn_all="¡ADVERTENCIA DE SOBRESCRITURA TOTAL!\n\n"
+        warn_all+="Se restaurarán TODOS los módulos respaldados en el almacenamiento hacia su equipo ($TARGET_USER_HOME).\n"
+        warn_all+="Cualquier configuración o archivo local existente que coincida con las recetas respaldadas será SOBRESCRITO con la versión del backup.\n\n"
+        warn_all+="¿Está completamente seguro de continuar con la Restauración Total?"
+        if ! whiptail_view_yesno "Restauración Total" "$warn_all"; then
             return 0
+        fi
+    else
+        if [[ "$assume_yes" != "true" && -t 0 ]]; then
+            ansi_view_warning "¡ADVERTENCIA: La restauración total sobrescribirá configuraciones y archivos locales en $TARGET_USER_HOME!"
+            if ! ansi_view_confirm "¿Está completamente seguro de restaurar todos los módulos?" "N"; then
+                ansi_view_info "Operación cancelada."
+                return 0
+            fi
         fi
     fi
 
@@ -2693,7 +2973,10 @@ controller_handle_profiles_admin() {
                 to_delete=$(whiptail_view_radiolist "Eliminar Perfil" "Seleccione el perfil a borrar:" "${del_items[@]}") || continue
                 [[ -z "$to_delete" ]] && continue
 
-                if whiptail_view_yesno "Confirmar Eliminación" "¿Está completamente seguro de eliminar el perfil '$to_delete' y todas sus recetas específicas?\nEsta acción no se puede deshacer."; then
+                local del_prompt="¿Está completamente seguro de eliminar la definición del perfil '$to_delete' y sus recetas exclusivas locales?\n\n"
+                del_prompt+="NOTA DE SEGURIDAD: Las copias de seguridad físicas ya existentes en su almacenamiento permanecerán protegidas y NO serán eliminadas.\n\n"
+                del_prompt+="¿Desea proceder con la eliminación definitiva de este perfil?"
+                if whiptail_view_yesno "Confirmar Eliminación" "$del_prompt"; then
                     local del_status=0
                     profile_model_delete "$to_delete" "$profiles_dir" || del_status=$?
                     if (( del_status == 0 )); then
@@ -2825,9 +3108,16 @@ controller_run_cli() {
                 echo "  --test-mode, --sandbox                         Activar entorno aislado en user_data/sandbox/."
                 echo "  --clean-sandbox                                Purgar por completo el entorno user_data/sandbox/."
                 echo ""
+                echo "Modo Desatendido y Seguridad:"
+                echo "  -y, --yes                                      Asumir confirmaciones en Pre-Flight Gate (modo no interactivo)."
+                echo ""
                 echo "Ayuda:"
                 echo "  -h, --help                                     Mostrar este menú de ayuda."
                 return 0
+                ;;
+            -y|--yes)
+                export CLI_ASSUME_YES="true"
+                shift
                 ;;
             --purge)
                 purge_flag="true"

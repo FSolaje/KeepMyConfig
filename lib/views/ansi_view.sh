@@ -151,3 +151,63 @@ ansi_view_confirm() {
         esac
     done
 }
+
+# ------------------------------------------------------------------------------
+# Función: ansi_view_preflight_table
+# Descripción: Imprime la tabla resumen Pre-Flight en consola ANSI.
+# Parámetros:
+#   Líneas estructuradas: "ID|NOMBRE|AMBITO|SENS|PURGE|DESTINO"
+# ------------------------------------------------------------------------------
+ansi_view_preflight_table() {
+    _ansi_view_init_palette
+    echo -e "${ANSI_CYAN}${ANSI_BOLD}========================================================================================${ANSI_RESET}"
+    echo -e "${ANSI_WHITE}${ANSI_BOLD}  MATRIZ PRE-FLIGHT DE SEGURIDAD (KeepMyConfig)${ANSI_RESET}"
+    echo -e "${ANSI_CYAN}${ANSI_BOLD}========================================================================================${ANSI_RESET}"
+    printf "${ANSI_BOLD}%-18s %-12s %-16s %-22s %s${ANSI_RESET}\n" "MÓDULO" "ÁMBITO" "CIFRADO GPG" "PURGA (SHRED -U)" "DESTINO"
+    echo -e "${ANSI_DIM}----------------------------------------------------------------------------------------${ANSI_RESET}"
+
+    for row in "$@"; do
+        [[ -n "$row" ]] || continue
+        local r_id r_name r_scope r_sens r_purge r_dest
+        IFS='|' read -r r_id r_name r_scope r_sens r_purge r_dest <<< "$row"
+
+        local purge_fmt="$r_purge"
+        if [[ "$r_purge" =~ SÍ|SI|true|Activa ]]; then
+            purge_fmt="\033[41;97;1m ¡PURGA ACTIVA! \033[0m"
+        else
+            purge_fmt="${ANSI_DIM}No${ANSI_RESET}"
+        fi
+
+        local sens_fmt="$r_sens"
+        if [[ "$r_sens" =~ SÍ|SI|true ]]; then
+            sens_fmt="${ANSI_YELLOW}SÍ (AES-256)${ANSI_RESET}"
+        else
+            sens_fmt="${ANSI_DIM}No${ANSI_RESET}"
+        fi
+
+        printf "%-18s %-12s %-26b %-32b %s\n" "$r_id" "$r_scope" "$sens_fmt" "$purge_fmt" "$r_dest"
+    done
+    echo -e "${ANSI_CYAN}${ANSI_BOLD}========================================================================================${ANSI_RESET}"
+}
+
+# ------------------------------------------------------------------------------
+# Función: ansi_view_confirm_critical
+# Descripción: Solicita confirmación explícita requiriendo teclear 'SI' en mayúsculas
+# Parámetros:
+#   $1 - Mensaje o pregunta de advertencia
+# Retorno:
+#   0 si escribe SI / SÍ, 1 en cualquier otro caso
+# ------------------------------------------------------------------------------
+ansi_view_confirm_critical() {
+    local prompt_msg="${1:-Para autorizar esta acción destructiva, escriba 'SI' en mayúsculas y pulse ENTER}"
+    _ansi_view_init_palette
+    echo -ne "\033[41;97;1m [ATENCIÓN REQUERIDA] \033[0m ${ANSI_BOLD}${prompt_msg}:${ANSI_RESET} " >&2
+    local answer=""
+    read -r answer
+    if [[ "$answer" == "SI" || "$answer" == "SÍ" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
