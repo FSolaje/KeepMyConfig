@@ -24,6 +24,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+
       - name: Resolve Tag & Pre-release Status
         id: meta
         run: |
@@ -41,27 +46,11 @@ jobs:
             echo "Pre-release detectada: No ($TAG)"
           fi
 
-      - name: Package Release Archive (.tar.gz)
+      - name: Build Official Distribution Packages & Checksums
         run: |
           TAG="${{ steps.meta.outputs.tag }}"
-          ARCHIVE_NAME="KeepMyConfig-${TAG}.tar.gz"
-          tar --exclude='.git' \
-              --exclude='.github' \
-              --exclude='user_data' \
-              --exclude='tests' \
-              -czf "$ARCHIVE_NAME" \
-              backup_manager.sh \
-              lib \
-              config \
-              modules.d \
-              markers \
-              .backup_app_marker \
-              LICENSE \
-              README.md \
-              MANUAL_USUARIO.md \
-              ESPECIFICACION.md \
-              CHANGELOG.md
-          echo "ARCHIVE_PATH=$ARCHIVE_NAME" >> "$GITHUB_ENV"
+          chmod +x scripts/package.sh
+          ./scripts/package.sh --version "$TAG" --output-dir dist --type all --clean
 
       - name: Publish Release to GitHub
         uses: softprops/action-gh-release@v2
@@ -70,6 +59,8 @@ jobs:
           name: ${{ steps.meta.outputs.tag }}
           prerelease: ${{ steps.meta.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
-          files: ${{ env.ARCHIVE_PATH }}
+          files: |
+            dist/KeepMyConfig-*.tar.*
+            dist/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
