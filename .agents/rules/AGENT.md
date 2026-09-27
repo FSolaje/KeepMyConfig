@@ -4,7 +4,7 @@ trigger: always_on
 
 # Directrices y Parámetros del Agente (AGENT.md)
 
-Este documento define las reglas de comportamiento, estándares de desarrollo, gobernanza Git y parámetros operativos para el agente de IA en el proyecto **BackupConfig**.
+Este documento define las reglas de comportamiento, estándares de desarrollo, gobernanza Git y parámetros operativos para el agente de IA en el proyecto **KeepMyConfig**.
 
 ---
 
@@ -32,6 +32,15 @@ Todos los commits realizados en este repositorio deben seguir **estrictamente** 
 
 ### Ámbitos Sugeridos (`scope`)
 - `model`, `view`, `controller`, `modules`, `crypto`, `tui`, `cli`, `storage`, `deps`, `structure`, `security`, `spec`.
+
+### 1.1. Prohibición Terminante de Commits Híbridos y Regla de Atomicidad
+- **Prohibición de Mezcla `fix` + `feat`:** Queda terminantemente vetado agrupar en un mismo commit tipos dispares, en especial correcciones de errores (`fix`) con nuevas funcionalidades (`feat`). Todo bugfix o incidencia debe tener su propio commit aislado previo o posterior a la funcionalidad.
+- **Prohibición de Mezcla con Documentación Pública:** Queda estrictamente prohibido empaquetar código funcional (`feat`, `fix`) con manuales de usuario o documentación pública (`docs`).
+- **Ciclo Atómico Estándar de Commits por Fase:**
+  1. `docs(spec): ...`: Diseño de especificación, plan técnico y desglose de tareas (previo a la codificación).
+  2. `feat(...)` o `fix(...)`: Lógica funcional de negocio o corrección en MVC.
+  3. `test(...)`: Suites de pruebas unitarias y fixtures (o consolidado con la feature en caso de TDD directo).
+  4. `docs(...)`: Documentación pública de usuario (`README.md`, `MANUAL_USUARIO.md`, `CHANGELOG.md`).
 
 ---
 
@@ -135,6 +144,20 @@ Con cada commit o integración de rama en `develop` o `main`, se evaluará el im
    - **`plan.md`**: Plan técnico arquitectónico, funciones del modelo/vista/controlador y Walkthrough de impacto.
    - **`tasks.md`**: Lista atómica de tareas secuenciales de ejecución con checkboxes.
 3. **Aprobación Previa:** Solo tras la revisión de estos tres documentos se procederá a implementar el código y sus pruebas unitarias.
+4. **Commit Previo de Especificación (`docs(spec)`):**
+   Tras la aprobación de los documentos iniciales por parte del usuario y antes de escribir código de producción, se realizará obligatoriamente un commit previo e independiente bajo la convención:
+   ```bash
+   docs(spec): definir requerimientos, plan técnico y tareas para <feature>
+   ```
+   Este commit sella criptográficamente el contrato arquitectónico en el historial de Git antes de iniciar la implementación.
+5. **Control de Cambios en la Especificación:**
+   Si durante el desarrollo surgen casos borde imprevistos o desviaciones arquitectónicas sustanciales, `spec.md` o `plan.md` se actualizarán en un commit dedicado:
+   ```bash
+   docs(spec): ajustar plan técnico ante <motivo o caso borde>
+   ```
+   (No se realizarán commits de spec por el simple marcado de casillas de verificación en `tasks.md`, las cuales se consolidan al concluir cada fase o hito).
+6. **Atomicidad Obligatoria por Fase en `tasks.md`:**
+   El desglose de tareas en `tasks.md` debe definir hitos claros de commit atómico al concluir cada fase verificada con pruebas unitarias. Queda estrictamente prohibido posponer los commits hasta el final de la especificación para crear un único commit "ómnibus" acumulado.
 
 ---
 
@@ -173,6 +196,7 @@ Con cada commit o integración de rama en `develop` o `main`, se evaluará el im
 
 - **Think-Before-Act:** Antes de modificar código fuente, la IA debe explicar brevemente qué va a realizar y a qué punto exacto de la especificación técnica (`spec.md`) sirve esa edición.
 - **Read-Before-Edit:** Queda prohibido modificar o sobrescribir un archivo sin haber leído previamente su contenido completo en la sesión activa.
+- **Desacoplamiento Temprano de Requerimientos:** Si durante una sesión de trabajo se descubre un bug o comportamiento anómalo ajeno a la nueva funcionalidad en curso, ambos requerimientos se desacoplarán de inmediato. El bugfix se abordará y comiteará en su propio ciclo (`fix(...)`) sin mezclarse con la rama o tarea de la feature.
 - **Uncertainty Marker (`[NEEDS CLARIFICATION]`):** Si se detectan ambigüedades, vacíos de diseño o contradicciones funcionales, la IA se detendrá y lanzará un bloque `[NEEDS CLARIFICATION]` interrogando directamente al usuario, sin asumir ni inventar arquitecturas.
 - **Gitignore Retroactivo:** Si se modifica `.gitignore` para añadir nuevas exclusiones, la IA purgará la caché mediante `git rm -r --cached .` y re-indexará antes de presentar los cambios para evitar "Ghost Tracking".
 
@@ -185,4 +209,24 @@ Con cada commit o integración de rama en `develop` o `main`, se evaluará el im
    - Leer su contenido para retomar el contexto exacto antes de realizar cualquier acción.
 2. **Al finalizar un hito o sesión:**
    - Actualizar `PROXIMOS_PASOS.md` reflejando las tareas completadas, el estado del código y los pasos inmediatos siguientes.
+
+---
+
+## 10. Mantenimiento Mandatorio de la Documentación Pública (README.md y MANUAL_USUARIO.md)
+
+Tras el desarrollo, especificación e integración de cada nueva característica o funcionalidad (`feature`):
+1. **Actualización Obligatoria de `README.md`:**
+   - Reflejar cualquier cambio en las capacidades principales, tabla de características, requisitos o comandos del repositorio.
+2. **Actualización Obligatoria de `MANUAL_USUARIO.md`:**
+   - Documentar de forma detallada el flujo de usuario correspondiente a la nueva funcionalidad, incluyendo ejemplos de uso en TUI (menús, opciones de Whiptail) y CLI (nuevos flags o parámetros).
+3. **Mantenimiento Obligatorio de `CHANGELOG.md`:**
+   - Registrar de forma puntual los cambios en la sección `[Unreleased]` bajo las categorías pertinentes (`Added`, `Fixed`, `Changed`, `Security`).
+4. **Commit Atómico Independiente de Documentación (`docs:`):**
+   - La documentación pública (`README.md`, `MANUAL_USUARIO.md`, `CHANGELOG.md`) **debe comitearse siempre de forma aislada e independiente en un commit posterior** al del código funcional o corrección:
+     ```bash
+     docs: documentar <feature/fix> en manual de usuario, readme y changelog
+     ```
+   - Queda terminantemente prohibido incluir modificaciones a la documentación pública dentro de commits de tipo `feat(...)` o `fix(...)`.
+5. **Criterio de Aceptación Pre-Integración:**
+   - Ninguna feature se considerará concluida ni se solicitará autorización para fusionar en `develop` sin que `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md` estén plenamente sincronizados y comiteados en su commit `docs:` dedicado.
 

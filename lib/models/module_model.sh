@@ -16,8 +16,9 @@ export MOD_ERR_MISSING_FIELD=5
 export MOD_ERR_ALREADY_EXISTS=6
 export MOD_ERR_IO=7
 
-# Resolución del directorio base de módulos por defecto
+# Resolución del directorio base de módulos y plantillas por defecto
 _MODULE_MODEL_DEFAULT_DIR="${MODULES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../modules.d" 2>/dev/null && pwd)}"
+_MODULE_MODEL_DEFAULT_TEMPLATES_DIR="${TEMPLATES_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../templates.d" 2>/dev/null && pwd)}"
 _MODULE_MODEL_DEFAULT_TAGS="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../config" 2>/dev/null && pwd)/default_tags.conf"
 
 # ------------------------------------------------------------------------------
@@ -235,6 +236,53 @@ module_model_check_paths() {
 }
 
 # ------------------------------------------------------------------------------
+# Función: module_model_sanitize_path
+# Descripción: Normaliza y sanea una ruta para garantizar que sea relativa al HOME
+#              del usuario, eliminando prefijos ($HOME, ~, /home/<user>/), barras
+#              redundantes y bloqueando intentos de directory traversal (..).
+# Parámetros:
+#   $1 - Ruta en bruto ingresada
+# Salida stdout:
+#   Ruta relativa limpia
+# Retorno:
+#   MOD_OK si es válida, MOD_ERR_CONFIG si queda vacía, es '.' o contiene '..'
+# ------------------------------------------------------------------------------
+module_model_sanitize_path() {
+    local raw_path="${1:-}"
+    [[ -n "$raw_path" ]] || return "$MOD_ERR_CONFIG"
+
+    # Limpiar espacios en blanco al inicio y al final
+    local clean
+    clean="$(echo "$raw_path" | xargs 2>/dev/null || echo "$raw_path")"
+    [[ -n "$clean" ]] || return "$MOD_ERR_CONFIG"
+
+    # Bloquear intentos de navegación hacia directorios superiores (..)
+    if [[ "$clean" =~ (^|/)\.\.(/|$) ]]; then
+        return "$MOD_ERR_CONFIG"
+    fi
+
+    # Eliminar prefijos de inicio: ${HOME}, $HOME, ~, /home/<usuario>
+    clean=$(echo "$clean" | sed -E 's#^(\$\{HOME\}|\$HOME|~|/home/[^/]+)(/.*)?$#\2#')
+
+    # Eliminar barras iniciales
+    clean=$(echo "$clean" | sed -E 's#^/+##')
+
+    # Eliminar barras finales
+    clean=$(echo "$clean" | sed -E 's#/+$##')
+
+    # Reducir secuencias de múltiples barras internas a una sola
+    clean=$(echo "$clean" | sed -E 's#/{2,}#/#g')
+
+    # Validar que no quede vacía o sea solo "."
+    if [[ -z "$clean" || "$clean" == "." ]]; then
+        return "$MOD_ERR_CONFIG"
+    fi
+
+    echo "$clean"
+    return "$MOD_OK"
+}
+
+# ------------------------------------------------------------------------------
 # Función: module_model_save
 # Descripción: Crea o sobrescribe un archivo .conf de módulo de forma atómica.
 # Parámetros:
@@ -278,15 +326,23 @@ module_model_save() {
         [[ -n "$t" ]] && tags_formatted+="\"$t\" "
     done
 
-    # Procesar rutas (soportando separador pipe '|' o comas)
+    # Procesar rutas (soportando separador pipe '|' o comas) y sanear automáticamente
     local paths_formatted=""
     local delim='|'
     [[ "$paths_str" =~ \| ]] || delim=','
     IFS="$delim" read -r -a paths_raw <<< "$paths_str"
+    local valid_paths_count=0
     for p in "${paths_raw[@]}"; do
         p=$(echo "$p" | xargs)
-        [[ -n "$p" ]] && paths_formatted+="    \"$p\""$'\n'
+        [[ -n "$p" ]] || continue
+        local san_p
+        if san_p=$(module_model_sanitize_path "$p"); then
+            paths_formatted+="    \"$san_p\""$'\n'
+            valid_paths_count=$((valid_paths_count + 1))
+        fi
     done
+
+    [[ $valid_paths_count -gt 0 ]] || return "$MOD_ERR_CONFIG"
 
     local target_file="$modules_dir/$mod_id.conf"
     local temp_file="$modules_dir/.tmp_${mod_id}_$$"
@@ -417,3 +473,149 @@ module_model_add_tag_to_catalog() {
     echo "${tag_id}:${desc}" >> "$tags_file" || return "$MOD_ERR_IO"
     return "$MOD_OK"
 }
+
+# ------------------------------------------------------------------------------
+# Función: module_model_list_templates
+# Descripción: Lista todos los IDs de plantillas disponibles en templates.d/.
+# Parámetros:
+#   $1 - (Opcional) Directorio de plantillas alternativo
+# Salida stdout:
+#   Lista de IDs de plantillas válidas (uno por línea)
+# Retorno:
+#   MOD_OK si se listaron con éxito.
+# ------------------------------------------------------------------------------
+module_model_list_templates() {
+    local templates_dir="${1:-$_MODULE_MODEL_DEFAULT_TEMPLATES_DIR}"
+    [[ -d "$templates_dir" ]] || return "$MOD_ERR_NOT_FOUND"
+
+    local conf_file tmpl_id
+    for conf_file in "$templates_dir"/*.conf; do
+        [[ -f "$conf_file" ]] || continue
+        tmpl_id="$(basename "$conf_file" .conf)"
+        # Omitir el esqueleto canónico de desarrollo de la lista de plantillas activables
+        [[ "$tmpl_id" == "template-skeleton" ]] && continue
+        if module_model_get "$tmpl_id" "$templates_dir" >/dev/null 2>&1; then
+            echo "$tmpl_id"
+        fi
+    done
+    return "$MOD_OK"
+}
+
+# ------------------------------------------------------------------------------
+# Función: module_model_get_template
+# Descripción: Obtiene la metadata estructurada de una plantilla de receta.
+# Parámetros:
+#   $1 - ID de la plantilla
+#   $2 - (Opcional) Directorio de plantillas alternativo
+# Salida stdout:
+#   Definición estructurada CLAVE=VALOR
+# Retorno:
+#   0 en éxito, código de error en caso contrario.
+# ------------------------------------------------------------------------------
+module_model_get_template() {
+    local tmpl_id="${1:-}"
+    local templates_dir="${2:-$_MODULE_MODEL_DEFAULT_TEMPLATES_DIR}"
+    module_model_get "$tmpl_id" "$templates_dir"
+}
+
+# ------------------------------------------------------------------------------
+# Función: module_model_activate_template
+# Descripción: Copia una receta desde templates.d/ hacia un catálogo de módulos
+#              (global modules.d/ o local de perfil).
+# Parámetros:
+#   $1 - ID de la plantilla a activar
+#   $2 - (Opcional) Directorio destino de módulos (por defecto modules.d/)
+#   $3 - (Opcional) Directorio de plantillas origen
+# Retorno:
+#   MOD_OK en éxito, MOD_ERR_ALREADY_EXISTS si ya existe en destino, o código de error.
+# ------------------------------------------------------------------------------
+module_model_activate_template() {
+    local tmpl_id="${1:-}"
+    local target_dir="${2:-$_MODULE_MODEL_DEFAULT_DIR}"
+    local templates_dir="${3:-$_MODULE_MODEL_DEFAULT_TEMPLATES_DIR}"
+
+    module_model_validate_id "$tmpl_id" || return "$MOD_ERR_INVALID_ID"
+    [[ -n "$target_dir" ]] || return "$MOD_ERR_CONFIG"
+
+    local src_file="$templates_dir/$tmpl_id.conf"
+    [[ -f "$src_file" && -r "$src_file" ]] || return "$MOD_ERR_NOT_FOUND"
+
+    local dest_file="$target_dir/$tmpl_id.conf"
+    if [[ -f "$dest_file" ]]; then
+        return "$MOD_ERR_ALREADY_EXISTS"
+    fi
+
+    mkdir -p "$target_dir" 2>/dev/null || return "$MOD_ERR_IO"
+    cp "$src_file" "$dest_file" || return "$MOD_ERR_IO"
+    return "$MOD_OK"
+}
+
+# ------------------------------------------------------------------------------
+# Función: module_model_create_template
+# Descripción: Crea una nueva plantilla de módulo directamente en templates.d/.
+# Parámetros:
+#   $1 - ID de la plantilla
+#   $2 - Nombre descriptivo
+#   $3 - Lista de etiquetas separadas por comas
+#   $4 - Lista de rutas separadas por pipes o comas
+#   $5 - IS_SENSITIVE (true/false)
+#   $6 - PURGE_AFTER_BACKUP (true/false)
+#   $7 - POST_RESTORE_HOOK (comando opcional)
+#   $8 - (Opcional) Directorio de plantillas
+# Retorno:
+#   0 en éxito, código de error si parámetros inválidos.
+# ------------------------------------------------------------------------------
+module_model_create_template() {
+    local tmpl_id="${1:-}"
+    local name="${2:-}"
+    local tags_str="${3:-}"
+    local paths_str="${4:-}"
+    local is_sensitive="${5:-false}"
+    local purge_after="${6:-false}"
+    local hook="${7:-}"
+    local templates_dir="${8:-$_MODULE_MODEL_DEFAULT_TEMPLATES_DIR}"
+
+    module_model_save "$tmpl_id" "$name" "$tags_str" "$paths_str" "$is_sensitive" "$purge_after" "$hook" "$templates_dir"
+}
+
+# ------------------------------------------------------------------------------
+# Función: module_model_export_to_template
+# Descripción: Promueve un módulo activo existente (global o de perfil) a la
+#              biblioteca permanente templates.d/.
+# Parámetros:
+#   $1 - Ruta al archivo .conf del módulo origen
+#   $2 - ID de la plantilla destino en templates.d/
+#   $3 - (Opcional) Directorio de plantillas destino
+# Retorno:
+#   0 en éxito, código de error en caso de fallo.
+# ------------------------------------------------------------------------------
+module_model_export_to_template() {
+    local source_file="${1:-}"
+    local target_tmpl_id="${2:-}"
+    local templates_dir="${3:-$_MODULE_MODEL_DEFAULT_TEMPLATES_DIR}"
+
+    [[ -f "$source_file" && -r "$source_file" ]] || return "$MOD_ERR_NOT_FOUND"
+    module_model_validate_id "$target_tmpl_id" || return "$MOD_ERR_INVALID_ID"
+
+    if ! bash -n "$source_file" >/dev/null 2>&1; then
+        return "$MOD_ERR_SYNTAX"
+    fi
+
+    local src_dir src_id
+    src_dir="$(cd "$(dirname "$source_file")" 2>/dev/null && pwd)"
+    src_id="$(basename "$source_file" .conf)"
+
+    local meta
+    meta=$(module_model_get "$src_id" "$src_dir") || return "$?"
+
+    local name tags paths is_sens purge hook
+    name=$(echo "$meta" | awk -F'=' '$1 == "NAME" {print $2}')
+    tags=$(echo "$meta" | awk -F'=' '$1 == "TAGS" {print $2}')
+    paths=$(echo "$meta" | awk -F'=' '$1 == "PATHS" {print $2}')
+    is_sens=$(echo "$meta" | awk -F'=' '$1 == "IS_SENSITIVE" {print $2}')
+    purge=$(echo "$meta" | awk -F'=' '$1 == "PURGE_AFTER_BACKUP" {print $2}')
+    hook=$(echo "$meta" | awk -F'=' '$1 == "POST_RESTORE_HOOK" {print $2}')
+
+    module_model_save "$target_tmpl_id" "$name" "$tags" "$paths" "$is_sens" "$purge" "$hook" "$templates_dir"
+}
+

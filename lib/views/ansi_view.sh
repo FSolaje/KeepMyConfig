@@ -47,7 +47,7 @@ _ansi_view_init_palette
 
 # Encabezado visual de sección o aplicación
 ansi_view_header() {
-    local title="${1:-BackupConfig}"
+    local title="${1:-KeepMyConfig}"
     _ansi_view_init_palette
     echo -e "${ANSI_CYAN}${ANSI_BOLD}======================================================================${ANSI_RESET}"
     echo -e "${ANSI_WHITE}${ANSI_BOLD}  ${title}${ANSI_RESET}"

@@ -7,13 +7,98 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Breaking Changes
+- **Ruta Universal de Almacenamiento (`BACKUP_DESTINATION`):**
+  - Se eliminan de forma definitiva las directivas fragmentadas `STORAGE_ID_TYPE`, `STORAGE_ID_VALUE`, `STORAGE_SUBDIR` y `STORAGE_STATIC_FALLBACK` en `config/config.conf`.
+  - La ubicación del almacenamiento se define ahora exclusivamente a través de la directiva `BACKUP_DESTINATION`.
+  - **Convención Zero-Config por Perfil:** Todo perfil secundario guarda de forma automática sus copias en el subdirectorio `<BACKUP_DESTINATION>/<id_perfil>` sin necesidad de parametrización manual, mientras que el perfil `default` preserva la raíz de `<BACKUP_DESTINATION>`.
+
 ### Added
+- **Home Virtual de Pruebas y Semillas Canónicas en Sandbox (`user_data/sandbox/home/`):**
+  - Confinamiento estricto de `TARGET_USER_HOME="${sandbox_base}/home"` en ejecuciones sandbox (`--test-mode`, `--sandbox`, `KEEP_MY_CONFIG_TEST_MODE=true`).
+  - Semillas canónicas de prueba reproducibles en `tests/fixtures/sandbox_home/` y auto-inicialización en `_sandbox_seed_virtual_home` para todas las recetas base (`.bashrc`, `.bash_aliases`, `.profile`, `.bash_logout`, `.ssh/id_rsa`, `.ssh/id_rsa.pub`, `.config/Code/User/settings.json`, `.config/Code/User/keybindings.json`, `.config/Code/User/sync/sync_state.json`, `.gitconfig`, `.config/git/ignore`, `.mozilla/firefox/*`, `.config/JetBrains/*`, `.thunderbird/*`, `.config/libreoffice/*`).
+  - Capacidad de verificar en vivo el ciclo completo de backup, descifrado y purga segura con `shred -u` con total seguridad sin poner en riesgo los datos de producción en `/home/$USER`.
+  - Regeneración automática del home virtual ante `--clean-sandbox` y nueva reactivación.
+- **Captura Interactiva de Rutas Línea a Línea (`whiptail_view_input_paths`):**
+  - Sustitución de la entrada en una sola línea separada por espacios por un diálogo guiado en bucle con confirmación por Enter y refresco visual de rutas acumuladas.
+  - Orientación explícita sobre rutas relativas respecto a `$HOME`, compatibilidad con `$HOME` o `~` y normalización automática.
+  - Finalización intuitiva pulsando Enter con el campo en blanco y soporte para nombres de carpetas con espacios.
+- **Feedback Detallado con Rutas Absolutas Completas en TUI:**
+  - Desglose detallado de rutas completas de origen (`${TARGET_USER_HOME}/...`) y de destino (`${backup_dir}/archives/...`) en cuadros de diálogo de confirmación.
+  - Detalle explícito de cada ruta destruida con `shred -u` en advertencias de seguridad antes y después de su ejecución.
+  - Desglose de rutas restituidas en los diálogos de restauración selectiva y global.
+- **Modo Sandbox y Entorno Aislado de Pruebas (Sub-Hito 12.4):**
+  - **Aislamiento Total (`user_data/sandbox/`):** Confinamiento de todas las rutas de trabajo volátiles (`config/`, `modules.d/`, `profiles/` y `storage/`) en un directorio aislado protegido por `.gitignore`, garantizando 0 archivos sin seguimiento (*untracked files*) en Git tras pruebas manuales o desarrollo.
+  - **Auto-Inicialización Transparente (`controller_enable_sandbox_mode`):** Despliegue automático de la estructura del sandbox, copia adaptada de `config/config.conf` (`INITIAL_SETUP_DONE="true"`, `ACTIVE_PROFILE="default"`, `BACKUP_DESTINATION="<sandbox>/storage"`), marcador de seguridad `.backup_storage_marker` y perfil base `profiles/default/profile.conf`.
+  - **Banderas CLI y Variable de Entorno:** Soporte para `--test-mode`, `--sandbox` y variable `KEEP_MY_CONFIG_TEST_MODE=true` tanto para interfaz interactiva TUI como CLI, con filtrado temprano de argumentos para encadenar cualquier comando.
+  - **Indicadores Visuales Explícitos:** Prefijo visual `[SANDBOX]` en el título de la TUI (`whiptail_view_main_menu`) y avisos de advertencia ANSI en consola para operaciones CLI.
+  - **Comando de Purga Rápida (`--clean-sandbox`):** Eliminación total del directorio `user_data/sandbox/` mediante `controller_clean_sandbox` con confirmación formateada.
+  - **Suite de Pruebas Automatizadas Ampliada:** 50 pruebas unitarias y de integración en `tests/test_sandbox_mode.sh`, verificando inicialización, home virtual, purga con shred, cancelación en TUI y whiptail_view_input_paths.
+
+### Fixed
+- **Gestión de Cancelación Voluntaria en Menús TUI (Bugfix Exit Code 1):**
+  - Intercepción limpia de `VIEW_CANCEL` en `controller_handle_backup_module`, `controller_handle_backup_tag`, `controller_handle_restore_module`, `controller_handle_restore_all` y diálogos de contraseña GPG para retornar `0` en lugar de abortar la ejecución.
+  - Protección de todas las ramas de llamada en el bucle interactivo de `controller_run_tui` con `|| true` para evitar abortos imprevistos del shell bajo `set -e`.
+- **Ruta Universal de Almacenamiento y Notación Semántica (`device_model.sh`):**
+  - Soporte unificado en `device_model_resolve_destination` para expansión de rutas locales (`~`, `$HOME`, `${HOME}`), rutas relativas y rutas externas montadas.
+  - Soporte de notación semántica de conveniencia `@media/<LABEL>/...` para enlazar discos externos por su etiqueta sin depender de la ruta fija asignada por el entorno de escritorio.
+  - Detección automática de soportes extraíbles en `device_model_detect_external_drives` escaneando `/media/$USER/*`, `/run/media/$USER/*` y particiones no del sistema en `lsblk`.
+  - Actualización atómica de destino con `device_model_update_config_destination`.
+- **Asistente de Configuración Inicial (Onboarding Wizard) y Flag `--setup` (`app_controller.sh`):**
+  - Flujo de primera ejecución activado automáticamente si `INITIAL_SETUP_DONE="false"`.
+  - Detección inteligente de discos externos montados y recomendación por defecto de ruta local segura (`~/Backups/KeepMyConfig`).
+  - Creación automática de la estructura de carpetas y despliegue del marcador de seguridad `.backup_storage_marker`.
+  - Pregunta de persistencia de sesión: selección de arranque recordando el último perfil activo (`REMEMBER_LAST_PROFILE="true"`) o iniciando siempre en `default` (`"false"`).
+  - Nuevo parámetro de consola `--setup` para ejecutar o reconfigurar el almacenamiento y preferencias en cualquier momento.
+  - Submenú de almacenamiento renovado en la Opción 8 de la TUI: cambio de ruta universal y relanzamiento del asistente de onboarding.
+- **Perfil Físico Predeterminado y Auto-Healing (`profile_model.sh`):**
+  - Existencia permanente del archivo físico `profiles/default/profile.conf`.
+  - Mecanismo de auto-recuperación transparente (*auto-healing*) en `profile_model_init_default` que recrea el archivo con valores canónicos ante borrados accidentales.
 - **Automatización CI/CD con GitHub Actions:**
   - Workflow de CI (`.github/workflows/ci.yml`) con verificación sintáctica de Bash (`bash -n`) y ejecución de pruebas unitarias en `ubuntu-latest` para pushes y pull requests a `main` y `develop`.
   - Workflow de Release (`.github/workflows/release.yml`) para creación automática de Releases en GitHub ante pushes de tags (`v*`), con detección de pre-releases (`-alpha`, `-beta`, `-rc`), generación de notas de versión y empaquetado de distribución `.tar.gz`.
+- **Sistema de Perfiles de Backup & Scoped Modules (Hito 12):**
+  - **Modelo `profile_model.sh`:** Lógica pura de negocio para gestión CRUD de perfiles de backup (`profile_model_create`, `profile_model_get`, `profile_model_delete`, `profile_model_list`).
+  - **Resolución en Cascada y Scoped Modules:** Resolución jerárquica de recetas (`profiles/<perfil>/modules.d/` prevalece sobre `modules.d/` global), permitiendo sobrescritura (*override*) y módulos exclusivos con aislamiento estricto.
+  - **Deduplicación Automática:** Listado unificado de módulos (`profile_model_list_modules`) con deduplicación y ordenación alfabética.
+  - **Vinculación Perfil-Destino:** Posibilidad de asociar un `TARGET_SUBDIR` específico a cada perfil (ej. `Backups/Docente` o `Backups/Desarrollo`).
+  - **Persistencia Atómica de Perfil Activo:** Manejo de `ACTIVE_PROFILE` en `config/config.conf` vía `profile_model_set_active` y `profile_model_get_active`.
+  - **Integración en Controlador y CLI:**
+    - Flags `--profile <id>` para sobrescritura de sesión en cualquier comando.
+    - Flags `--list-profiles`, `--set-active-profile <id>` y `--create-profile <id>`.
+    - Indicador de ámbito (`[Global]`, `[Override]`, `[Exclusivo]`) en `--list-modules`.
+  - **Integración TUI con Whiptail:**
+    - Opción 9 en menú principal: *[PROFILES] Gestión de Perfiles de Backup*.
+    - Visualización del perfil activo en el título del menú principal (`KeepMyConfig [Perfil: <id>]`).
+    - Submenú completo para inspección, cambio de perfil activo, creación asistida, visualización de módulos con estado y borrado seguro de perfiles.
+  - **Suite de Pruebas Unitarias:** 41 pruebas específicas en `tests/test_profile_model.sh` y 18 pruebas adicionales de integración en `tests/test_controller.sh`.
+  - **Rebranding a KeepMyConfig:** Unificación de identidad y nombres en títulos de consola, diálogos de interfaz, cabeceras y scripts.
+- **Módulos con Ámbito y Sanitización de Rutas (Sub-Hito 12.1):**
+  - **Sanitización de Rutas en `module_model.sh`:** Función `module_model_sanitize_path` para normalización automática de rutas de recetas (`MODULE_PATHS`), suprimiendo prefijos `$HOME/`, `${HOME}/`, `~/` o `/home/<user>/`, eliminando barras redundantes y bloqueando intentos de directory traversal (`..`).
+  - **Sanitización de Destinos en `profile_model.sh`:** Función `profile_model_sanitize_target_subdir` que garantiza que `TARGET_SUBDIR` sea una ruta relativa al medio de almacenamiento, limpiando barras iniciales redundantes y previniendo colisiones con el punto de montaje.
+  - **Selector de Ámbito en Asistente TUI (`app_controller.sh`):** Al crear un módulo con un perfil activo distinto de `default`, se ofrece la opción de asignarlo al catálogo global (`modules.d/`) o exclusivamente al perfil activo (`profiles/<activo>/modules.d/`).
+  - **Visualización de Ámbito en TUI:** Etiquetas visuales `[Global]` o `[Perfil: <id>]` al listar, inspeccionar o eliminar recetas en la Opción 7.
+  - **Ampliación de Cobertura:** 49 nuevas aserciones en pruebas unitarias (`test_module_model.sh`, `test_profile_model.sh` y `test_controller.sh`), alcanzando 298 tests al 100% de éxito.
+- **Biblioteca de Plantillas, Activación Selectiva y Exclusión en Perfiles (Sub-Hito 12.2):**
+  - **Biblioteca de Plantillas (`templates.d/`):** Desacoplamiento del catálogo de recetas predefinidas en `templates.d/` con 9 recetas oficiales (`bash-env`, `firefox`, `git-config`, `intellij`, `libreoffice`, `ssh-keys`, `thunderbird`, `vscode-sensitive`, `vscode-standard`) y una plantilla de referencia canónica documentada (`template-skeleton.conf`).
+  - **Estado Inicial Limpio (FR-TMPL-002):** Primera ejecución con 0 módulos activos en `modules.d/`. Al invocar `--backup-all` sin módulos activos, se muestra un mensaje explicativo y amigable sugiriendo la activación de plantillas, retornando código `0` en vez de error.
+  - **Lógica de Plantillas en `module_model.sh`:** Funciones `module_model_list_templates`, `module_model_get_template`, `module_model_activate_template`, `module_model_create_template` y `module_model_export_to_template`.
+  - **Exclusión de Módulos Globales en Perfiles (`profile_model.sh`):**
+    - Soporte de directiva `DISABLED_MODULES=("mod1" "mod2")` en `profile.conf`.
+    - Funciones `profile_model_get_disabled_modules`, `profile_model_disable_module` y `profile_model_enable_module`.
+    - Filtrado en cascada en `profile_model_list_modules` y `profile_model_resolve_module` para excluir módulos globales deshabilitados en el perfil activo.
+  - **Integración TUI y CLI (`app_controller.sh` y `backup_manager.sh`):**
+    - Opción 7: Nuevas acciones para *Activar módulo desde plantilla*, *Crear nueva plantilla en la biblioteca* y *Exportar módulo activo a la biblioteca*.
+    - Opción 9: Nueva acción para *Gestionar exclusiones de módulos globales* mediante checklist interactiva para perfiles no predeterminados.
+    - Nuevas banderas CLI: `--list-templates`, `--enable-template <id>` y `--export-template <mod_id>`.
+  - **Suites de Pruebas Actualizadas:** Cobertura ampliada en `tests/test_module_model.sh`, `tests/test_profile_model.sh` y `tests/test_controller.sh`, superando 318 pruebas unitarias al 100% de éxito.
+
+### Fixed
+- **Validación Jerárquica de Marcador y Sanitización de Destinos (`fix(storage)`):**
+  - **Validación Jerárquica:** `device_model_validate_storage` ahora reconoce como válidas unidades de almacenamiento que tengan el marcador de seguridad en la raíz o en cualquier subdirectorio previo, auto-creando de forma atómica y transparente las nuevas subcarpetas de perfil (`mkdir -p`) sin obligar al usuario a ejecutar una inicialización manual previa.
+  - **Sanitización de `STORAGE_SUBDIR`:** Implementada la función `device_model_sanitize_subdir` para depurar prefijos `$HOME`, `~` o `/home/<usuario>` antes de concatenar rutas, evitando la creación de carpetas físicas literales con el nombre `'$HOME'` dentro del almacenamiento.
 
 ### Planned
-- Sistema de "Perfiles de Backup" (Hito 12: perfiles de máquina con resolución en cascada, override y módulos exclusivos).
 - Soporte para almacenamiento remoto (Hito 13: SSH, SFTP y Rsync sin privilegios root).
 
 ## [0.1.0-alpha.1] - 2026-09-20

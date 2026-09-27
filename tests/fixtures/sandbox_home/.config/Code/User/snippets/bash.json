@@ -1,0 +1,11 @@
+{
+  "Bash Shebang": {
+    "prefix": "shebang",
+    "body": [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      ""
+    ],
+    "description": "Inserta encabezado estricto de Bash"
+  }
+}

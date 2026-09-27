@@ -1,12 +1,13 @@
 # Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
-> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hook pre-commit de 5 fases activo localmente y Workflows de GitHub Actions (`ci.yml` y `release.yml`) desplegados en `develop`.  
-> **Paso inmediato:** Iniciar el **Hito 12** (Sistema de "Perfiles de Backup") creando la rama `dev/feature/backup-profiles`, redactar sus documentos SDD (`specs/backup_profiles/`) y actualizar los títulos a `KeepMyConfig`.
+> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hito 12 Base consolidado en commit `1ba2f20`, Sub-Hito 12.1 en `a5e5ea3`, Sub-Hito 12.3 en `7b34f9e`, Sub-Hito 12.4 en `264cc7c`, Sub-Hito 12.4.1 en `18ec12f`, y Gobernanza de Commits Atómicos y Reglas AGENT.md en `3988e52` en la rama `dev/feature/backup-profiles`. Toda la suite de 10 baterías con **458/458 pruebas unitarias al 100%**, escáner SAST impecable y aislamiento total en Git.  
+> **Paso inmediato para la próxima sesión:** Iniciar el **Sub-Hito 12.4.2: Arquitectura Universal TUI, Asistente de Edición de Módulos, Pre-Flight Safety Gate y Personalización Visual** bajo el flujo SDD estricto (rama dedicada `dev/feature/tui-ux-module-edit-and-safety`, commit previo `docs(spec)`, fases atómicas con pruebas y commit final `docs`).
 
 ---
 
 ## Hitos Completados:
+
 
 1. **Validación del Documento de Especificación:**
    - [x] Revisión del archivo `ESPECIFICACION.md` completada y aprobada con la inclusión de `PURGE_AFTER_BACKUP=true/false` para control atómico de purga segura con `shred -u`.
@@ -53,33 +54,101 @@
     - [x] Nueva prueba unitaria añadida en `tests/test_controller.sh` (Test 13).
     - [x] 8/8 suites de pruebas superadas y escáner SAST limpio.
     - [x] Integración en rama `develop` completada.
+11. **Política de Versionado SemVer y Lanzamiento Alfa (`v0.1.0-alpha.1`):**
+    - [x] Definición de estándar SemVer compatible con GitHub Releases.
+    - [x] Generación de Tag Anotado `v0.1.0-alpha.1` en Git.
+    - [x] Sincronización con GitHub: Repositorio remoto `FSolaje/KeepMyConfig`, subida de ramas `main`, `develop` y tag `v0.1.0-alpha.1`. Release publicada en GitHub.
+    - [x] Hook de Calidad Pre-Commit de 5 barreras en `.git/hooks/pre-commit`.
+    - [x] Automatización GitHub Actions: Workflows `ci.yml` y `release.yml`.
+12. **Sistema de Perfiles de Backup Base (`dev/feature/backup-profiles`):**
+    - [x] **Documentos SDD:** `spec.md`, `plan.md` y `tasks.md` en `specs/backup_profiles/`.
+    - [x] **Modelo `profile_model.sh`:** CRUD de perfiles, validación de IDs, persistencia atómica de `ACTIVE_PROFILE` en `config.conf`.
+    - [x] **Resolución en Cascada:** Módulos de perfil (`profiles/<perfil>/modules.d/`) prevalecen sobre módulos globales (`modules.d/`) y soporte de recetas exclusivas.
+    - [x] **Deduplicación:** Listado unificado `profile_model_list_modules`.
+    - [x] **Vinculación a Destinos:** Soporte de `TARGET_SUBDIR` específico por perfil.
+    - [x] **Integración CLI y TUI:** Flags `--profile`, `--list-profiles`, `--set-active-profile`, `--create-profile`, y Opción 9 en menú TUI de `whiptail`.
+    - [x] **Unificación de Identidad `KeepMyConfig`:** Actualización de banners, títulos, cabeceras, `README.md` y `MANUAL_USUARIO.md`.
+    - [x] **Batería de Pruebas Unitarias:** 9 suites de pruebas unitarias al 100% de éxito (249 tests en verde).
+    - [x] **Escáner SAST:** 0 alertas en 77 archivos auditados.
+    - [x] **Commit de Consolidación:** Registrado bajo Conventional Commits (`1ba2f20`).
+13. **Módulos con Ámbito y Sanitización de Rutas (Sub-Hito 12.1):**
+    - [x] **Documentos SDD:** `specs/scoped_modules_sanitization/` (`spec.md`, `plan.md`, `tasks.md`).
+    - [x] **Sanitización de Rutas en `module_model.sh`:** Función `module_model_sanitize_path` para eliminación de `$HOME`, `~`, `/home/<user>/`, barras redundantes y bloqueo de `..`.
+    - [x] **Sanitización de Destinos en `profile_model.sh`:** Función `profile_model_sanitize_target_subdir` para prevención de rutas absolutas locales en `TARGET_SUBDIR`.
+    - [x] **Selector de Ámbito en TUI (`app_controller.sh`):** Pregunta al usuario si el módulo es Global o Exclusivo del perfil activo al crearlo (Opción 7), y muestra etiquetas `[Global]` o `[Perfil: <id>]` en listados y borrados.
+    - [x] **Ampliación de Pruebas Unitarias:** 49 nuevas pruebas añadidas (total: 298 pruebas al 100% de éxito).
+    - [x] **Escáner SAST:** 0 alertas en 80 archivos auditados.
+    - [x] **Commit de Consolidación:** Registrado bajo Conventional Commits (`a5e5ea3`).
+14. **Biblioteca de Plantillas y Exclusiones en Perfiles (Sub-Hito 12.2):**
+    - [x] **Documentos SDD:** `specs/templates_and_profile_exclusions/` (`spec.md`, `plan.md`, `tasks.md`).
+    - [x] **Biblioteca `templates.d/`:** Desacoplamiento de recetas predefinidas (9 recetas base + esqueleto canónico `template-skeleton.conf`).
+    - [x] **Estado Inicial Limpio:** 0 módulos activos en `modules.d/` de inicio; orientación amigable en `--backup-all` sin error.
+    - [x] **Modelo `module_model.sh`:** Funciones de listado, lectura, activación, creación y exportación de plantillas.
+    - [x] **Modelo `profile_model.sh`:** Directiva `DISABLED_MODULES`, soporte de exclusión selectiva en perfiles y resolución en cascada con filtrado.
+    - [x] **Controlador y Vistas (`app_controller.sh` y `backup_manager.sh`):**
+      - Opciones en TUI 7 y 9 para activar plantillas, crear plantillas, exportar módulos y gestionar exclusiones en perfiles.
+      - Flags CLI `--list-templates`, `--enable-template` y `--export-template`.
+    - [x] **Documentación Actualizada:** `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md` actualizados según Regla Mandatoria 10 de `AGENT.md`.
+    - [x] **Batería de Pruebas:** 318 pruebas unitarias superadas al 100% (72 pruebas de controlador).
+15. **Ruta Universal de Backup, Destino por Perfil y Onboarding (Sub-Hito 12.3):**
+    - [x] **Documentos SDD:** `specs/universal_storage_and_onboarding/` (`spec.md`, `plan.md`, `tasks.md`).
+    - [x] **Modelo de Dispositivo y Almacenamiento Universal (`device_model.sh`):** Función `device_model_resolve_destination` (soporte `~`, `$HOME`, `${HOME}`, rutas relativas y absolutas, y `@media/<LABEL>/...`), detección de soportes externos `device_model_detect_external_drives`, actualización atómica `device_model_update_config_destination` y validación jerárquica sin fuga de variables en `device_model_validate_storage`.
+    - [x] **Perfil Default Físico y Convención Zero-Config (`profile_model.sh`):** Creación física de `profiles/default/profile.conf`, auto-reparación preventiva (*auto-healing*) en `profile_model_init_default` y resolución de destino Zero-Config por perfil `<BACKUP_DESTINATION>/<id_perfil>`.
+    - [x] **Onboarding Wizard y Control de Sesión (`app_controller.sh`):** Configuración inicial con `INITIAL_SETUP_DONE="false"`, detección de discos y opción local `$HOME/Backups/KeepMyConfig`, despliegue automático del marcador de seguridad `.backup_storage_marker`, preferencia de persistencia de sesión `REMEMBER_LAST_PROFILE=true/false` y flag CLI `--setup`.
+    - [x] **Limpieza Arquitectónica del Submenú de Almacenamiento:** Depuración de remanentes obsoletos en la Opción 8 (retirados listing/targets de Hito 9) y nueva acción directa `controller_handle_deploy_marker`.
+    - [x] **Documentación Actualizada:** Sincronización mandatoria de `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md` (con registro de `### Breaking Changes`).
+    - [x] **Batería de Pruebas Unitarias:** 370 pruebas unitarias al 100% de éxito (53 device, 78 profile, 80 controller).
+    - [x] **Auditoría de Seguridad SAST:** Escáner limpio con 0 alertas en 97 archivos.
+    - [x] **Commit de Consolidación:** Registrado bajo Conventional Commits (`7b34f9e`).
+16. **Modo Sandbox y Entorno Aislado de Pruebas (Sub-Hito 12.4):**
+    - [x] **Documentos SDD:** `specs/sandbox_test_mode/` (`spec.md`, `plan.md`, `tasks.md`) completados y aprobados.
+    - [x] **Aislamiento en `user_data/sandbox/`:** Confinamiento completo de `config/config.conf`, `modules.d/`, `profiles/` y `storage/` en un directorio excluido en `.gitignore`.
+    - [x] **Auto-Inicialización Transparente (`controller_enable_sandbox_mode`):** Despliegue de estructura de directorios, configuración con `BACKUP_DESTINATION` local a sandbox, perfil `default` canónico y marcador de seguridad `.backup_storage_marker`.
+    - [x] **Purga Segura (`controller_clean_sandbox`):** Eliminación total del sandbox con `--clean-sandbox` y reporte ANSI formateado.
+    - [x] **Integración CLI y TUI (`backup_manager.sh` y `app_controller.sh`):** Flags `--test-mode`, `--sandbox`, variable `KEEP_MY_CONFIG_TEST_MODE=true`, banner `[SANDBOX]` en título de Whiptail y avisos de seguridad en consola.
+    - [x] **Documentación Actualizada:** `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md` sincronizados rigurosamente.
+    - [x] **Commit de Consolidación:** Registrado bajo Conventional Commits (`264cc7c`).
+17. **Home Virtual en Sandbox, Captura Guiada de Rutas y Corrección TUI (Sub-Hito 12.4.1):**
+    - [x] **Documentos SDD:** `specs/sandbox_virtual_home_and_tui_ux/` (`spec.md`, `plan.md`, `tasks.md`).
+    - [x] **Home Virtual de Pruebas (`user_data/sandbox/home/`):** Confinamiento estricto de `TARGET_USER_HOME`, semillas canónicas en `tests/fixtures/sandbox_home/` para todas las recetas base y verificación segura de purga con `shred -u` sin tocar el `$HOME` real.
+    - [x] **Captura Interactiva de Rutas Línea a Línea (`whiptail_view_input_paths`):** Cuadro dinámico con confirmación por Enter, visualización acumulada y orientación sobre rutas relativas/$HOME.
+    - [x] **Feedback Detallado con Rutas Absolutas en TUI:** Desglose de rutas completas de origen, destino y ficheros destruidos en diálogos informativos.
+    - [x] **Corrección de Cancelación en TUI:** Retorno limpio `0` en cancelación voluntaria de selección de módulos, etiquetas, menús y contraseñas (evitando abortos bajo `set -e`).
+    - [x] **Batería de Pruebas Unitarias:** 50 pruebas en `tests/test_sandbox_mode.sh` (total: 458/458 pruebas superadas al 100%).
+    - [x] **Commit de Consolidación:** Registrado bajo Conventional Commits (`18ec12f`).
+18. **Blindaje Normativo de Gobernanza Git y Atomicidad Documental:**
+    - [x] Actualización de `.agents/rules/AGENT.md` con prohibición de commits híbridos (`fix` + `feat`), obligatoriedad de commits previos de especificación (`docs(spec)`), atomicidad por fases en `tasks.md`, desacoplamiento temprano de bugs y commits atómicos independientes para documentación pública (`docs:`).
+    - [x] **Commit Atómico Dedicado:** Registrado bajo Conventional Commits (`3988e52`).
 
 ---
 
 ## Hoja de Ruta Inmediata y Futuras Funcionalidades (Roadmap):
 
-### Hito 11: Política de Versionado SemVer y Lanzamiento Alfa (`v0.1.0-alpha.1`)
-- [x] **Definición de estándar SemVer:** Estructurar el versionado con prefijo `v` (`vMAJOR.MINOR.PATCH-PRERELEASE`) compatible con GitHub Releases.
-- [x] **Generación de Tag Anotado:** Creación del tag `v0.1.0-alpha.1` en Git para congelar el hito funcional del MVP base (MVC, GPG, Shred, TUI/CLI, Multi-target, Local Path).
-- [x] **Documentación de Publicación:** Registrar en `MANUAL_USUARIO.md` o documentación del repositorio el procedimiento de publicación de releases y pre-releases en GitHub.
-- [x] **Sincronización con GitHub:** Creación del repositorio remoto `FSolaje/KeepMyConfig`, subida de ramas `main`, `develop` y tag `v0.1.0-alpha.1`. Publicación de la Release en GitHub.
-- [x] **Hook de Calidad Pre-Commit:** Despliegue de `.git/hooks/pre-commit` con 5 barreras (conflictos, archivos pesados/secretos, sintaxis `bash -n`, SAST y tests unitarios).
-- [x] **Automatización GitHub Actions:** Creación de workflows `.github/workflows/ci.yml` (tests continuos) y `.github/workflows/release.yml` (publicación automática de releases y distribución `.tar.gz`).
+### Sub-Hito 12.4.2 (Siguiente Tarea Inmediata): Arquitectura Universal TUI, Asistente de Edición de Módulos, Pre-Flight Safety Gate y Personalización Visual
+- [ ] Creación de rama GitFlow dedicada: `dev/feature/tui-ux-module-edit-and-safety`.
+- [ ] Especificación SDD en `specs/tui_ux_module_edit_and_safety/` (`spec.md`, `plan.md`, `tasks.md`).
+- [ ] Commit previo obligatorio de especificación: `docs(spec): definir arquitectura universal TUI, edicion de modulos, safety gate y temas`.
+- [ ] **Fase 1 (Bugfix Sandbox):** Sembrado automático de recetas `.conf` en `user_data/sandbox/modules.d/` y guardas defensivas ante listas vacías.
+- [ ] **Fase 2 (UX Rutas):** Clarificación contextual de rutas relativas/absolutas y ruta base en asistentes.
+- [ ] **Fase 3 (Edición de Módulos en TUI):** Asistente interactivo para modificar nombre, rutas, etiquetas, sensible (GPG) y purga (`shred -u`), respetando ámbito global vs perfil.
+- [ ] **Fase 4 (Resolución de Colisiones en Plantillas):** Menú para clonar/derivar con nuevo ID (`--as-module`), sobrescribir o cancelar.
+- [ ] **Fase 5 (Pre-Flight Safety Gate):** Matriz resumen y confirmación interactiva en TUI y CLI con alertas rojas para `shred -u` y matriz de acciones críticas.
+- [ ] **Fase 6 (Arquitectura Universal de Menús y Temas TUI):** Homogeneización de los 7 menús con telemetría, badges e iconos; soporte de paletas (`midnight`, `cyberdark`, `aubergine`, `amber`, `default`) mediante `NEWT_COLORS`.
+- [ ] **Fase 7 (Suites de Tests Unitarios):** Batería de pruebas para edición de módulos, clonación de plantillas, sembrado de sandbox y pre-flight gate.
+- [ ] **Fase 8 (Documentación Pública):** Actualización y commit atómico independiente `docs: ...` de `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md`.
 
-### Hito 12: Sistema de "Perfiles de Backup" (Backup Profiles & Scoped Modules)
-- [ ] **Modelo de Perfiles:** Definición del perfil activo (`ACTIVE_PROFILE` en configuración y flag CLI `--profile <nombre>`).
-- [ ] **Jerarquía y Precedencia de Módulos:**
-  - Módulos globales en `modules.d/` (disponibles para todos los entornos).
-  - Módulos específicos en `profiles/<perfil>/modules.d/`:
-    - *Sobrescritura (Override):* Si coincide el ID/nombre con uno global, se ejecuta la versión del perfil.
-    - *Exclusivos:* Si un módulo sólo pertenece a un perfil, no aparece ni se ejecuta en perfiles ajenos.
-- [ ] **Vinculación Perfil-Destino:** Cada perfil puede asociar su propio `TARGET_SUBDIR` (ej. `Backups/Lliurex25` vs `Backups/Personal_PC`).
-- [ ] **Interfaz TUI/CLI:** Selector de perfil activo en TUI y soporte `--profile` en línea de comandos.
-- [ ] **Pruebas Unitarias:** Suites de test para validar la resolución en cascada, precedencia y aislamiento de recetas.
+### Sub-Hito 12.5: Sistema de Empaquetado y Distribución Automatizada para Releases
+- [ ] Definición de Manifiesto de Distribución con Lista Blanca estricta (exclusión de `.agents/`, `specs/`, `tests/`, `user_data/`, etc.).
+- [ ] Script reproducible de empaquetado `scripts/package.sh` para generar `KeepMyConfig-vX.Y.Z.tar.gz` (sin tarbomb) y `SHA256SUMS.txt`.
+- [ ] Script de instalación opcional sin sudo `install.sh` (`~/.local/bin` y lanzador desktop para Lliurex 25 / Ubuntu 24.04).
+- [ ] Actualización del workflow `.github/workflows/release.yml` para adjuntar los artefactos empaquetados oficiales en cada release de GitHub.
+- [ ] Commit independiente del Sub-Hito 12.5.
 
 ### Hito 13: Almacenamiento Remoto (SSH, SFTP, Rsync)
-- [ ] **Ampliación de `STORAGE_ID_TYPE`:** Añadir soportes `SSH`, `SFTP` y `RSYNC`.
+- [ ] **Ampliación de `BACKUP_DESTINATION`:** Añadir soporte para destinos remotos (`ssh://user@host/path`, `sftp://`, `rsync://`).
 - [ ] **Autenticación y Conectividad sin privilegios:** Integración de claves SSH y comprobación de puertos/hosts.
 - [ ] **Validación Remota del Marcador:** Verificación de `.backup_storage_marker` en destino remoto mediante canal seguro.
 - [ ] **Transferencia Eficiente:** Estrategia de sincronización o montaje (FUSE `sshfs` o canalización `rsync`/tuberías `ssh`).
 - [ ] **Asociación con Perfiles:** Posibilidad de que cada perfil defina si su destino es un SSD físico, ruta local o servidor remoto.
+
+
