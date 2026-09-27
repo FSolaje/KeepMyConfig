@@ -130,11 +130,11 @@ assert_contains "$cli_sandbox_out" "[AVISO] Ejecutando en MODO TEST / SANDBOX" "
 env_test_out=$(KEEP_MY_CONFIG_TEST_MODE=true "${PROJECT_ROOT}/backup_manager.sh" --list-modules 2>&1)
 assert_contains "$env_test_out" "[AVISO] Ejecutando en MODO TEST / SANDBOX" "KEEP_MY_CONFIG_TEST_MODE=true debe activar el sandbox"
 
-# Test 10: Activación de plantilla aislada en sandbox
-enable_out=$("${PROJECT_ROOT}/backup_manager.sh" --test-mode --enable-template bash-env 2>&1)
-assert_contains "$enable_out" "Plantilla 'bash-env' activada" "--enable-template debe confirmar activación en modo sandbox"
-assert_file_exists "${PROJECT_ROOT}/user_data/sandbox/modules.d/bash-env.conf" "bash-env.conf debe existir en user_data/sandbox/modules.d"
-assert_file_not_exists "${PROJECT_ROOT}/modules.d/bash-env.conf" "modules.d raíz de producción NO debe contener bash-env.conf"
+# Test 10: Activación de plantilla aislada en sandbox (usando firefox, no sembrada por defecto)
+enable_out=$("${PROJECT_ROOT}/backup_manager.sh" --test-mode --enable-template firefox 2>&1)
+assert_contains "$enable_out" "Plantilla 'firefox' activada" "--enable-template debe confirmar activación en modo sandbox"
+assert_file_exists "${PROJECT_ROOT}/user_data/sandbox/modules.d/firefox.conf" "firefox.conf debe existir en user_data/sandbox/modules.d"
+assert_file_not_exists "${PROJECT_ROOT}/modules.d/firefox.conf" "modules.d raíz de producción NO debe contener firefox.conf"
 
 # Test 11: Creación de perfil aislado en sandbox
 create_prof_out=$("${PROJECT_ROOT}/backup_manager.sh" --test-mode --create-profile docente 2>&1)
@@ -144,7 +144,8 @@ assert_file_not_exists "${PROJECT_ROOT}/profiles/docente" "profiles/ raíz de pr
 
 # Test 12: Listado de módulos en sandbox refleja los módulos activados en sandbox
 list_mods_out=$("${PROJECT_ROOT}/backup_manager.sh" --test-mode --list-modules 2>&1)
-assert_contains "$list_mods_out" "bash-env" "--list-modules en sandbox debe listar bash-env"
+assert_contains "$list_mods_out" "firefox" "--list-modules en sandbox debe listar firefox"
+assert_contains "$list_mods_out" "bash-env" "--list-modules en sandbox debe listar bash-env (sembrado)"
 
 # Test 13: Comprobación de que git status permanece completamente limpio (NFR-SEC-001)
 git_status_porcelain=$(git -C "${PROJECT_ROOT}" status --porcelain user_data/sandbox 2>&1 || true)
@@ -258,6 +259,11 @@ whiptail() {
 captured_paths=$(whiptail_view_input_paths "Test Entrada" "Módulo Mock" 2>/dev/null)
 assert_eq ".config/app|.apprc" "$captured_paths" "whiptail_view_input_paths debe retornar las rutas acumuladas unidas por pipe"
 rm -f "$INPUT_SIM_FILE"
+
+# Test 22: Sembrado automático de módulos canónicos en user_data/sandbox/modules.d (RF-01)
+"${PROJECT_ROOT}/backup_manager.sh" --test-mode --list-modules &>/dev/null
+assert_file_exists "${PROJECT_ROOT}/user_data/sandbox/modules.d/bash-env.conf" "Sandbox debe sembrar automáticamente bash-env.conf en modules.d"
+assert_file_exists "${PROJECT_ROOT}/user_data/sandbox/modules.d/ssh-keys.conf" "Sandbox debe sembrar automáticamente ssh-keys.conf en modules.d"
 
 # Purga final del sandbox para dejar el espacio limpio
 "${PROJECT_ROOT}/backup_manager.sh" --clean-sandbox &>/dev/null || true

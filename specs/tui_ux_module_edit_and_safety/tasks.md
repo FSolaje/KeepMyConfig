@@ -17,10 +17,10 @@
 ---
 
 ## Fase 1: Sembrado de Módulos en Sandbox Mode y Guardas Defensivas (Bugfix)
-- [ ] Implementar función auxiliar `_sandbox_seed_modules` en `lib/controllers/app_controller.sh`.
-- [ ] Invocar el sembrado en `controller_enable_sandbox_mode` para copiar `${base_dir}/modules.d/*.conf` a `${sandbox_base}/modules.d/`.
-- [ ] Añadir guardas en `controller_handle_backup_module` y `controller_handle_restore_module` para avisar amigablemente si la lista de módulos está vacía en lugar de abrir un selector vacío.
-- [ ] Verificar manualmente en `--test-mode` que el listado de módulos muestra las recetas.
+- [x] Implementar función auxiliar `_sandbox_seed_modules` en `lib/controllers/app_controller.sh`.
+- [x] Invocar el sembrado en `controller_enable_sandbox_mode` para copiar `${base_dir}/modules.d/*.conf` a `${sandbox_base}/modules.d/`.
+- [x] Añadir guardas en `controller_handle_backup_module` y `controller_handle_restore_module` para avisar amigablemente si la lista de módulos está vacía en lugar de abrir un selector vacío.
+- [x] Verificar manualmente en `--test-mode` que el listado de módulos muestra las recetas.
 - [ ] **Hito de Commit 1 (fix):**
   ```bash
   fix(sandbox): sembrar recetas base en user_data/sandbox/modules.d y añadir guardas ante listas vacías
