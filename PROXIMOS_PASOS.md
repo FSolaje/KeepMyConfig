@@ -1,8 +1,8 @@
 # Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
-> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hito 12 Base consolidado en commit `1ba2f20` y Sub-Hito 12.1 en `a5e5ea3` en la rama `dev/feature/backup-profiles`. Sub-Hitos 12.2 y 12.3 finalizados, testeados al 100% (368/368 pruebas unitarias), documentación pública sincronizada y SAST limpio.  
-> **Paso inmediato:** Autorización humana de commit para el **Sub-Hito 12.3** (`feat!(storage): ruta universal de backup, destino por perfil y asistente de onboarding`) y proceder con el **Sub-Hito 12.4** (Sistema de Empaquetado y Distribución Automatizada para Releases).
+> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hito 12 Base consolidado en commit `1ba2f20`, Sub-Hito 12.1 en `a5e5ea3`, Sub-Hito 12.3 en `7b34f9e`, y **Sub-Hito 12.4 (Modo Sandbox / Test Mode) completado y listo para commit** en la rama `dev/feature/backup-profiles`. Toda la suite de 10 baterías con **405/405 pruebas unitarias al 100%**, escáner SAST impecable y aislamiento total en Git.  
+> **Paso inmediato para la próxima sesión:** Consolidar en Git el Sub-Hito 12.4 tras aprobación del usuario, y continuar con el **Sub-Hito 12.5: Sistema de Empaquetado y Distribución Automatizada para Releases** (`scripts/package.sh` e `install.sh`).
 
 ---
 
@@ -94,52 +94,43 @@
     - [x] **Modelo de Dispositivo y Almacenamiento Universal (`device_model.sh`):** Función `device_model_resolve_destination` (soporte `~`, `$HOME`, `${HOME}`, rutas relativas y absolutas, y `@media/<LABEL>/...`), detección de soportes externos `device_model_detect_external_drives`, actualización atómica `device_model_update_config_destination` y validación jerárquica sin fuga de variables en `device_model_validate_storage`.
     - [x] **Perfil Default Físico y Convención Zero-Config (`profile_model.sh`):** Creación física de `profiles/default/profile.conf`, auto-reparación preventiva (*auto-healing*) en `profile_model_init_default` y resolución de destino Zero-Config por perfil `<BACKUP_DESTINATION>/<id_perfil>`.
     - [x] **Onboarding Wizard y Control de Sesión (`app_controller.sh`):** Configuración inicial con `INITIAL_SETUP_DONE="false"`, detección de discos y opción local `$HOME/Backups/KeepMyConfig`, despliegue automático del marcador de seguridad `.backup_storage_marker`, preferencia de persistencia de sesión `REMEMBER_LAST_PROFILE=true/false` y flag CLI `--setup`.
+    - [x] **Limpieza Arquitectónica del Submenú de Almacenamiento:** Depuración de remanentes obsoletos en la Opción 8 (retirados listing/targets de Hito 9) y nueva acción directa `controller_handle_deploy_marker`.
     - [x] **Documentación Actualizada:** Sincronización mandatoria de `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md` (con registro de `### Breaking Changes`).
-    - [x] **Batería de Pruebas Unitarias:** 368 pruebas unitarias al 100% de éxito (53 device, 78 profile, 78 controller).
-    - [x] **Auditoría de Seguridad SAST:** Escáner limpio con 0 alertas en 100 archivos.
+    - [x] **Batería de Pruebas Unitarias:** 370 pruebas unitarias al 100% de éxito (53 device, 78 profile, 80 controller).
+    - [x] **Auditoría de Seguridad SAST:** Escáner limpio con 0 alertas en 97 archivos.
+    - [x] **Commit de Consolidación:** Registrado bajo Conventional Commits (`7b34f9e`).
+16. **Modo Sandbox y Entorno Aislado de Pruebas (Sub-Hito 12.4):**
+    - [x] **Documentos SDD:** `specs/sandbox_test_mode/` (`spec.md`, `plan.md`, `tasks.md`) completados y aprobados.
+    - [x] **Aislamiento en `user_data/sandbox/`:** Confinamiento completo de `config/config.conf`, `modules.d/`, `profiles/` y `storage/` en un directorio excluido en `.gitignore`.
+    - [x] **Auto-Inicialización Transparente (`controller_enable_sandbox_mode`):** Despliegue de estructura de directorios, configuración con `BACKUP_DESTINATION` local a sandbox, perfil `default` canónico y marcador de seguridad `.backup_storage_marker`.
+    - [x] **Purga Segura (`controller_clean_sandbox`):** Eliminación total del sandbox con `--clean-sandbox` y reporte ANSI formateado.
+    - [x] **Integración CLI y TUI (`backup_manager.sh` y `app_controller.sh`):** Flags `--test-mode`, `--sandbox`, variable `KEEP_MY_CONFIG_TEST_MODE=true`, banner `[SANDBOX]` en título de Whiptail y avisos de seguridad en consola.
+    - [x] **Documentación Actualizada:** `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md` sincronizados rigurosamente.
+    - [x] **Batería de Pruebas Unitarias:** Nueva suite `tests/test_sandbox_mode.sh` con 33 pruebas superadas (total: 405/405 pruebas al 100%).
 
 ---
 
 ## Hoja de Ruta Inmediata y Futuras Funcionalidades (Roadmap):
 
-### Sub-Hito 12.1: Módulos con Ámbito y Sanitización de Rutas (Completado y Consolidado)
-- [x] Documentos SDD aprobados por el usuario (`specs/scoped_modules_sanitization/`).
-- [x] Implementar `module_model_sanitize_path` en `lib/models/module_model.sh` (limpieza automática de `$HOME/`, `~/`, `/home/<user>/`).
-- [x] Implementar selector de ámbito en el asistente TUI de creación de módulos (`modules.d/` vs `profiles/<activo>/modules.d/`).
-- [x] Sanitización de barras iniciales y `$HOME` en `TARGET_SUBDIR`.
-- [x] Suites de pruebas unitarias y de integración (298 tests passing).
-- [x] Commit independiente del Sub-Hito 12.1 consolidado (`a5e5ea3`).
+### Sub-Hito 12.4: Modo Sandbox / Test Mode (`--test-mode` y `--clean-sandbox`) (Completado y Listo para Commit)
+- [x] Documentos SDD completados en `specs/sandbox_test_mode/` (`spec.md`, `plan.md`, `tasks.md`).
+- [x] Implementar `controller_enable_sandbox_mode` en `lib/controllers/app_controller.sh` (confinamiento en `user_data/sandbox/` para `config/`, `modules.d/`, `profiles/`, `storage/`).
+- [x] Implementar `controller_clean_sandbox` en `lib/controllers/app_controller.sh`.
+- [x] Integrar flags `--test-mode`, `--sandbox` y `--clean-sandbox` en `backup_manager.sh`.
+- [x] Indicador visual en TUI Whiptail: `KeepMyConfig [SANDBOX] [Perfil: <id>]`.
+- [x] Suite de pruebas unitarias `tests/test_sandbox_mode.sh` con verificación de aislamiento en `git status` (33/33 tests).
+- [x] Sincronización mandatoria de `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md`.
+- [ ] Autorización y Commit independiente del Sub-Hito 12.4.
 
-### Sub-Hito 12.2: Biblioteca de Plantillas (`templates.d/`), Activación y Desactivación en Perfiles (Completado y Consolidado)
-- [x] Creación del catálogo `templates.d/` con recetas estándar listas para usar (Firefox, IntelliJ, Git, VSCode, SSH, Bash, etc.).
-- [x] Estado inicial limpio de primera ejecución: 0 módulos activos por defecto; catálogo disponible para activación selectiva.
-- [x] Soporte de directiva `DISABLED_MODULES=("mod1" "mod2")` en `profile.conf` para desactivar módulos globales en perfiles particulares.
-- [x] Adaptación de la resolución en cascada en `profile_model.sh` para filtrar exclusiones por perfil.
-- [x] Asistente TUI/CLI para activar módulos desde la biblioteca de plantillas y gestionar exclusiones en perfiles.
-- [x] Suites de pruebas unitarias y de integración (318 tests passing al 100%).
-
-### Sub-Hito 12.3: Ruta Universal de Backup, Destino por Perfil y Onboarding (Completado y Listo para Commit)
-- [x] Ruta universal unificada en `config/config.conf` (`BACKUP_DESTINATION="~/Backups/KeepMyConfig"`).
-- [x] Estado de primera ejecución (`INITIAL_SETUP_DONE="false"`) y Asistente de Onboarding interactivo (TUI / CLI `--setup`).
-- [x] Detección automática de discos externos conectados y despliegue seguro de `.backup_storage_marker`.
-- [x] Convención Zero-Config para perfiles de backup (`<BACKUP_DESTINATION>/<id_perfil>`).
-- [x] Directorio físico permanente `profiles/default/profile.conf` y auto-reparación preventiva (*auto-healing*).
-- [x] Opción `REMEMBER_LAST_PROFILE=true/false` para arrancar con el perfil de la última sesión.
-- [x] Suites de pruebas unitarias completas (368 tests passing al 100%) y escáner SAST limpio.
-- [ ] Autorización y Commit independiente del Sub-Hito 12.3.
-
-### Sub-Hito 12.4: Sistema de Empaquetado y Distribución Automatizada para Releases
+### Sub-Hito 12.5 (Siguiente Tarea): Sistema de Empaquetado y Distribución Automatizada para Releases
 - [ ] Definición de Manifiesto de Distribución con Lista Blanca estricta (exclusión de `.agents/`, `specs/`, `tests/`, `user_data/`, etc.).
 - [ ] Script reproducible de empaquetado `scripts/package.sh` para generar `KeepMyConfig-vX.Y.Z.tar.gz` (sin tarbomb) y `SHA256SUMS.txt`.
 - [ ] Script de instalación opcional sin sudo `install.sh` (`~/.local/bin` y lanzador desktop para Lliurex 25 / Ubuntu 24.04).
 - [ ] Actualización del workflow `.github/workflows/release.yml` para adjuntar los artefactos empaquetados oficiales en cada release de GitHub.
-- [ ] Commit independiente del Sub-Hito 12.4.
-
-### Sub-Hito 12.5 (Roadmap): Asistente de Configuración Guiado por Consola CLI
-- [ ] Modo interactivo paso a paso por terminal estándar (`--setup` / CLI Wizard) sin dependencia de `whiptail`, ideal para servidores headless y sesiones SSH mínimas.
+- [ ] Commit independiente del Sub-Hito 12.5.
 
 ### Hito 13: Almacenamiento Remoto (SSH, SFTP, Rsync)
-- [ ] **Ampliación de `STORAGE_ID_TYPE`:** Añadir soportes `SSH`, `SFTP` y `RSYNC`.
+- [ ] **Ampliación de `BACKUP_DESTINATION`:** Añadir soporte para destinos remotos (`ssh://user@host/path`, `sftp://`, `rsync://`).
 - [ ] **Autenticación y Conectividad sin privilegios:** Integración de claves SSH y comprobación de puertos/hosts.
 - [ ] **Validación Remota del Marcador:** Verificación de `.backup_storage_marker` en destino remoto mediante canal seguro.
 - [ ] **Transferencia Eficiente:** Estrategia de sincronización o montaje (FUSE `sshfs` o canalización `rsync`/tuberías `ssh`).

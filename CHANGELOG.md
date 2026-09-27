@@ -14,6 +14,13 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - **Convención Zero-Config por Perfil:** Todo perfil secundario guarda de forma automática sus copias en el subdirectorio `<BACKUP_DESTINATION>/<id_perfil>` sin necesidad de parametrización manual, mientras que el perfil `default` preserva la raíz de `<BACKUP_DESTINATION>`.
 
 ### Added
+- **Modo Sandbox y Entorno Aislado de Pruebas (Sub-Hito 12.4):**
+  - **Aislamiento Total (`user_data/sandbox/`):** Confinamiento de todas las rutas de trabajo volátiles (`config/`, `modules.d/`, `profiles/` y `storage/`) en un directorio aislado protegido por `.gitignore`, garantizando 0 archivos sin seguimiento (*untracked files*) en Git tras pruebas manuales o desarrollo.
+  - **Auto-Inicialización Transparente (`controller_enable_sandbox_mode`):** Despliegue automático de la estructura del sandbox, copia adaptada de `config/config.conf` (`INITIAL_SETUP_DONE="true"`, `ACTIVE_PROFILE="default"`, `BACKUP_DESTINATION="<sandbox>/storage"`), marcador de seguridad `.backup_storage_marker` y perfil base `profiles/default/profile.conf`.
+  - **Banderas CLI y Variable de Entorno:** Soporte para `--test-mode`, `--sandbox` y variable `KEEP_MY_CONFIG_TEST_MODE=true` tanto para interfaz interactiva TUI como CLI, con filtrado temprano de argumentos para encadenar cualquier comando.
+  - **Indicadores Visuales Explícitos:** Prefijo visual `[SANDBOX]` en el título de la TUI (`whiptail_view_main_menu`) y avisos de advertencia ANSI en consola para operaciones CLI.
+  - **Comando de Purga Rápida (`--clean-sandbox`):** Eliminación total del directorio `user_data/sandbox/` mediante `controller_clean_sandbox` con confirmación formateada.
+  - **Nueva Suite de Pruebas Automatizadas:** 33 pruebas unitarias y de integración en `tests/test_sandbox_mode.sh`, verificando inicialización, redirección de variables, persistencia, aislamiento en Git y purga.
 - **Ruta Universal de Almacenamiento y Notación Semántica (`device_model.sh`):**
   - Soporte unificado en `device_model_resolve_destination` para expansión de rutas locales (`~`, `$HOME`, `${HOME}`), rutas relativas y rutas externas montadas.
   - Soporte de notación semántica de conveniencia `@media/<LABEL>/...` para enlazar discos externos por su etiqueta sin depender de la ruta fija asignada por el entorno de escritorio.

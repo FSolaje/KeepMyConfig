@@ -157,8 +157,15 @@ whiptail_view_password_confirm() {
 # Menú Principal del Gestor de Backup y Recuperación
 whiptail_view_main_menu() {
     local profile_name="${1:-}"
+    local is_sandbox="${2:-${IS_SANDBOX_MODE:-false}}"
     local title="KeepMyConfig - Gestor de Backup y Recuperación"
-    if [[ -n "$profile_name" ]]; then
+    if [[ "$is_sandbox" == "true" ]]; then
+        if [[ -n "$profile_name" ]]; then
+            title="KeepMyConfig [SANDBOX] [Perfil: $profile_name]"
+        else
+            title="KeepMyConfig [SANDBOX]"
+        fi
+    elif [[ -n "$profile_name" ]]; then
         title="KeepMyConfig [Perfil: $profile_name]"
     fi
     local prompt="Seleccione la operación que desea realizar:"
