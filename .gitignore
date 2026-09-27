@@ -46,3 +46,6 @@ id_ed25519*
 # Entornos de sandbox y pruebas locales end-to-end
 sandbox/
 modules.d/sandbox-*.conf
+
+# Artefactos locales de empaquetado y distribución (Releases)
+dist/

@@ -1,0 +1,16 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=KeepMyConfig
+GenericName=Gestor de Backup y Recuperación
+GenericName[es]=Gestor de Backup y Recuperación
+GenericName[ca]=Gestor de Còpies de Seguretat i Recuperació
+Comment=Copias de seguridad y recuperación modular para terminal
+Comment[es]=Copias de seguridad y recuperación modular para terminal
+Comment[ca]=Còpies de seguretat i recuperació modular per a terminal
+Exec=keepmyconfig
+Icon=keepmyconfig
+Terminal=true
+Categories=Utility;Archiving;
+Keywords=backup;copia;seguridad;lliurex;configuracion;settings;restore;
+StartupNotify=false

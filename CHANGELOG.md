@@ -14,6 +14,26 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - **Convención Zero-Config por Perfil:** Todo perfil secundario guarda de forma automática sus copias en el subdirectorio `<BACKUP_DESTINATION>/<id_perfil>` sin necesidad de parametrización manual, mientras que el perfil `default` preserva la raíz de `<BACKUP_DESTINATION>`.
 
 ### Added
+- **Sistema de Empaquetado y Distribución Automatizada para Releases (Sub-Hito 12.5):**
+  - **Empaquetado Dual Reproducible (`scripts/package.sh`):**
+    - Generación de Edición Estándar (`KeepMyConfig-${VERSION}.tar.gz` y `.tar.zst`) con instalador y Edición Portable (`KeepMyConfig-${VERSION}-portable.tar.gz` y `.tar.zst`) autónoma *plug-and-play*.
+    - Estructura estricta Anti-Tarbomb con carpeta contenedora única y lista blanca granular en *staging* (exclusión total de `.git`, `.github`, `.agents`, `specs/`, `tests/`, `user_data/`).
+    - Normalización de permisos UNIX (`0755` directorios/ejecutables, `0644` ficheros regulares) y cálculo de firmas criptográficas `dist/SHA256SUMS.txt`.
+    - Smoke test automatizado integrado para certificar la integridad de los paquetes antes de su distribución.
+  - **Instalador y Desinstalador sin Privilegios (`install.sh` y `uninstall.sh`):**
+    - Despliegue en espacio de usuario bajo estándar XDG (`~/.local/share/KeepMyConfig/` y enlace ejecutable en `~/.local/bin/keepmyconfig`).
+    - Asistente de primera instalación (OOBE) interactivo con detección de terminal gráfica (`ptyxis`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `x-terminal-emulator`), selector guiado de destino de backups con despliegue de marcador `.backup_storage_marker` y creación de perfil inicial.
+    - Soporte para parámetros CLI desatendidos (`--target-dir`, `--bin-dir`, `--backup-dest`, `--initial-profile`, `--yes`).
+    - Desinstalador limpio con preservación de datos de usuario o purga completa (`--purge`).
+  - **Edición Portable Autónoma para Unidades Externas:**
+    - Marcador `.portable` y lanzador script wrapper `keepmyconfig.sh` ejecutable directamente desde pendrives o discos SSD en sistemas de archivos FAT32, exFAT o NTFS sin requerir enlaces simbólicos.
+  - **Artefactos Visuales e Integración Freedesktop:**
+    - Icono vectorial oficial W3C/Freedesktop en `assets/keepmyconfig.svg`.
+    - Plantilla de lanzador de escritorio Freedesktop `assets/keepmyconfig.desktop` validada con `desktop-file-validate`.
+  - **Integración en GitHub Actions (`release.yml`):**
+    - Automatización de compilación con `scripts/package.sh` y publicación de artefactos duales y `SHA256SUMS.txt` en releases oficiales de GitHub.
+  - **Suite de Pruebas Automatizadas de Empaquetado (`tests/test_packaging_and_distribution.sh`):**
+    - 96 aserciones de integración cubriendo empaquetado, lista blanca/negra, anti-tarbomb, verificación criptográfica, instalación, idempotencia, permisos y desinstalación (elevando la suite total a 624 pruebas al 100% de éxito).
 - **Arquitectura Universal de Menús TUI (Sub-Hito 12.4.2):**
   - Reestructuración integral de la navegación interactiva en un Menú Principal híbrido (acceso inmediato a backup completo y restauración sensible) y 6 submenús especializados (Respaldo, Recuperación, Perfiles, Módulos, Almacenamiento y Preferencias).
   - Cabeceras de telemetría dinámica en tiempo real que informan en cada pantalla del perfil activo, ruta resuelta de destino, módulos activos y espacio disponible en disco.
@@ -38,6 +58,10 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - 70 nuevas pruebas unitarias y de integración distribuidas en `tests/test_views.sh`, `tests/test_module_model.sh` y `tests/test_controller.sh`, alcanzando un total de 528 pruebas unitarias al 100% de éxito.
 
 ### Security
+- **Endurecimiento Preventivo de Permisos UNIX (Read-Only Hardening en Instalador):**
+  - Aplicación automática de permisos de solo lectura y ejecución `0555` sobre `backup_manager.sh`, `uninstall.sh`, directorios de `lib/` y `templates.d/`, y permisos de solo lectura `0444` sobre ficheros de lógica MVC y plantillas, bloqueando manipulaciones o inyecciones de código en espacio de usuario.
+  - Preservación estricta de permisos de escritura (`0755`/`0644`) sobre carpetas de datos de usuario (`config/`, `modules.d/`, `profiles/`).
+  - Desbloqueo preventivo defensivo (`chmod -R u+w`) en `install.sh` y `uninstall.sh` para garantizar actualizaciones y purgas completas sin errores de permisos denegados.
 - **Consentimiento Activo Obligatorio para Purga (`shred -u`):**
   - Todo diálogo de activación o mantenimiento de purga utiliza `whiptail_view_confirm_critical` con foco predeterminado en `[NO]` (`--defaultno`), requiriendo que el usuario se desplace activamente a `[SÍ]`. En consola, `ansi_view_confirm_critical` exige escribir explícitamente `SI` en mayúsculas salvo uso de `--yes`.
 - **Salvaguardas en Eliminación de Perfiles:**
