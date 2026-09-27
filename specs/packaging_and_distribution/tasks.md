@@ -10,20 +10,37 @@
 - [x] Crear especificación funcional detallada (`specs/packaging_and_distribution/spec.md`).
 - [x] Crear plan técnico y arquitectura de componentes (`specs/packaging_and_distribution/plan.md`).
 - [x] Crear desglose atómico de tareas secuenciales (`specs/packaging_and_distribution/tasks.md`).
-- [ ] **Hito de Commit 0 (docs):**
+- [x] **Hito de Commit 0 (docs):** Consolidado en `702ff8a`.
   ```bash
   docs(spec): definir sistema de empaquetado y distribucion para releases
   ```
 
 ---
 
-## Fase 1: Artefactos Visuales y Metadatos de Escritorio
-- [ ] Crear icono vectorial oficial `assets/keepmyconfig.svg` (diseño escalable con escudo, terminal y flechas de sincronización).
-- [ ] Crear plantilla de lanzador de escritorio `assets/keepmyconfig.desktop` conforme al estándar Freedesktop.
-- [ ] Añadir carpeta `dist/` a `.gitignore` para aislar compilaciones locales de paquetes.
-- [ ] **Hito de Commit 1 (feat):**
+## Fase 1: Artefactos Visuales y Metadatos de Escritorio (Subfases Atómicas)
+
+### Subfase 1.1: Aislamiento en `.gitignore`
+- [x] Añadir carpeta `dist/` a `.gitignore` para aislar compilaciones locales de paquetes.
+- [x] Aplicar purga preventiva de caché si procede según Regla 8 de `AGENT.md`.
+- [ ] **Hito de Commit 1.1 (chore):**
   ```bash
-  feat(assets): incorporar icono vectorial svg y lanzador de escritorio freedesktop
+  chore(git): aislar directorio dist en gitignore para artefactos de empaquetado
+  ```
+
+### Subfase 1.2: Icono Vectorial Oficial SVG
+- [ ] Crear icono vectorial oficial `assets/keepmyconfig.svg` (diseño escalable profesional con escudo de seguridad, terminal `>_` y flechas de sincronización).
+- [ ] Validar sintaxis XML/SVG y escalabilidad sin degradación.
+- [ ] **Hito de Commit 1.2 (feat):**
+  ```bash
+  feat(assets): incorporar icono vectorial oficial svg para la aplicacion
+  ```
+
+### Subfase 1.3: Lanzador de Escritorio Freedesktop
+- [ ] Crear plantilla de lanzador de escritorio `assets/keepmyconfig.desktop` conforme al estándar XDG Freedesktop (`Categories=Utility;Archiving;`, `Terminal=true`, `Icon=keepmyconfig`).
+- [ ] Validar formato con `desktop-file-validate` si está disponible en el entorno.
+- [ ] **Hito de Commit 1.3 (feat):**
+  ```bash
+  feat(desktop): incorporar plantilla de lanzador de escritorio freedesktop
   ```
 
 ---
