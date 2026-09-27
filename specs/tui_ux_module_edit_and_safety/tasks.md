@@ -61,14 +61,14 @@
 ---
 
 ## Fase 4: Resolución de Colisiones en Plantillas, Ficha Técnica y Ámbito Universal
-- [ ] Implementar ficha técnica de previsualización con resumen completo y confirmación interactiva antes de activar plantilla en `controller_handle_enable_template`.
-- [ ] Interrogar con foco obligatorio en `[NO]` sobre la conservación de purga (`shred -u`) al activar plantillas que la definan de fábrica, desactivándola por defecto si no es confirmada activamente.
-- [ ] Añadir selector universal de ámbito (Catálogo Global vs Exclusivo de Perfil) al activar plantilla desde cualquier perfil (incluido `default`).
-- [ ] Implementar `module_model_activate_template_as` en `lib/models/module_model.sh` para admitir nuevo ID y nombre.
-- [ ] Modificar `controller_handle_enable_template` para abrir menú de 3 opciones ante colisión (Clonar con nuevo nombre, Sobrescribir, Cancelar).
-- [ ] Añadir soporte en CLI para `--as-module <nuevo_id>` y `--force`.
-- [ ] Aplicar la misma resolución simétrica al exportar módulos a la biblioteca de plantillas.
-- [ ] **Hito de Commit 4 (feat):**
+- [x] Implementar ficha técnica de previsualización con resumen completo y confirmación interactiva antes de activar plantilla en `controller_handle_enable_template`.
+- [x] Interrogar con foco obligatorio en `[NO]` sobre la conservación de purga (`shred -u`) al activar plantillas que la definan de fábrica, desactivándola por defecto si no es confirmada activamente.
+- [x] Añadir selector universal de ámbito (Catálogo Global vs Exclusivo de Perfil) al activar plantilla desde cualquier perfil (incluido `default`).
+- [x] Implementar `module_model_activate_template_as` en `lib/models/module_model.sh` para admitir nuevo ID y nombre.
+- [x] Modificar `controller_handle_enable_template` para abrir menú de 3 opciones ante colisión (Clonar con nuevo nombre, Sobrescribir, Cancelar).
+- [x] Añadir soporte en CLI para `--as-module <nuevo_id>` y `--force`.
+- [x] Aplicar la misma resolución simétrica al exportar módulos a la biblioteca de plantillas.
+- [x] **Hito de Commit 4 (feat):**
   ```bash
   feat(templates): incorporar clonacion con nuevo identificador, ficha tecnica y resolucion interactiva de colisiones
   ```
