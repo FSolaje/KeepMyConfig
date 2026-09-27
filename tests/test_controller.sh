@@ -166,6 +166,7 @@ assert_eq "0" "$check_ok_status" "device_check con marcador debe retornar 0"
 assert_contains "$check_ok_out" "STORAGE_READY" "El reporte debe indicar STORAGE_READY"
 
 # Test 7: Respaldo individual de módulo vía controller
+export CLI_ASSUME_YES="true"
 ctrl_backup_out=$(controller_handle_backup_module "test-app" "false" "auto")
 ctrl_backup_status=$?
 assert_eq "0" "$ctrl_backup_status" "controller_handle_backup_module debe retornar 0"

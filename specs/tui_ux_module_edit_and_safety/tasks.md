@@ -76,13 +76,13 @@
 ---
 
 ## Fase 5: Pre-Flight Safety Gate y Matriz de Acciones Críticas
-- [ ] Implementar función auxiliar `_controller_build_preflight_matrix` en `lib/controllers/app_controller.sh`.
-- [ ] Implementar `whiptail_view_confirm_critical` (con `--defaultno`) y diálogo pre-flight en `lib/views/whiptail_view.sh`.
-- [ ] Implementar `ansi_view_preflight_table` (con fondos rojos `\033[41;97;1m` para purga) en `lib/views/ansi_view.sh`.
-- [ ] Interceptar las llamadas a `backup_all`, `backup_tag` y `backup_module` con el Pre-Flight Gate.
-- [ ] Añadir advertencia previa de sobreescritura con listado de rutas en `controller_handle_restore_*`.
-- [ ] Incorporar salvaguardas en eliminación de perfiles (bloqueo de `default` y perfil activo).
-- [ ] **Hito de Commit 5 (feat):**
+- [x] Implementar función auxiliar `_controller_build_preflight_matrix` en `lib/controllers/app_controller.sh`.
+- [x] Implementar `whiptail_view_confirm_critical` (con `--defaultno`) y diálogo pre-flight en `lib/views/whiptail_view.sh`.
+- [x] Implementar `ansi_view_preflight_table` (con fondos rojos `\033[41;97;1m` para purga) en `lib/views/ansi_view.sh`.
+- [x] Interceptar las llamadas a `backup_all`, `backup_tag` y `backup_module` con el Pre-Flight Gate.
+- [x] Añadir advertencia previa de sobreescritura con listado de rutas en `controller_handle_restore_*`.
+- [x] Incorporar salvaguardas en eliminación de perfiles (bloqueo de `default` y perfil activo).
+- [x] **Hito de Commit 5 (feat):**
   ```bash
   feat(security): implementar pre-flight safety gate y salvaguardas para acciones destructivas
   ```
