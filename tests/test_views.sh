@@ -279,6 +279,40 @@ else
     TESTS_FAILED=$((TESTS_FAILED + 1))
 fi
 
+# Test 37: whiptail_view_confirm_critical aceptando o rechazando
+MOCK_EXIT_CODE=0
+whiptail_view_confirm_critical "Destrucción" "¿Continuar con shred?"
+assert_eq "0" "$?" "whiptail_view_confirm_critical debe retornar 0 si el usuario confirma"
+
+MOCK_EXIT_CODE=1
+set +e
+whiptail_view_confirm_critical "Destrucción" "¿Continuar con shred?"
+crit_status=$?
+set -e
+assert_eq "1" "$crit_status" "whiptail_view_confirm_critical debe retornar 1 si el usuario cancela"
+
+# Test 38: whiptail_view_preflight_summary
+MOCK_EXIT_CODE=0
+whiptail_view_preflight_summary "Resumen" "Matriz de módulos..."
+assert_eq "0" "$?" "whiptail_view_preflight_summary debe retornar 0 si se aprueba"
+
+# Test 39: ansi_view_preflight_table formateo de matriz
+preflight_out=$(ansi_view_preflight_table "ssh-keys|Llaves SSH|Global|SÍ|SÍ|/media/SSD" "bash-env|Entorno Bash|Perfil|No|No|/media/SSD")
+assert_contains "$preflight_out" "MATRIZ PRE-FLIGHT DE SEGURIDAD" "ansi_view_preflight_table debe incluir título de cabecera"
+assert_contains "$preflight_out" "¡PURGA ACTIVA!" "ansi_view_preflight_table debe resaltar purga activa"
+assert_contains "$preflight_out" "SÍ (AES-256)" "ansi_view_preflight_table debe indicar cifrado GPG"
+
+# Test 40: ansi_view_confirm_critical validando palabra clave 'SI'
+set +e
+echo "SI" | ansi_view_confirm_critical "Confirmar purga irreversible" >/dev/null 2>&1
+ansi_crit_yes=$?
+echo "no" | ansi_view_confirm_critical "Confirmar purga irreversible" >/dev/null 2>&1
+ansi_crit_no=$?
+set -e
+assert_eq "0" "$ansi_crit_yes" "ansi_view_confirm_critical con 'SI' debe retornar 0"
+assert_eq "1" "$ansi_crit_no" "ansi_view_confirm_critical con 'no' debe retornar 1"
+
+
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
 

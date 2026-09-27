@@ -103,15 +103,16 @@
 ---
 
 ## Fase 7: Batería de Pruebas Unitarias Automatizadas
-- [ ] Crear / ampliar pruebas en `tests/test_sandbox_mode.sh` para verificar sembrado de módulos.
-- [ ] Ampliar `tests/test_module_model.sh` con pruebas de activación con nuevo nombre (`activate_template_as`).
-- [ ] Ampliar `tests/test_controller.sh` con pruebas para el Pre-Flight Gate (cancelación limpia código 0, flags `--yes` y `--as-module`).
-- [ ] Ampliar `tests/test_views.sh` con verificación sintáctica de temas `NEWT_COLORS`.
-- [ ] Ejecutar la suite completa y certificar 100% de tests en verde.
+- [x] Crear / ampliar pruebas en `tests/test_sandbox_mode.sh` para verificar sembrado de módulos.
+- [x] Ampliar `tests/test_module_model.sh` con pruebas de activación con nuevo nombre (`activate_template_as`).
+- [x] Ampliar `tests/test_controller.sh` con pruebas para el Pre-Flight Gate (cancelación limpia código 0, flags `--yes` y `--as-module`).
+- [x] Ampliar `tests/test_views.sh` con verificación sintáctica de temas `NEWT_COLORS`.
+- [x] Ejecutar la suite completa y certificar 100% de tests en verde.
 - [ ] **Hito de Commit 7 (test):**
   ```bash
   test: incorporar baterias de pruebas para edicion de modulos, clonacion, safety gate y temas
   ```
+
 
 ---
 

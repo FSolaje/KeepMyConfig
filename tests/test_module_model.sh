@@ -296,8 +296,62 @@ EXP_META=$(module_model_get "firefox-exportada" "$MOCK_TMPL_LIB")
 [[ "$EXP_META" =~ ID=firefox-exportada ]]
 assert_equals "0" "$?" "La plantilla exportada debe tener ID actualizado 'firefox-exportada'"
 
+# ------------------------------------------------------------------------------
+# Test 13: Conmutación de Estado MODULE_ENABLED (FR-MOD-015, FR-MOD-016)
+# ------------------------------------------------------------------------------
+module_model_is_enabled "firefox" "$ACTIVATED_DIR"
+assert_exit_code "0" $? "module_model_is_enabled debe retornar 0 por defecto (activo)"
+
+module_model_set_enabled "firefox" "false" "$ACTIVATED_DIR"
+assert_exit_code "$MOD_OK" $? "module_model_set_enabled false debe retornar MOD_OK"
+module_model_is_enabled "firefox" "$ACTIVATED_DIR"
+assert_exit_code "1" $? "module_model_is_enabled debe retornar 1 cuando MODULE_ENABLED=false"
+grep -q '^MODULE_ENABLED="false"' "$ACTIVATED_DIR/firefox.conf"
+assert_equals "0" "$?" "firefox.conf debe persistir MODULE_ENABLED=false"
+
+module_model_set_enabled "firefox" "true" "$ACTIVATED_DIR"
+assert_exit_code "$MOD_OK" $? "module_model_set_enabled true debe retornar MOD_OK"
+module_model_is_enabled "firefox" "$ACTIVATED_DIR"
+assert_exit_code "0" $? "module_model_is_enabled debe retornar 0 tras reactivación"
+grep -q '^MODULE_ENABLED="true"' "$ACTIVATED_DIR/firefox.conf"
+assert_equals "0" "$?" "firefox.conf debe persistir MODULE_ENABLED=true"
+
+# ------------------------------------------------------------------------------
+# Test 14: Activación de Plantillas con Nuevo ID y Parámetros (FR-TMPL-009)
+# ------------------------------------------------------------------------------
+module_model_activate_template_as "firefox" "$ACTIVATED_DIR" "$TEMPLATES_DIR" "firefox-work" "Firefox Oficina" "false" "false"
+assert_exit_code "$MOD_OK" $? "module_model_activate_template_as con nuevo ID debe retornar MOD_OK"
+assert_equals "1" "$([[ -f "$ACTIVATED_DIR/firefox-work.conf" ]] && echo 1 || echo 0)" "firefox-work.conf debe existir en activated_modules"
+
+WORK_META=$(module_model_get "firefox-work" "$ACTIVATED_DIR")
+[[ "$WORK_META" =~ ID=firefox-work ]]
+assert_equals "0" "$?" "firefox-work debe tener ID=firefox-work"
+[[ "$WORK_META" =~ NAME=Firefox\ Oficina ]]
+assert_equals "0" "$?" "firefox-work debe tener NAME='Firefox Oficina'"
+[[ "$WORK_META" =~ PURGE_AFTER_BACKUP=false ]]
+assert_equals "0" "$?" "firefox-work debe tener PURGE_AFTER_BACKUP=false"
+
+# Detección de colisión sin flag force
+module_model_activate_template_as "firefox" "$ACTIVATED_DIR" "$TEMPLATES_DIR" "firefox-work" "Firefox Duplicado" "false" "false" >/dev/null 2>&1
+assert_exit_code "$MOD_ERR_ALREADY_EXISTS" $? "module_model_activate_template_as con ID existente debe retornar MOD_ERR_ALREADY_EXISTS"
+
+# Sobrescritura autorizada con force=true
+module_model_activate_template_as "firefox" "$ACTIVATED_DIR" "$TEMPLATES_DIR" "firefox-work" "Firefox Sobrescrito" "true" "false"
+assert_exit_code "$MOD_OK" $? "module_model_activate_template_as con force=true debe retornar MOD_OK"
+WORK_OVERWRITE_META=$(module_model_get "firefox-work" "$ACTIVATED_DIR")
+[[ "$WORK_OVERWRITE_META" =~ NAME=Firefox\ Sobrescrito ]]
+assert_equals "0" "$?" "firefox-work debe tener NAME actualizado 'Firefox Sobrescrito'"
+
+# Override de purga activo
+module_model_activate_template_as "firefox" "$ACTIVATED_DIR" "$TEMPLATES_DIR" "firefox-purged" "Firefox Purga" "false" "true"
+assert_exit_code "$MOD_OK" $? "module_model_activate_template_as con override_purge=true debe retornar MOD_OK"
+PURGED_META=$(module_model_get "firefox-purged" "$ACTIVATED_DIR")
+[[ "$PURGED_META" =~ PURGE_AFTER_BACKUP=true ]]
+assert_equals "0" "$?" "firefox-purged debe tener PURGE_AFTER_BACKUP=true"
+
 # Limpieza
 rm -rf "$TEMP_TEST_DIR"
+
 
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
