@@ -36,8 +36,8 @@
   ```
 
 ### Subfase 1.3: Lanzador de Escritorio Freedesktop
-- [ ] Crear plantilla de lanzador de escritorio `assets/keepmyconfig.desktop` conforme al estándar XDG Freedesktop (`Categories=Utility;Archiving;`, `Terminal=true`, `Icon=keepmyconfig`).
-- [ ] Validar formato con `desktop-file-validate` si está disponible en el entorno.
+- [x] Crear plantilla de lanzador de escritorio `assets/keepmyconfig.desktop` conforme al estándar XDG Freedesktop (`Categories=Utility;Archiving;`, `Terminal=true`, `Icon=keepmyconfig`).
+- [x] Validar formato con `desktop-file-validate` si está disponible en el entorno.
 - [ ] **Hito de Commit 1.3 (feat):**
   ```bash
   feat(desktop): incorporar plantilla de lanzador de escritorio freedesktop
