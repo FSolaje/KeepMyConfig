@@ -152,11 +152,21 @@
 - [x] Subfase 1.1: Aislamiento del directorio `dist/` en `.gitignore` (`128df06`).
 - [x] Subfase 1.2: Diseño e incorporación del icono vectorial SVG `assets/keepmyconfig.svg` (`22245b4`).
 - [x] Subfase 1.3: Creación de la plantilla de lanzador de escritorio Freedesktop `assets/keepmyconfig.desktop` validada con `desktop-file-validate` (`9c82bd0`).
-- [ ] **Fase 2 (Siguiente paso):** Script reproducible de empaquetado `scripts/package.sh` para generar `KeepMyConfig-vX.Y.Z.tar.gz` (sin tarbomb, permisos normalizados `0755`/`0644`, lista blanca estricta) y `SHA256SUMS.txt`.
+- [ ] **Fase 2 (En curso):** Script reproducible de empaquetado dual `scripts/package.sh` para generar `KeepMyConfig-vX.Y.Z.tar.gz` (edición estándar con instalador) y `KeepMyConfig-vX.Y.Z-portable.tar.gz` (edición portable plug-and-play con `.portable` y `keepmyconfig.sh`), sin tarbomb, permisos normalizados `0755`/`0644`, lista blanca estricta y `SHA256SUMS.txt`.
 - [ ] **Fase 3:** Script de instalación y desinstalación sin sudo `install.sh` y `uninstall.sh`.
 - [ ] **Fase 4:** Suite de pruebas unitarias automatizadas `tests/test_packaging_and_distribution.sh`.
-- [ ] **Fase 5:** Actualización del workflow `.github/workflows/release.yml` para adjuntar los artefactos empaquetados oficiales en cada release de GitHub.
+- [ ] **Fase 5:** Actualización del workflow `.github/workflows/release.yml` para adjuntar los artefactos empaquetados oficiales (estándar y portable) en cada release de GitHub.
 - [ ] **Fase 6:** Sincronización mandatoria de documentación pública (`README.md`, `MANUAL_USUARIO.md`, `CHANGELOG.md`).
+
+### Sub-Hito 12.6: Blindaje Criptográfico de Integridad y Protección de Código Bash ante Manipulación (Próximo)
+> **Motivación y Análisis de Vulnerabilidad:** Al tratarse de un software completamente escrito en Bash, el código fuente reside en texto plano interpretado en `$HOME/.local/share/KeepMyConfig/lib/`. Cualquier script o proceso en el espacio de usuario podría alterar, corromper o inyectar código malicioso en las librerías del core (ej. captura de claves GPG o alteración de la purga segura con `shred`).  
+- [ ] **Documentos SDD:** Crear `specs/codebase_integrity_and_security/` (`spec.md`, `plan.md`, `tasks.md`).
+- [ ] **Sello Criptográfico en Empaquetado:** Generación del manifiesto de integridad `.app_integrity.sha256` en `scripts/package.sh` cubriendo `backup_manager.sh` y todos los scripts de `lib/`.
+- [ ] **Guarda de Autenticidad en Tiempo de Carga:** Comprobación ultrarrápida al inicio de `backup_manager.sh` contra `.app_integrity.sha256`. Bloqueo inmediato con código de salida crítico y alerta de seguridad si cualquier script de lógica ha sido alterado.
+- [ ] **Endurecimiento de Permisos (Hardening) en `install.sh`:** Aplicación de permisos estrictos de solo lectura (`chmod -R 0555` / `chmod -R u-w`) sobre `lib/` y binarios, preservando permisos de escritura únicamente en carpetas de datos del usuario (`config/`, `modules.d/`, `profiles/`).
+- [ ] **Firma Digital GPG Opcional:** Evaluación de soporte para verificación de firma `.asc` del manifiesto para entornos de alta seguridad.
+- [ ] **Compatibilidad con Desarrollo / Sandbox:** Variable de elusión controlada `KEEP_MY_CONFIG_DEV=true` y modo test para permitir desarrollo activo sin alertas espurias.
+- [ ] **Suite de Pruebas:** Pruebas unitarias de integridad simulando inyección de código y validando la detección inmediata.
 
 ### Hito 13: Almacenamiento Remoto (SSH, SFTP, Rsync)
 - [ ] **Ampliación de `BACKUP_DESTINATION`:** Añadir soporte para destinos remotos (`ssh://user@host/path`, `sftp://`, `rsync://`).
@@ -164,5 +174,6 @@
 - [ ] **Validación Remota del Marcador:** Verificación de `.backup_storage_marker` en destino remoto mediante canal seguro.
 - [ ] **Transferencia Eficiente:** Estrategia de sincronización o montaje (FUSE `sshfs` o canalización `rsync`/tuberías `ssh`).
 - [ ] **Asociación con Perfiles:** Posibilidad de que cada perfil defina si su destino es un SSD físico, ruta local o servidor remoto.
+
 
 

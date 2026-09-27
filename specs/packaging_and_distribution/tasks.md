@@ -45,17 +45,19 @@
 
 ---
 
-## Fase 2: Script Reproducible de Empaquetado y Checksums
+## Fase 2: Script Reproducible de Empaquetado Dual y Checksums
 - [ ] Crear directorio `scripts/` y el script `scripts/package.sh` con permisos `0755`.
 - [ ] Implementar resolución automática de versión (flag `--version`, git tags SemVer o fallback de `CHANGELOG.md`).
-- [ ] Implementar mecanismo de lista blanca estricta con directorio temporal de preparación (*staging*).
+- [ ] Implementar soporte para selector de tipo de paquete `--type all|standard|portable` (por defecto `all`).
+- [ ] Implementar mecanismo de lista blanca estricta con directorios temporales de preparación (*staging*) diferenciados.
+- [ ] Implementar generación de edición estándar (`KeepMyConfig-${VERSION}`) y edición portable (`KeepMyConfig-${VERSION}-portable`) con marcador `.portable` y lanzador `keepmyconfig.sh`.
 - [ ] Implementar normalización de permisos UNIX (`0755` directorios y ejecutables, `0644` ficheros regulares).
-- [ ] Implementar compresión sin tarbomb (`KeepMyConfig-${VERSION}/`) en `.tar.gz` y `.tar.zst` si está disponible.
-- [ ] Implementar generación automática de `SHA256SUMS.txt`.
-- [ ] Implementar smoke test integrado para verificar integridad del paquete generado y respuesta de `--help`.
+- [ ] Implementar compresión sin tarbomb en `.tar.gz` y `.tar.zst` si está disponible.
+- [ ] Implementar generación automática unificada de `SHA256SUMS.txt`.
+- [ ] Implementar smoke test integrado para verificar integridad de ambas ediciones y respuesta de `--help`.
 - [ ] **Hito de Commit 2 (feat):**
   ```bash
-  feat(packaging): implementar script de empaquetado reproducible y generacion de checksums
+  feat(packaging): implementar empaquetado reproducible dual y generacion de checksums
   ```
 
 ---

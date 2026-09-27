@@ -18,6 +18,9 @@ Para su adopción práctica en institutos de secundaria, centros educativos DAW 
 3. **Instalador sin Privilegios (`install.sh`):** Permitir la instalación desatendida o asistida por parte de cualquier usuario estándar sin necesidad de `sudo`, desplegando la aplicación en cumplimiento de los estándares XDG (`~/.local/share/KeepMyConfig`, enlace ejecutable en `~/.local/bin/keepmyconfig` y lanzador de escritorio en `~/.local/share/applications/keepmyconfig.desktop`).
 4. **Desinstalador Limpio (`uninstall.sh`):** Facilitar la retirada completa de la aplicación, sus enlaces y su lanzador, con opción de salvaguarda o purga de configuraciones.
 5. **Automatización de Releases en GitHub Actions (`.github/workflows/release.yml`):** Reutilizar el script de empaquetado oficial dentro del workflow de CI/CD para que cada nuevo tag SemVer adjunte de forma idéntica los artefactos comprimidos y sus sumas de verificación.
+6. **Distribución Dual (Instalable vs. Portable):** Producir dos ediciones oficiales diferenciadas en cada Release:
+   - **Edición Instalable (`KeepMyConfig-v<VERSION>.tar.gz`):** Diseñada para integración completa en el sistema operativo mediante `install.sh` (menú de aplicaciones, icono SVG, lanzador `.desktop` y binario en `~/.local/bin/keepmyconfig`).
+   - **Edición Portable Autónoma (`KeepMyConfig-v<VERSION>-portable.tar.gz`):** Diseñada para ejecución directa e inmediata desde cualquier carpeta o almacenamiento extraíble (SSD, pendrive USB) sin requerir instalación, con lanzador de conveniencia `keepmyconfig.sh` y marcador `.portable`.
 
 ---
 
@@ -29,8 +32,10 @@ El paquete de distribución debe incluir **exclusivamente** los archivos y carpe
 | Archivo / Directorio | Permisos Requeridos | Propósito en Producción |
 | :--- | :---: | :--- |
 | `backup_manager.sh` | `0755` (`rwxr-xr-x`) | Entrypoint ejecutable principal (TUI / CLI). |
-| `install.sh` | `0755` (`rwxr-xr-x`) | Script de instalación desatendida / asistida para el usuario. |
-| `uninstall.sh` | `0755` (`rwxr-xr-x`) | Script de desinstalación limpia. |
+| `install.sh` | `0755` (`rwxr-xr-x`) | Script de instalación desatendida / asistida (solo en paquete estándar). |
+| `uninstall.sh` | `0755` (`rwxr-xr-x`) | Script de desinstalación limpia (solo en paquete estándar). |
+| `keepmyconfig.sh` | `0755` (`rwxr-xr-x`) | Lanzador de conveniencia portable (solo en paquete portable). |
+| `.portable` | `0644` (`rw-r--r--`) | Marcador de entorno portable autónomo (solo en paquete portable). |
 | `lib/` | `0755` (dirs) / `0644` (sh) | Modelos (`lib/models/`), Vistas (`lib/views/`) y Controlador (`lib/controllers/`). |
 | `config/config.conf` | `0644` (`rw-r--r--`) | Configuración predeterminada de fábrica. |
 | `config/default_tags.conf`| `0644` (`rw-r--r--`) | Catálogo oficial de etiquetas. |
@@ -58,38 +63,35 @@ Queda estrictamente prohibida la inclusión de:
 ---
 
 ### 2.2. Garantía Anti-Tarbomb (FR-PKG-002)
-- El archivo comprimido generado debe tener la estructura:
-  ```text
-  KeepMyConfig-v<MAJOR>.<MINOR>.<PATCH>[-<PRERELEASE>]/
-  ├── backup_manager.sh
-  ├── install.sh
-  ├── uninstall.sh
-  ...
-  ```
-- Al ejecutar `tar -xzf KeepMyConfig-v0.1.0-alpha.2.tar.gz`, todos los archivos deben quedar confinados en la carpeta `KeepMyConfig-v0.1.0-alpha.2/`, sin volcar ningún fichero suelto en el directorio actual.
+- El archivo comprimido generado debe tener la estructura unificada:
+  - Paquete estándar: `KeepMyConfig-v<VERSION>/`
+  - Paquete portable: `KeepMyConfig-v<VERSION>-portable/`
+- Al ejecutar `tar -xzf KeepMyConfig-v0.1.0-alpha.2.tar.gz` o `tar -xzf KeepMyConfig-v0.1.0-alpha.2-portable.tar.gz`, todos los archivos deben quedar confinados en su respectiva carpeta raíz, sin volcar ningún fichero suelto en el directorio de trabajo.
 
 ---
 
 ### 2.3. Script de Empaquetado `scripts/package.sh` (FR-PKG-003)
 - **Sintaxis:**
   ```bash
-  scripts/package.sh [--version <vX.Y.Z>] [--output-dir <ruta>] [--clean]
+  scripts/package.sh [--version <vX.Y.Z>] [--output-dir <ruta>] [--clean] [--type all|standard|portable] [--skip-tests]
   ```
 - **Detección Automática de Versión:**
   1. Si se pasa `--version`, toma ese valor (validando formato `vX.Y.Z[-pre]`).
   2. Si no se pasa, intenta extraer el tag anotado actual de Git (`git describe --tags --exact-match 2>/dev/null`).
   3. Si no hay tag exacto, extrae la última versión documentada en `CHANGELOG.md` o el tag más reciente (`git describe --tags --abbrev=0`).
-- **Proceso de Empaquetado:**
-  1. Limpia y crea un directorio temporal de staging en un entorno seguro (`/tmp/keepmyconfig_pkg_XXXXXX` o `dist/staging`).
-  2. Copia rigurosamente los archivos de la lista blanca.
-  3. Normaliza permisos: `chmod 755` para ejecutables y directorios; `chmod 644` para configuraciones, plantillas y documentación.
-  4. Genera el tarball `KeepMyConfig-${VERSION}.tar.gz` (y opcional `KeepMyConfig-${VERSION}.tar.zst` si `zstd` está disponible).
-  5. Calcula las sumas SHA-256 de todos los paquetes producidos y escribe `SHA256SUMS.txt` en el directorio de salida.
-  6. **Smoke Test Automatizado:** Descomprime el paquete en una carpeta temporal y verifica que:
-     - No sea un tarbomb.
-     - `backup_manager.sh` sea ejecutable y responda a `--help` con código `0`.
-     - Existan `.backup_app_marker`, `profiles/default/profile.conf` y `templates.d/template-skeleton.conf`.
-     - No contenga ningún archivo de la lista negra.
+- **Proceso de Empaquetado Dual:**
+  1. Limpia y crea directorios temporales de staging en un entorno seguro (`mktemp -d`).
+  2. Si `--type all` (por defecto) o `--type standard`, construye el paquete estándar con `install.sh` y `uninstall.sh`.
+  3. Si `--type all` (por defecto) o `--type portable`, construye el paquete portable con lanzador `keepmyconfig.sh`, marcador `.portable` y sin instalador.
+  4. Normaliza permisos: `chmod 755` para ejecutables y directorios; `chmod 644` para configuraciones, plantillas y documentación.
+  5. Genera los tarballs en `.tar.gz` y `.tar.zst` (si `zstd` está disponible).
+  6. Calcula las sumas SHA-256 de todos los paquetes producidos y escribe `SHA256SUMS.txt` en el directorio de salida.
+  7. **Smoke Test Automatizado:** Descomprime ambos paquetes en carpetas temporales aisladas y valida:
+     - Ausencia de tarbomb.
+     - Ejecución exitosa de `backup_manager.sh --help` y `keepmyconfig.sh --help`.
+     - Presencia de archivos críticos correspondientes a cada edición.
+     - Ausencia total de archivos de lista negra.
+     - Verificación íntegra de `sha256sum -c SHA256SUMS.txt`.
 
 ---
 
@@ -143,8 +145,21 @@ Queda estrictamente prohibida la inclusión de:
 ### 2.7. Integración en CI/CD con GitHub Actions (FR-PKG-007)
 - El workflow `.github/workflows/release.yml` debe invocar directamente `scripts/package.sh --version "${TAG}"`.
 - Debe adjuntar como artefactos oficiales de la Release:
-  - `KeepMyConfig-${TAG}.tar.gz`
+  - `KeepMyConfig-${TAG}.tar.gz` (y `.tar.zst` si aplica)
+  - `KeepMyConfig-${TAG}-portable.tar.gz` (y `.tar.zst` si aplica)
   - `SHA256SUMS.txt`
+
+---
+
+### 2.8. Edición Portable Autónoma (FR-PKG-008)
+- **Propósito:** Permitir al usuario ejecutar KeepMyConfig inmediatamente tras descomprimir en cualquier carpeta o soporte extraíble (pendrive USB, disco duro externo, carpeta compartida) sin requerir instalación en el sistema operativo ni permisos de superusuario.
+- **Estructura Interna:**
+  - Archivo marcador `.portable` en la raíz de la carpeta de la aplicación.
+  - Script lanzador `keepmyconfig.sh` (ejecutable `0755`) que redirige de forma transparente la ejecución a `./backup_manager.sh "$@"`.
+  - No contiene scripts de instalación del sistema (`install.sh` ni `uninstall.sh`).
+- **Comportamiento en Modo Portable:**
+  - Si `.portable` está presente, KeepMyConfig reconoce que se está ejecutando desde un medio autónomo.
+  - Puede sugerir o preconfigurar el almacenamiento dentro de la propia carpeta o dispositivo portador (`./storage` o `../Backups`), garantizando que las copias viajen con la propia unidad sin contaminar el `$HOME` del equipo anfitrión.
 
 ---
 

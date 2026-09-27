@@ -39,57 +39,53 @@ KeepMyConfig/
 
 ---
 
-### 2.2. Generador Reproducible de Distribución (`scripts/package.sh`)
+### 2.2. Generador Reproducible de Distribución Dual (`scripts/package.sh`)
 
-- **Objetivo:** Construir de manera estricta y verificable el paquete `.tar.gz` oficial y su archivo `SHA256SUMS.txt`.
+- **Objetivo:** Construir de manera estricta y verificable los paquetes oficiales:
+  - Estándar / Instalable: `KeepMyConfig-${VERSION}.tar.gz` (y `.tar.zst`)
+  - Portable / Autónomo: `KeepMyConfig-${VERSION}-portable.tar.gz` (y `.tar.zst`)
+  y el archivo unificado de sumas criptográficas `SHA256SUMS.txt`.
 - **Estructura Interna:**
   ```bash
   scripts/package.sh [OPCIONES]
-    --version <tag>     # Especificar versión explícita (ej. v0.1.0-alpha.2)
-    --output-dir <dir>  # Directorio destino de los artefactos (default: dist/)
-    --clean             # Limpiar artefactos previos en el directorio de salida
-    --skip-tests        # Omitir el smoke test posterior (no recomendado)
-    -h, --help          # Ayuda de uso
+    -v, --version <tag>     # Especificar versión explícita (ej. v0.1.0-alpha.2)
+    -o, --output-dir <dir>  # Directorio destino de los artefactos (default: dist/)
+    -t, --type <tipo>       # Tipo de paquete: all (default), standard, portable
+    -c, --clean             # Limpiar artefactos previos en el directorio de salida
+    -s, --skip-tests        # Omitir el smoke test posterior (no recomendado)
+    -h, --help              # Ayuda de uso
   ```
 
-- **Mecanismo de Lista Blanca Estricta:**
-  El script no empaqueta directamente con comodines del repositorio. En su lugar, despliega un entorno de preparación (*staging directory*) en una ruta temporal aislada (`mktemp -d`):
-  ```text
-  STAGING_DIR/
-  └── KeepMyConfig-${VERSION}/
-      ├── backup_manager.sh
-      ├── install.sh
-      ├── uninstall.sh
-      ├── lib/
-      ├── config/
-      ├── templates.d/
-      ├── modules.d/
-      ├── profiles/default/
-      ├── markers/
-      ├── assets/
-      ├── .backup_app_marker
-      ├── LICENSE
-      ├── README.md
-      ├── MANUAL_USUARIO.md
-      └── CHANGELOG.md
-  ```
+- **Mecanismo de Lista Blanca Estricta y Staging Diferenciado:**
+  El script despliega entornos de preparación aislados (`mktemp -d`):
+  
+  1. **Staging Estándar (`KeepMyConfig-${VERSION}/`):**
+     Incluye `backup_manager.sh`, `install.sh`, `uninstall.sh`, `lib/`, `config/`, `templates.d/`, `modules.d/`, `profiles/default/`, `markers/`, `assets/`, `.backup_app_marker`, `LICENSE`, `README.md`, `MANUAL_USUARIO.md`, `CHANGELOG.md`.
+
+  2. **Staging Portable (`KeepMyConfig-${VERSION}-portable/`):**
+     Incluye `backup_manager.sh`, lanzador de conveniencia `keepmyconfig.sh`, marcador `.portable`, `lib/`, `config/`, `templates.d/`, `modules.d/`, `profiles/default/`, `markers/`, `assets/`, `.backup_app_marker`, `LICENSE`, `README.md`, `MANUAL_USUARIO.md`, `CHANGELOG.md`. (Excluye `install.sh` y `uninstall.sh`).
 
 - **Normalización de Permisos:**
   - `find "$STAGING_DIR" -type d -exec chmod 755 {} +`
   - `find "$STAGING_DIR" -type f -exec chmod 644 {} +`
-  - `chmod 755 "$STAGING_DIR/KeepMyConfig-${VERSION}/backup_manager.sh"`
-  - `chmod 755 "$STAGING_DIR/KeepMyConfig-${VERSION}/install.sh"`
-  - `chmod 755 "$STAGING_DIR/KeepMyConfig-${VERSION}/uninstall.sh"`
+  - `chmod 755 "$STAGING_DIR/.../backup_manager.sh"`
+  - `chmod 755 "$STAGING_DIR/.../keepmyconfig.sh"` (portable)
+  - `chmod 755 "$STAGING_DIR/.../install.sh"` (estándar)
+  - `chmod 755 "$STAGING_DIR/.../uninstall.sh"` (estándar)
 
 - **Generación de Archivos y Checksums:**
-  - `tar -czf "${OUTPUT_DIR}/KeepMyConfig-${VERSION}.tar.gz" -C "$STAGING_DIR" "KeepMyConfig-${VERSION}"`
-  - `sha256sum "KeepMyConfig-${VERSION}.tar.gz" > "${OUTPUT_DIR}/SHA256SUMS.txt"`
+  - `tar -czf "${OUTPUT_DIR}/KeepMyConfig-${VERSION}.tar.gz" -C "$STAGING_STD" "KeepMyConfig-${VERSION}"`
+  - `tar -czf "${OUTPUT_DIR}/KeepMyConfig-${VERSION}-portable.tar.gz" -C "$STAGING_PORT" "KeepMyConfig-${VERSION}-portable"`
+  - Si `zstd` está disponible, genera además `.tar.zst` para ambas ediciones.
+  - `sha256sum KeepMyConfig-* > "${OUTPUT_DIR}/SHA256SUMS.txt"`
 
 - **Smoke Test Automatizado:**
-  - Descomprime el tarball generado en una carpeta temporal independiente.
-  - Verifica que la carpeta raíz sea exactamente `KeepMyConfig-${VERSION}`.
-  - Verifica que `backup_manager.sh --help` retorne código de salida 0.
+  - Descomprime cada tarball generado en carpetas temporales independientes.
+  - Verifica que las carpetas raíz sean exactamente `KeepMyConfig-${VERSION}` y `KeepMyConfig-${VERSION}-portable`.
+  - Verifica que `backup_manager.sh --help` y `keepmyconfig.sh --help` respondan con código 0.
+  - Comprueba que `.portable` esté en la versión portable y que `install.sh` esté solo en la estándar.
   - Comprueba que ningún archivo no deseado (`.git`, `user_data`, `tests`, `specs`, etc.) esté presente.
+  - Valida criptográficamente el fichero `SHA256SUMS.txt` con `sha256sum -c`.
 
 ---
 
