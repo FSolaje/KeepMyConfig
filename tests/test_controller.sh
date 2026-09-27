@@ -385,6 +385,60 @@ assert_eq "0" "$?" "Onboarding debe registrar REMEMBER_LAST_PROFILE=true"
 # Restaurar configuración de prueba
 CONTROLLER_CONFIG_FILE="$MOCK_CONFIG"
 
+# Test 28: controller_handle_toggle_module conmutando estado activo/inactivo de módulo
+set_toggle_off=0
+controller_handle_toggle_module "docente-excl" "false" "docente" "false" || set_toggle_off=$?
+assert_eq "0" "$set_toggle_off" "controller_handle_toggle_module desactivar debe retornar 0"
+docente_excl_info=$(_controller_get_module_info "docente-excl")
+assert_contains "$docente_excl_info" "ENABLED=false" "Módulo docente-excl debe reportar ENABLED=false"
+grep -q '^MODULE_ENABLED="false"' "$MOCK_PROFILES_DIR/docente/modules.d/docente-excl.conf"
+assert_eq "0" "$?" "Fichero conf de docente-excl debe persistir MODULE_ENABLED=false"
+
+set_toggle_on=0
+controller_handle_toggle_module "docente-excl" "true" "docente" "false" || set_toggle_on=$?
+assert_eq "0" "$set_toggle_on" "controller_handle_toggle_module reactivar debe retornar 0"
+docente_excl_info_on=$(_controller_get_module_info "docente-excl")
+assert_contains "$docente_excl_info_on" "ENABLED=true" "Módulo docente-excl debe reportar ENABLED=true"
+grep -q '^MODULE_ENABLED="true"' "$MOCK_PROFILES_DIR/docente/modules.d/docente-excl.conf"
+assert_eq "0" "$?" "Fichero conf de docente-excl debe persistir MODULE_ENABLED=true"
+
+
+# Test 29: controller_handle_enable_template con --as-module y resolución de colisiones con --force
+enable_as_out=$(controller_handle_enable_template "firefox" "false" "default" "firefox-derivado" "false")
+assert_eq "0" "$?" "enable_template con --as-module debe retornar 0"
+assert_eq "1" "$([[ -f "$MOCK_MODULES_DIR/firefox-derivado.conf" ]] && echo 1 || echo 0)" "firefox-derivado.conf debe existir en modules.d"
+
+# Colisión sin --force debe fallar con error
+set +e
+enable_col_out=$(controller_handle_enable_template "firefox" "false" "default" "firefox-derivado" "false" 2>&1)
+col_exit=$?
+set -e
+assert_eq "1" "$col_exit" "enable_template con ID colisionante sin --force debe retornar 1"
+assert_contains "$enable_col_out" "ya está activo" "Mensaje de colisión debe advertir que el módulo ya existe"
+
+# Sobrescritura con --force debe prosperar
+enable_force_out=$(controller_handle_enable_template "firefox" "false" "default" "firefox-derivado" "true")
+assert_eq "0" "$?" "enable_template con ID colisionante y --force=true debe retornar 0"
+
+# Test 30: Pre-Flight Safety Gate y salvaguarda de purga en CLI
+# Simular ejecución de preflight con flag CLI_ASSUME_YES=true
+preflight_yes_exit=0
+CLI_ASSUME_YES="true" _controller_run_preflight_gate "Test Backup" "firefox-derivado" "false" "auto" || preflight_yes_exit=$?
+assert_eq "0" "$preflight_yes_exit" "_controller_run_preflight_gate con CLI_ASSUME_YES=true debe retornar 0"
+
+# Cancelación ante advertencia crítica de purga cuando el usuario no escribe 'SI'
+set +e
+preflight_cancel_exit=0
+printf "no\n" | (CLI_ASSUME_YES="false" IS_SANDBOX_MODE="false" KEEP_MY_CONFIG_TEST_MODE="false" _controller_run_preflight_gate "Test Backup" "firefox-derivado" "false" "true" >/dev/null 2>&1) || preflight_cancel_exit=$?
+set -e
+assert_eq "1" "$preflight_cancel_exit" "_controller_run_preflight_gate ante purga sin 'SI' debe retornar 1 (cancelación)"
+
+# Aprobación ante advertencia crítica de purga cuando el usuario escribe 'SI'
+preflight_confirm_exit=0
+printf "SI\n" | (CLI_ASSUME_YES="false" IS_SANDBOX_MODE="false" KEEP_MY_CONFIG_TEST_MODE="false" _controller_run_preflight_gate "Test Backup" "firefox-derivado" "false" "true" >/dev/null 2>&1) || preflight_confirm_exit=$?
+assert_eq "0" "$preflight_confirm_exit" "_controller_run_preflight_gate ante purga con 'SI' debe retornar 0 (autorización)"
+
+
 
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
