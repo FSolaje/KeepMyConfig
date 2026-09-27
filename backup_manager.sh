@@ -6,7 +6,14 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolver ruta canónica real (soporta enlaces simbólicos en PATH como ~/.local/bin/keepmyconfig)
+SOURCE_FILE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE_FILE" ]]; do
+    LINK_DIR="$(cd -P "$(dirname "$SOURCE_FILE")" && pwd)"
+    SOURCE_FILE="$(readlink "$SOURCE_FILE")"
+    [[ "$SOURCE_FILE" != /* ]] && SOURCE_FILE="${LINK_DIR}/${SOURCE_FILE}"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE_FILE")" && pwd)"
 
 # Validar integridad del árbol de la aplicación
 if [[ ! -f "${SCRIPT_DIR}/.backup_app_marker" ]]; then

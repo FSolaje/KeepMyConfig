@@ -1,8 +1,8 @@
 # Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
-> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Sub-Hito 12.4.2 (Arquitectura Universal TUI, Asistente de Edición de Módulos, Pre-Flight Safety Gate y Personalización Visual) completado en la rama `dev/feature/tui-ux-module-edit-and-safety`. Toda la suite de 10 baterías con **528/528 pruebas unitarias al 100%**, escáner SAST impecable y aislamiento total en Git.  
-> **Paso inmediato para la próxima sesión:** Integración de la rama `dev/feature/tui-ux-module-edit-and-safety` en `develop` e iniciar el **Sub-Hito 12.5: Sistema de Empaquetado y Distribución Automatizada para Releases** bajo el flujo SDD estricto (rama dedicada `dev/feature/packaging-distribution`, commit previo `docs(spec)`, fases atómicas con pruebas y commit final `docs`).
+> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.2`** publicada en Releases. Sub-Hito 12.5 (Sistema de Empaquetado y Distribución Automatizada) completado al 100% en sus 6 fases en la rama `dev/feature/packaging-distribution` con 10 commits atómicos consolidados. Batería de 11 suites con **624/624 pruebas unitarias al 100%**, escáner SAST impecable y documentación pública plenamente sincronizada.  
+> **Paso inmediato para la próxima sesión:** Integración (merge) de `dev/feature/packaging-distribution` en `develop` y evaluación del Sub-Hito 12.6 (Blindaje Criptográfico de Integridad) o nueva versión alfa `v0.1.0-alpha.3`.
 
 ---
 
@@ -132,21 +132,44 @@
     - [x] **Fase 6 (Arquitectura Universal de Menús y Temas TUI):** Menú Principal híbrido (Menú 1) y 6 submenús especializados con telemetría en tiempo real, iconografía uniforme y catálogo de temas `NEWT_COLORS` (`default`, `midnight`, `cyberdark`, `aubergine`, `amber`) (`77bb8d9`).
     - [x] **Fase 7 (Batería de Pruebas Unitarias):** 70 nuevas aserciones en `test_views.sh`, `test_module_model.sh` y `test_controller.sh` (totalizando 528 pruebas unitarias al 100% de éxito) (`9deb859`).
     - [x] **Fase 8 (Documentación Pública):** Sincronización mandatoria de `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md`.
+20. **Empaquetado y Distribución - Fase 0 y Fase 1 (Sub-Hito 12.5 en curso):**
+    - [x] Rama GitFlow dedicada `dev/feature/packaging-distribution` bifurcada desde `develop` actualizado (`v0.1.0-alpha.2`).
+    - [x] **Fase 0 (SDD):** `specs/packaging_and_distribution/` (`spec.md`, `plan.md`, `tasks.md`) y commit previo obligatorio `702ff8a` (`docs(spec)`).
+    - [x] **Subfase 1.1 (Aislamiento Git):** Inclusión de `dist/` en `.gitignore` y purga preventiva de caché de Git (`128df06`).
+    - [x] **Subfase 1.2 (Icono Vectorial):** Diseño e incorporación del icono oficial W3C/Freedesktop `assets/keepmyconfig.svg` (`22245b4`).
+    - [x] **Subfase 1.3 (Lanzador Freedesktop):** Creación del lanzador estándar XDG `assets/keepmyconfig.desktop` validado con `desktop-file-validate` (`9c82bd0`).
+    - [x] **Calidad y Seguridad:** 10 suites unitarias superadas al 100% (528/528 tests) y escáner SAST limpio (0 alertas).
 
 ---
 
 ## Hoja de Ruta Inmediata y Futuras Funcionalidades (Roadmap):
 
-### Sub-Hito 12.5 (Siguiente Tarea Inmediata): Sistema de Empaquetado y Distribución Automatizada para Releases
-- [ ] Integración de `dev/feature/tui-ux-module-edit-and-safety` en `develop`.
-- [ ] Creación de rama GitFlow dedicada: `dev/feature/packaging-distribution`.
-- [ ] Documentos SDD en `specs/packaging_and_distribution/` (`spec.md`, `plan.md`, `tasks.md`).
-- [ ] Commit previo obligatorio de especificación: `docs(spec): definir sistema de empaquetado y distribucion para releases`.
-- [ ] Definición de Manifiesto de Distribución con Lista Blanca estricta (exclusión de `.agents/`, `specs/`, `tests/`, `user_data/`, etc.).
-- [ ] Script reproducible de empaquetado `scripts/package.sh` para generar `KeepMyConfig-vX.Y.Z.tar.gz` (sin tarbomb) y `SHA256SUMS.txt`.
-- [ ] Script de instalación opcional sin sudo `install.sh` (`~/.local/bin` y lanzador desktop para Lliurex 25 / Ubuntu 24.04).
-- [ ] Actualización del workflow `.github/workflows/release.yml` para adjuntar los artefactos empaquetados oficiales en cada release de GitHub.
-- [ ] Commit independiente del Sub-Hito 12.5.
+### Sub-Hito 12.5: Sistema de Empaquetado y Distribución Automatizada para Releases (Completado)
+- [x] Integración de `dev/feature/tui-ux-module-edit-and-safety` en `develop` y tag `v0.1.0-alpha.2`.
+- [x] Creación de rama GitFlow dedicada: `dev/feature/packaging-distribution`.
+- [x] Documentos SDD en `specs/packaging_and_distribution/` (`spec.md`, `plan.md`, `tasks.md`).
+- [x] Commit previo obligatorio de especificación: `docs(spec): definir sistema de empaquetado y distribucion para releases` (`702ff8a`).
+- [x] Subfase 1.1: Aislamiento del directorio `dist/` en `.gitignore` (`128df06`).
+- [x] Subfase 1.2: Diseño e incorporación del icono vectorial SVG `assets/keepmyconfig.svg` (`22245b4`).
+- [x] Subfase 1.3: Creación de la plantilla de lanzador de escritorio Freedesktop `assets/keepmyconfig.desktop` validada con `desktop-file-validate` (`9c82bd0`).
+- [x] **Fase 2:** Script reproducible de empaquetado dual `scripts/package.sh` para generar `KeepMyConfig-vX.Y.Z.tar.gz` (edición estándar con instalador) y `KeepMyConfig-vX.Y.Z-portable.tar.gz` (edición portable plug-and-play con `.portable` y `keepmyconfig.sh`), sin tarbomb, permisos normalizados `0755`/`0644`, lista blanca estricta y `SHA256SUMS.txt` (`e67aabb`).
+- [x] **Fase 3:** Script de instalación y desinstalación sin sudo `install.sh` y `uninstall.sh`:
+  - [x] Subfase 3.1: Scripts base e invocación canónica mediante symlinks en `$PATH` (`513bd5e`).
+  - [x] Subfase 3.2: Asistente interactivo OOBE de destino de backups, marcador y perfiles (`8fe5d3f`).
+  - [x] Subfase 3.3: Endurecimiento preventivo de permisos UNIX (`0555`/`0444`) en core/lib/templates (`16b84f8`).
+- [x] **Fase 4:** Suite de pruebas unitarias automatizadas `tests/test_packaging_and_distribution.sh` con 96 aserciones de integración (total: 624/624 pruebas al 100%) (`2b6957c`).
+- [x] **Fase 5:** Actualización del workflow `.github/workflows/release.yml` para invocar `scripts/package.sh` y adjuntar artefactos duales y checksums (`fb8ac1e`).
+- [x] **Fase 6:** Sincronización mandatoria de documentación pública (`README.md`, `MANUAL_USUARIO.md`, `CHANGELOG.md`, `PROXIMOS_PASOS.md`).
+
+### Sub-Hito 12.6: Blindaje Criptográfico de Integridad y Protección de Código Bash ante Manipulación (Próximo)
+> **Motivación y Análisis de Vulnerabilidad:** Al tratarse de un software completamente escrito en Bash, el código fuente reside en texto plano interpretado en `$HOME/.local/share/KeepMyConfig/lib/`. Cualquier script o proceso en el espacio de usuario podría alterar, corromper o inyectar código malicioso en las librerías del core (ej. captura de claves GPG o alteración de la purga segura con `shred`).  
+- [ ] **Documentos SDD:** Crear `specs/codebase_integrity_and_security/` (`spec.md`, `plan.md`, `tasks.md`).
+- [ ] **Sello Criptográfico en Empaquetado:** Generación del manifiesto de integridad `.app_integrity.sha256` en `scripts/package.sh` cubriendo `backup_manager.sh` y todos los scripts de `lib/`.
+- [ ] **Guarda de Autenticidad en Tiempo de Carga:** Comprobación ultrarrápida al inicio de `backup_manager.sh` contra `.app_integrity.sha256`. Bloqueo inmediato con código de salida crítico y alerta de seguridad si cualquier script de lógica ha sido alterado.
+- [ ] **Endurecimiento de Permisos (Hardening) en `install.sh`:** Aplicación de permisos estrictos de solo lectura (`chmod -R 0555` / `chmod -R u-w`) sobre `lib/` y binarios, preservando permisos de escritura únicamente en carpetas de datos del usuario (`config/`, `modules.d/`, `profiles/`).
+- [ ] **Firma Digital GPG Opcional:** Evaluación de soporte para verificación de firma `.asc` del manifiesto para entornos de alta seguridad.
+- [ ] **Compatibilidad con Desarrollo / Sandbox:** Variable de elusión controlada `KEEP_MY_CONFIG_DEV=true` y modo test para permitir desarrollo activo sin alertas espurias.
+- [ ] **Suite de Pruebas:** Pruebas unitarias de integridad simulando inyección de código y validando la detección inmediata.
 
 ### Hito 13: Almacenamiento Remoto (SSH, SFTP, Rsync)
 - [ ] **Ampliación de `BACKUP_DESTINATION`:** Añadir soporte para destinos remotos (`ssh://user@host/path`, `sftp://`, `rsync://`).
@@ -154,5 +177,6 @@
 - [ ] **Validación Remota del Marcador:** Verificación de `.backup_storage_marker` en destino remoto mediante canal seguro.
 - [ ] **Transferencia Eficiente:** Estrategia de sincronización o montaje (FUSE `sshfs` o canalización `rsync`/tuberías `ssh`).
 - [ ] **Asociación con Perfiles:** Posibilidad de que cada perfil defina si su destino es un SSD físico, ruta local o servidor remoto.
+
 
 
