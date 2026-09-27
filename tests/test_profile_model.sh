@@ -301,9 +301,14 @@ assert_equals "1" "$(echo "$mod_list_def_check" | grep -qx 'global-app' && echo 
 res_def_check=$(profile_model_resolve_module "global-app" "default" "$SANDBOX_DIR")
 assert_exit_code "$PROFILE_OK" $? "resolve_module 'global-app' en default debe retornar PROFILE_OK"
 
-# Intentar deshabilitar en 'default' debe fallar
+# Deshabilitar en 'default' ahora debe tener éxito
 profile_model_disable_module "default" "global-app" "$SANDBOX_PROFILES" >/dev/null 2>&1
-assert_exit_code "$PROFILE_ERR_CANNOT_DELETE" $? "disable_module en default debe retornar PROFILE_ERR_CANNOT_DELETE"
+assert_exit_code "$PROFILE_OK" $? "disable_module en default debe retornar PROFILE_OK"
+mod_list_def_disabled=$(profile_model_list_modules "default" "$SANDBOX_DIR")
+assert_equals "0" "$(echo "$mod_list_def_disabled" | grep -qx 'global-app' && echo 1 || echo 0)" "global-app no debe figurar en default tras deshabilitarse"
+# Rehabilitar en default
+profile_model_enable_module "default" "global-app" "$SANDBOX_PROFILES" >/dev/null 2>&1
+assert_exit_code "$PROFILE_OK" $? "enable_module en default debe retornar PROFILE_OK"
 
 # Re-habilitar 'global-app' en 'work'
 profile_model_enable_module "work" "global-app" "$SANDBOX_PROFILES"

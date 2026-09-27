@@ -43,10 +43,47 @@ _controller_get_module_info() {
     module_model_get "$mod_id" "$mod_dir"
 }
 
+_controller_list_all_modules() {
+    local act_prof
+    act_prof="${1:-$(_controller_get_active_profile)}"
+    local global_dir="${MODULES_DIR:-${CONTROLLER_BASE_DIR}/modules.d}"
+    local profile_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}/${act_prof}/modules.d"
+    local all_m=()
+
+    if [[ -d "$global_dir" ]]; then
+        for f in "$global_dir"/*.conf; do
+            [[ -f "$f" ]] || continue
+            all_m+=("$(basename "$f" .conf)")
+        done
+    fi
+
+    if [[ -n "$act_prof" && "$act_prof" != "default" && -d "$profile_dir" ]]; then
+        for f in "$profile_dir"/*.conf; do
+            [[ -f "$f" ]] || continue
+            all_m+=("$(basename "$f" .conf)")
+        done
+    fi
+
+    if [[ ${#all_m[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    printf "%s\n" "${all_m[@]}" | sort -u
+}
+
 _controller_list_modules() {
     local act_prof
     act_prof=$(_controller_get_active_profile)
-    profile_model_list_modules "$act_prof" "$CONTROLLER_BASE_DIR"
+    local all_mods
+    all_mods=$(profile_model_list_modules "$act_prof" "$CONTROLLER_BASE_DIR") || true
+    for m in $all_mods; do
+        [[ -n "$m" ]] || continue
+        local m_path
+        m_path=$(profile_model_resolve_module "$m" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null || true)
+        if [[ -n "$m_path" ]] && module_model_is_enabled "$m_path"; then
+            echo "$m"
+        fi
+    done
 }
 
 # Inicialización del entorno, configuración, modelos y vistas
@@ -151,6 +188,38 @@ _sandbox_seed_virtual_home() {
     return 0
 }
 
+_sandbox_seed_modules() {
+    local target_modules_dir="$1"
+    local base_dir="$2"
+    local tmpl_dir="${base_dir}/templates.d"
+    local global_mods_dir="${base_dir}/modules.d"
+
+    # Verificar si el catálogo de modules.d del sandbox ya tiene recetas .conf
+    local count=0
+    if [[ -d "$target_modules_dir" ]]; then
+        count=$(find "$target_modules_dir" -maxdepth 1 -name "*.conf" 2>/dev/null | wc -l)
+    fi
+
+    if (( count == 0 )); then
+        local g_count=0
+        if [[ -d "$global_mods_dir" ]]; then
+            g_count=$(find "$global_mods_dir" -maxdepth 1 -name "*.conf" 2>/dev/null | wc -l)
+        fi
+        if (( g_count > 0 )); then
+            cp "$global_mods_dir"/*.conf "$target_modules_dir/" 2>/dev/null || true
+        elif [[ -d "$tmpl_dir" ]]; then
+            # Sembrar recetas canónicas de prueba desde templates.d
+            local seed_templates=("bash-env.conf" "ssh-keys.conf" "vscode-standard.conf" "vscode-sensitive.conf" "git-config.conf")
+            for tmpl in "${seed_templates[@]}"; do
+                if [[ -f "$tmpl_dir/$tmpl" ]]; then
+                    cp "$tmpl_dir/$tmpl" "$target_modules_dir/" 2>/dev/null || true
+                fi
+            done
+        fi
+    fi
+    return 0
+}
+
 controller_enable_sandbox_mode() {
     IS_SANDBOX_MODE="true"
     local base_dir="${CONTROLLER_BASE_DIR:-}"
@@ -199,6 +268,7 @@ COMPRESSION_LEVEL="3"
 GPG_CIPHER="AES256"
 SHRED_ITERATIONS=3
 SHRED_ZERO_PASS=true
+TUI_THEME="default"
 EOF
         fi
     fi
@@ -229,6 +299,9 @@ DISABLED_MODULES=()
 EOF
         fi
     fi
+
+    # 5.1. Desplegar recetas de prueba en modules.d del sandbox si está vacío
+    _sandbox_seed_modules "${sandbox_base}/modules.d" "$base_dir"
 
     # 6. Redirigir variables operativas hacia el entorno sandbox
     TARGET_USER_HOME="${sandbox_base}/home"
@@ -290,6 +363,53 @@ _controller_get_backup_dir() {
     return 0
 }
 
+# Genera el encabezado dinámico con telemetría en vivo para todos los menús TUI
+_controller_build_tui_telemetry_header() {
+    local act_prof
+    act_prof=$(_controller_get_active_profile)
+    local dest_info="${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}"
+    if (( ${#dest_info} > 26 )); then
+        dest_info="...${dest_info: -23}"
+    fi
+    local active_mods=()
+    local m
+    while IFS= read -r m; do
+        [[ -n "$m" ]] && active_mods+=("$m")
+    done < <(_controller_list_modules 2>/dev/null || true)
+    local mods_cnt="${#active_mods[@]}"
+    local cur_theme="${TUI_THEME:-default}"
+
+    local header="📊 Telemetría: Perfil: [$act_prof] | Destino: [$dest_info] | Módulos: [$mods_cnt] | Tema: [$cur_theme]\n"
+    header+="────────────────────────────────────────────────────────────────────────\n"
+    echo -e "$header"
+}
+
+# Actualiza de forma atómica la preferencia TUI_THEME en config.conf
+_controller_update_config_theme() {
+    local new_theme="$1"
+    local cfg_file="$(_controller_get_config_file)"
+    if grep -q '^TUI_THEME=' "$cfg_file" 2>/dev/null; then
+        sed -i "s|^TUI_THEME=.*|TUI_THEME=\"$new_theme\"|" "$cfg_file"
+    else
+        echo "TUI_THEME=\"$new_theme\"" >> "$cfg_file"
+    fi
+    TUI_THEME="$new_theme"
+}
+
+# Conmuta la preferencia REMEMBER_LAST_PROFILE en config.conf
+_controller_toggle_remember_profile() {
+    local cfg_file="$(_controller_get_config_file)"
+    local cur_val="${REMEMBER_LAST_PROFILE:-true}"
+    local new_val="true"
+    [[ "$cur_val" == "true" ]] && new_val="false"
+    if grep -q '^REMEMBER_LAST_PROFILE=' "$cfg_file" 2>/dev/null; then
+        sed -i "s|^REMEMBER_LAST_PROFILE=.*|REMEMBER_LAST_PROFILE=\"$new_val\"|" "$cfg_file"
+    else
+        echo "REMEMBER_LAST_PROFILE=\"$new_val\"" >> "$cfg_file"
+    fi
+    REMEMBER_LAST_PROFILE="$new_val"
+}
+
 # Advertencia interactiva de seguridad post-backup si quedaron ficheros sensibles sin purgar
 _controller_check_sensitive_purge_warning() {
     local module_id="$1"
@@ -339,8 +459,199 @@ _controller_check_sensitive_purge_warning() {
 }
 
 # ==============================================================================
+# Pre-Flight Safety Gate (RF-05)
+# ==============================================================================
+
+# Construye la matriz pre-flight para una lista de módulos
+# Salida por stdout: una línea por módulo con formato:
+# ID|NOMBRE|AMBITO|IS_SENSITIVE|PURGE_ACTIVE|PATHS|DESTINO
+_controller_build_preflight_matrix() {
+    local mod_list=("$@")
+    local act_prof
+    act_prof=$(_controller_get_active_profile)
+    local backup_dest
+    backup_dest=$(_controller_get_backup_dir 2>/dev/null || echo "Almacenamiento")
+
+    for m in "${mod_list[@]}"; do
+        [[ -n "$m" ]] || continue
+        local minfo
+        minfo=$(_controller_get_module_info "$m" 2>/dev/null) || continue
+
+        local mname msens mpurge mpaths
+        mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
+        msens=$(echo "$minfo" | grep '^IS_SENSITIVE=' | cut -d'=' -f2- || echo "false")
+        mpurge=$(echo "$minfo" | grep '^PURGE_AFTER_BACKUP=' | cut -d'=' -f2- || echo "false")
+        mpaths=$(echo "$minfo" | grep '^PATHS=' | cut -d'=' -f2- || echo "")
+
+        local m_path
+        m_path=$(profile_model_resolve_module "$m" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null || true)
+        local mscope="[Global]"
+        if [[ "$m_path" =~ /profiles/ ]]; then
+            mscope="[Perfil: $act_prof]"
+        fi
+
+        echo "${m}|${mname}|${mscope}|${msens}|${mpurge}|${mpaths}|${backup_dest}"
+    done
+}
+
+# Ejecuta el Pre-Flight Safety Gate antes de cualquier operación de respaldo
+# Retorna 0 si el usuario confirma (o si --yes), 1 si cancela
+_controller_run_preflight_gate() {
+    local op_title="${1:-Respaldo}"
+    local mod_list_str="${2:-}"
+    local is_tui="${3:-false}"
+    local purge_override="${4:-auto}"
+    local assume_yes="${CLI_ASSUME_YES:-false}"
+    if [[ "${IS_SANDBOX_MODE:-false}" == "true" || "${KEEP_MY_CONFIG_TEST_MODE:-false}" == "true" ]]; then
+        assume_yes="true"
+    fi
+
+    local mod_arr=()
+    read -r -a mod_arr <<< "$mod_list_str"
+    [[ ${#mod_arr[@]} -gt 0 ]] || return 0
+
+    local matrix_lines=()
+    local has_purge="false"
+    local purge_paths=()
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        local mid mname mscope msens mpurge mpaths mdest
+        IFS='|' read -r mid mname mscope msens mpurge mpaths mdest <<< "$line"
+
+        # Aplicar purge_override si se especificó
+        local eff_purge="$mpurge"
+        if [[ "$purge_override" == "true" ]]; then
+            eff_purge="true"
+        elif [[ "$purge_override" == "false" ]]; then
+            eff_purge="false"
+        fi
+
+        if [[ "$eff_purge" == "true" ]]; then
+            has_purge="true"
+            local p_arr=()
+            IFS='|' read -r -a p_arr <<< "$mpaths"
+            for p in "${p_arr[@]}"; do
+                [[ -n "$p" ]] || continue
+                purge_paths+=("${TARGET_USER_HOME}/${p}")
+            done
+        fi
+
+        local sens_txt="No"
+        [[ "$msens" == "true" ]] && sens_txt="SÍ"
+        local purge_txt="No"
+        [[ "$eff_purge" == "true" ]] && purge_txt="SÍ"
+
+        matrix_lines+=("${mid}|${mname}|${mscope}|${sens_txt}|${purge_txt}|${mdest}")
+    done < <(_controller_build_preflight_matrix "${mod_arr[@]}")
+
+    if [[ "$is_tui" == "true" ]]; then
+        # 1. Resumen Pre-Flight en Whiptail
+        local summary_txt="MATRIZ DE OPERACIÓN:\n\n"
+        local header_fmt
+        printf -v header_fmt "%-16s %-10s %-12s %-14s\n" "MÓDULO" "ÁMBITO" "GPG" "PURGA SHRED"
+        summary_txt+="$header_fmt"
+        summary_txt+="--------------------------------------------------------\n"
+        for row in "${matrix_lines[@]}"; do
+            local mid mname mscope sens_txt purge_txt mdest
+            IFS='|' read -r mid mname mscope sens_txt purge_txt mdest <<< "$row"
+            local line_fmt
+            printf -v line_fmt "%-16s %-10s %-12s %-14s\n" "$mid" "$mscope" "$sens_txt" "$purge_txt"
+            summary_txt+="$line_fmt"
+        done
+        summary_txt+="\n¿Desea autorizar y ejecutar esta operación de respaldo?"
+
+        if ! whiptail_view_preflight_summary "Pre-Flight: $op_title" "$summary_txt"; then
+            return 1
+        fi
+
+        # 2. Alarma crítica si hay purga shred activa
+        if [[ "$has_purge" == "true" ]]; then
+            local purge_list_txt=""
+            for pp in "${purge_paths[@]}"; do
+                purge_list_txt+="  • $pp\n"
+            done
+            local critical_msg="¡ADVERTENCIA CRÍTICA DE SEGURIDAD!\n\n"
+            critical_msg+="La operación incluye módulos con PURGA AUTOMÁTICA ACTIVA (shred -u).\n"
+            critical_msg+="Los siguientes archivos y carpetas locales SERÁN DESTRUIDOS de forma permanente e irreversible tras empaquetarse:\n\n"
+            critical_msg+="$purge_list_txt\n"
+            critical_msg+="¿Está TOTALMENTE SEGURO de continuar y DESTRUIR estos archivos originales de su equipo?"
+
+            if ! whiptail_view_confirm_critical "PELIGRO: DESTRUCCIÓN IRREVERSIBLE" "$critical_msg"; then
+                return 1
+            fi
+        fi
+
+    else
+        # Modo CLI
+        ansi_view_preflight_table "${matrix_lines[@]}"
+
+        if [[ "$has_purge" == "true" ]]; then
+            echo ""
+            echo -e "\033[41;97;1m ======================================================================================== \033[0m"
+            echo -e "\033[41;97;1m  ¡PELIGRO: DESTRUCCIÓN IRREVERSIBLE DE ARCHIVOS ORIGINALES CON SHRED -U!                  \033[0m"
+            echo -e "\033[41;97;1m ======================================================================================== \033[0m"
+            echo -e "${ANSI_RED}${ANSI_BOLD}Los siguientes archivos en su equipo local serán purgados y destruidos tras el respaldo:${ANSI_RESET}"
+            for pp in "${purge_paths[@]}"; do
+                echo -e "  • ${ANSI_BOLD}${pp}${ANSI_RESET}"
+            done
+            echo ""
+            if [[ "$assume_yes" == "true" ]]; then
+                ansi_view_warning "Flag --yes detectado: Se asume confirmación de purga desatendida."
+            else
+                if ! ansi_view_confirm_critical "Para confirmar la DESTRUCCIÓN de estos archivos originales, escriba 'SI' y pulse ENTER"; then
+                    ansi_view_error "Operación cancelada por el usuario ante advertencia de purga."
+                    return 1
+                fi
+            fi
+        else
+            if [[ "$assume_yes" != "true" ]]; then
+                if [[ -t 0 ]]; then
+                    if ! ansi_view_confirm "¿Desea proceder con el respaldo de estos módulos?" "S"; then
+                        ansi_view_info "Operación cancelada por el usuario."
+                        return 1
+                    fi
+                fi
+            fi
+        fi
+    fi
+
+    return 0
+}
+
+# ==============================================================================
 # Manejadores de Casos de Uso (Handlers)
 # ==============================================================================
+
+# Submenú 2: Opciones Avanzadas de Respaldo
+controller_handle_backup_submenu() {
+    local is_tui="${1:-true}"
+    if [[ "$is_tui" != "true" ]]; then
+        return 0
+    fi
+
+    while true; do
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
+
+        local choice
+        choice=$(whiptail_view_menu "Opciones de Respaldo [Perfil: $act_prof]" \
+            "${telemetry_prompt}Seleccione la modalidad de respaldo:" \
+            "1" "🏷️   [BACKUP]   Respaldo por Etiquetas (Tags)" \
+            "2" "📦  [BACKUP]   Respaldo por Módulo Individual" \
+            "3" "🚀  [BACKUP]   Respaldo Completo (Todos los Módulos)" \
+            "0" "↩️   [VOLVER]   Regresar al Menú Principal") || return 0
+
+        case "$choice" in
+            1) controller_handle_backup_tag "" "true" "auto" || true ;;
+            2) controller_handle_backup_module "" "true" "auto" || true ;;
+            3) controller_handle_backup_all "true" "auto" || true ;;
+            0) return 0 ;;
+        esac
+    done
+}
 
 # 1. Respaldo Completo (Todos los módulos)
 controller_handle_backup_all() {
@@ -377,6 +688,11 @@ controller_handle_backup_all() {
             ansi_view_error "$err_txt"
         fi
         return 2
+    fi
+
+    # Pre-Flight Safety Gate (RF-05)
+    if ! _controller_run_preflight_gate "Respaldo Completo" "${active_mods[*]}" "$is_tui" "$purge_override"; then
+        return 0
     fi
 
     # Verificar si hay módulos sensibles en el perfil activo
@@ -469,6 +785,10 @@ controller_handle_backup_tag() {
             for t in $all_tags; do
                 tag_items+=("$t" "Etiqueta: $t" "OFF")
             done
+            if [[ ${#tag_items[@]} -eq 0 ]]; then
+                whiptail_view_msgbox "Sin Etiquetas" "No hay etiquetas configuradas en el sistema.\n\nPuede asignar etiquetas a los módulos desde la administración de módulos."
+                return 0
+            fi
             tag=$(whiptail_view_radiolist "Seleccionar Etiqueta" "Elija la etiqueta a respaldar:" "${tag_items[@]}") || return 0
             [[ -z "$tag" ]] && return 0
         else
@@ -510,6 +830,11 @@ controller_handle_backup_tag() {
         local err_txt="No se encontraron módulos asociados a la etiqueta '$tag' en el perfil activo."
         [[ "$is_tui" == "true" ]] && whiptail_view_error "Etiqueta Vacía" "$err_txt" || ansi_view_error "$err_txt"
         return 2
+    fi
+
+    # Pre-Flight Safety Gate (RF-05)
+    if ! _controller_run_preflight_gate "Respaldo por Etiqueta '$tag'" "${tag_mods[*]}" "$is_tui" "$purge_override"; then
+        return 0
     fi
 
     local passphrase=""
@@ -584,6 +909,12 @@ controller_handle_backup_module() {
                 mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
                 mod_items+=("$m" "$mname" "OFF")
             done
+            if [[ ${#mod_items[@]} -eq 0 ]]; then
+                local act_prof
+                act_prof=$(_controller_get_active_profile)
+                whiptail_view_msgbox "Sin Módulos Activos" "No hay módulos configurados para respaldar en el perfil '$act_prof'.\n\nPuede activar recetas desde la administración de módulos y plantillas."
+                return 0
+            fi
             module_id=$(whiptail_view_radiolist "Seleccionar Módulo" "Elija el módulo individual a respaldar:" "${mod_items[@]}") || return 0
             [[ -z "$module_id" ]] && return 0
         else
@@ -607,6 +938,11 @@ controller_handle_backup_module() {
         [[ "$is_tui" == "true" ]] && whiptail_view_error "Módulo Inválido" "$err_txt" || ansi_view_error "$err_txt"
         return 3
     }
+
+    # Pre-Flight Safety Gate (RF-05)
+    if ! _controller_run_preflight_gate "Respaldo de Módulo '$module_id'" "$module_id" "$is_tui" "$purge_override"; then
+        return 0
+    fi
 
     local passphrase=""
     if echo "$minfo" | grep -q 'IS_SENSITIVE=true'; then
@@ -670,6 +1006,36 @@ controller_handle_backup_module() {
     return "$ret"
 }
 
+# Submenú 3: Centro de Recuperación
+controller_handle_restore_submenu() {
+    local is_tui="${1:-true}"
+    if [[ "$is_tui" != "true" ]]; then
+        return 0
+    fi
+
+    while true; do
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
+
+        local choice
+        choice=$(whiptail_view_menu "Centro de Recuperación [Perfil: $act_prof]" \
+            "${telemetry_prompt}Seleccione el método de restauración:" \
+            "1" "⚡  [RESTORE]  Restauración Rápida de Datos Sensibles" \
+            "2" "🔍  [RESTORE]  Restauración Selectiva (Módulo / Histórico)" \
+            "3" "🌐  [RESTORE]  Restauración Total (Todos los Módulos)" \
+            "0" "↩️   [VOLVER]   Regresar al Menú Principal") || return 0
+
+        case "$choice" in
+            1) controller_handle_restore_sensitive "true" || true ;;
+            2) controller_handle_restore_module "" "" "true" || true ;;
+            3) controller_handle_restore_all "true" || true ;;
+            0) return 0 ;;
+        esac
+    done
+}
+
 # 4. Restauración Exprés de Datos Sensibles
 controller_handle_restore_sensitive() {
     local is_tui="${1:-false}"
@@ -681,6 +1047,54 @@ controller_handle_restore_sensitive() {
         local err_txt="No se detectó el SSD externo de backup o falta el marcador de seguridad."
         [[ "$is_tui" == "true" ]] && whiptail_view_error "Disco No Disponible" "$err_txt" || ansi_view_error "$err_txt"
         return 2
+    fi
+
+    local assume_yes="${CLI_ASSUME_YES:-false}"
+    if [[ "${IS_SANDBOX_MODE:-false}" == "true" || "${KEEP_MY_CONFIG_TEST_MODE:-false}" == "true" ]]; then
+        assume_yes="true"
+    fi
+    local sensitive_modules
+    sensitive_modules=$(module_model_filter_by_sensitivity "true") || true
+    local sens_paths=()
+    while IFS= read -r sm; do
+        [[ -n "$sm" ]] || continue
+        if restore_model_find_archive "$sm" "$backup_dir" "" >/dev/null 2>&1; then
+            local sinfo
+            sinfo=$(_controller_get_module_info "$sm" 2>/dev/null || true)
+            local spaths_raw
+            spaths_raw=$(echo "$sinfo" | grep '^PATHS=' | cut -d'=' -f2- || true)
+            local spaths=()
+            IFS='|' read -r -a spaths <<< "$spaths_raw"
+            for p in "${spaths[@]}"; do
+                [[ -n "$p" ]] || continue
+                sens_paths+=("${TARGET_USER_HOME}/${p}")
+            done
+        fi
+    done <<< "$sensitive_modules"
+
+    if [[ ${#sens_paths[@]} -gt 0 ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            local warn_msg="ATENCIÓN: Se van a restaurar los siguientes archivos sensibles en su equipo local.\n"
+            warn_msg+="Cualquier contenido local existente en estas rutas será SOBRESCRITO:\n\n"
+            for sp in "${sens_paths[@]}"; do
+                warn_msg+="  • $sp\n"
+            done
+            warn_msg+="\n¿Desea continuar con la restauración?"
+            if ! whiptail_view_yesno "Advertencia de Sobrescritura" "$warn_msg"; then
+                return 0
+            fi
+        else
+            if [[ "$assume_yes" != "true" && -t 0 ]]; then
+                ansi_view_warning "Los siguientes archivos sensibles locales serán SOBRESCRITOS:"
+                for sp in "${sens_paths[@]}"; do
+                    echo "  • $sp"
+                done
+                if ! ansi_view_confirm "¿Desea continuar con la restauración?" "N"; then
+                    ansi_view_info "Operación cancelada."
+                    return 0
+                fi
+            fi
+        fi
     fi
 
     local passphrase=""
@@ -736,6 +1150,12 @@ controller_handle_restore_module() {
                 mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
                 mod_items+=("$m" "$mname" "OFF")
             done
+            if [[ ${#mod_items[@]} -eq 0 ]]; then
+                local act_prof
+                act_prof=$(_controller_get_active_profile)
+                whiptail_view_msgbox "Sin Módulos" "No hay módulos registrados en el perfil activo '$act_prof'.\n\nPuede activar recetas desde la administración de módulos."
+                return 0
+            fi
             module_id=$(whiptail_view_radiolist "Seleccionar Módulo" "Elija el módulo a restaurar:" "${mod_items[@]}") || return 0
             [[ -z "$module_id" ]] && return 0
         else
@@ -787,6 +1207,46 @@ controller_handle_restore_module() {
         fi
     fi
 
+    local assume_yes="${CLI_ASSUME_YES:-false}"
+    if [[ "${IS_SANDBOX_MODE:-false}" == "true" || "${KEEP_MY_CONFIG_TEST_MODE:-false}" == "true" ]]; then
+        assume_yes="true"
+    fi
+    local minfo
+    minfo=$(_controller_get_module_info "$module_id" 2>/dev/null || true)
+    local paths_raw
+    paths_raw=$(echo "$minfo" | grep '^PATHS=' | cut -d'=' -f2- || true)
+    local paths=()
+    IFS='|' read -r -a paths <<< "$paths_raw"
+    local mod_targets=()
+    for p in "${paths[@]}"; do
+        [[ -n "$p" ]] || continue
+        mod_targets+=("${TARGET_USER_HOME}/${p}")
+    done
+
+    if [[ ${#mod_targets[@]} -gt 0 ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            local warn_msg="ATENCIÓN: La restauración del módulo '$module_id' SOBRESCRIBIRÁ los archivos locales actuales en:\n\n"
+            for mt in "${mod_targets[@]}"; do
+                warn_msg+="  • $mt\n"
+            done
+            warn_msg+="\n¿Desea proceder con la restauración y sobrescribir los datos locales?"
+            if ! whiptail_view_yesno "Advertencia de Sobrescritura" "$warn_msg"; then
+                return 0
+            fi
+        else
+            if [[ "$assume_yes" != "true" && -t 0 ]]; then
+                ansi_view_warning "La restauración de '$module_id' SOBRESCRIBIRÁ los siguientes archivos locales:"
+                for mt in "${mod_targets[@]}"; do
+                    echo "  • $mt"
+                done
+                if ! ansi_view_confirm "¿Desea proceder con la restauración?" "N"; then
+                    ansi_view_info "Operación cancelada."
+                    return 0
+                fi
+            fi
+        fi
+    fi
+
     local report
     report=$(restore_model_restore_module "$module_id" "$backup_dir" "$TARGET_USER_HOME" "$timestamp" "$passphrase" "$m_dir")
     ret=$?
@@ -835,9 +1295,25 @@ controller_handle_restore_all() {
         return 2
     fi
 
+    local assume_yes="${CLI_ASSUME_YES:-false}"
+    if [[ "${IS_SANDBOX_MODE:-false}" == "true" || "${KEEP_MY_CONFIG_TEST_MODE:-false}" == "true" ]]; then
+        assume_yes="true"
+    fi
     if [[ "$is_tui" == "true" ]]; then
-        if ! whiptail_view_yesno "Restauración Total" "¿Está seguro de que desea restaurar TODOS los módulos respaldados en el SSD a su sistema local?"; then
+        local warn_all="¡ADVERTENCIA DE SOBRESCRITURA TOTAL!\n\n"
+        warn_all+="Se restaurarán TODOS los módulos respaldados en el almacenamiento hacia su equipo ($TARGET_USER_HOME).\n"
+        warn_all+="Cualquier configuración o archivo local existente que coincida con las recetas respaldadas será SOBRESCRITO con la versión del backup.\n\n"
+        warn_all+="¿Está completamente seguro de continuar con la Restauración Total?"
+        if ! whiptail_view_yesno "Restauración Total" "$warn_all"; then
             return 0
+        fi
+    else
+        if [[ "$assume_yes" != "true" && -t 0 ]]; then
+            ansi_view_warning "¡ADVERTENCIA: La restauración total sobrescribirá configuraciones y archivos locales en $TARGET_USER_HOME!"
+            if ! ansi_view_confirm "¿Está completamente seguro de restaurar todos los módulos?" "N"; then
+                ansi_view_info "Operación cancelada."
+                return 0
+            fi
         fi
     fi
 
@@ -997,9 +1473,20 @@ controller_handle_init_target() {
     local is_tui="${3:-false}"
 
     if [[ "$is_tui" == "true" && -z "$subdir" ]]; then
+        local base_dest="${BACKUP_DESTINATION:-}"
+        if [[ -z "$base_dest" ]]; then
+            local cfg_file="$(_controller_get_config_file)"
+            base_dest=$(grep '^BACKUP_DESTINATION=' "$cfg_file" 2>/dev/null | cut -d'=' -f2- | tr -d '"')
+            base_dest="${base_dest:-~/Backups/KeepMyConfig}"
+        fi
         local def_sub="Backups/$(hostname)"
-        subdir=$(whiptail_view_input "Inicializar Destino de Backup" \
-            "Introduzca la ruta relativa de la subcarpeta para este equipo:" "$def_sub") || return 0
+        local prompt_init="Inicializar una subcarpeta de almacenamiento para este equipo:\n\n"
+        prompt_init+="• Destino base actual: $base_dest\n\n"
+        prompt_init+="Indique el nombre de la subcarpeta relativa (ej: '$def_sub').\n"
+        prompt_init+="El sistema creará la estructura 'archives/', 'logs/' y el marcador '.backup_storage_marker' dentro de:\n"
+        prompt_init+="-> $base_dest/<subcarpeta>\n\n"
+        prompt_init+="Subcarpeta a inicializar:"
+        subdir=$(whiptail_view_input "Inicializar Destino de Backup" "$prompt_init" "$def_sub") || return 0
         [[ -z "$subdir" ]] && return 0
 
         if whiptail_view_yesno "Destino Predeterminado" "¿Desea establecer '$subdir' como la carpeta activa en config.conf?"; then
@@ -1229,7 +1716,11 @@ controller_handle_onboarding_wizard() {
 
         local chosen_dest=""
         if [[ "$sel" == "$manual_idx" ]]; then
-            chosen_dest=$(whiptail_view_input "Ruta Personalizada de Backup" "Ingrese la ruta del directorio para las copias (ej: ~/Backups o /media/...):" "~/Backups/KeepMyConfig") || return 1
+            local prompt_onboard="Indique la ruta base para almacenar las copias de seguridad de sus perfiles:\n\n"
+            prompt_onboard+="• Se admite formato con tilde (ej: ~/Backups/KeepMyConfig)\n"
+            prompt_onboard+="• Se admiten rutas absolutas (ej: /media/\$USER/MiDisco/Backups o /mnt/servidor)\n\n"
+            prompt_onboard+="Ruta de destino:"
+            chosen_dest=$(whiptail_view_input "Ruta Personalizada de Backup" "$prompt_onboard" "~/Backups/KeepMyConfig") || return 1
         else
             chosen_dest="${opt_paths[$sel]:-~/Backups/KeepMyConfig}"
         fi
@@ -1282,7 +1773,8 @@ controller_handle_onboarding_wizard() {
 
         local chosen_dest=""
         if [[ "$sel" == "$manual_idx" ]]; then
-            read -r -p "Ingrese la ruta de destino: " chosen_dest || true
+            echo "Ingrese la ruta de destino (admite '~/...' o ruta absoluta ej: '/media/...'):"
+            read -r -p "Destino [~/Backups/KeepMyConfig]: " chosen_dest || true
         else
             chosen_dest="${opt_paths[$sel]:-~/Backups/KeepMyConfig}"
         fi
@@ -1319,8 +1811,20 @@ controller_handle_set_backup_destination() {
     local cfg_file="$(_controller_get_config_file)"
 
     if [[ "$is_tui" == "true" ]]; then
-        local cur_dest="${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}"
-        new_dest=$(whiptail_view_input "Destino de Backup" "Introduzca la nueva ruta de destino para las copias:" "$cur_dest") || return 0
+        local cur_dest="${BACKUP_DESTINATION:-}"
+        if [[ -z "$cur_dest" ]]; then
+            cur_dest=$(grep '^BACKUP_DESTINATION=' "$cfg_file" 2>/dev/null | cut -d'=' -f2- | tr -d '"')
+            cur_dest="${cur_dest:-~/Backups/KeepMyConfig}"
+        fi
+        local prompt_dest="Defina la ruta base donde se almacenarán las copias de seguridad de sus perfiles:\n\n"
+        prompt_dest+="• Destino base actual: $cur_dest\n\n"
+        prompt_dest+="Formatos admitidos:\n"
+        prompt_dest+="• Ruta local con tilde: ej. ~/Backups/KeepMyConfig\n"
+        prompt_dest+="• Ruta absoluta en disco local o externo: ej. /media/\$USER/MiDisco/Backups\n"
+        prompt_dest+="• Ruta de red montada: ej. /mnt/nfs_backups\n\n"
+        prompt_dest+="Nota: El sistema desplegará automáticamente el marcador '.backup_storage_marker' si no existe.\n\n"
+        prompt_dest+="Introduzca la nueva ruta de destino:"
+        new_dest=$(whiptail_view_input "Destino Global de Backup" "$prompt_dest" "$cur_dest") || return 0
         [[ -n "$new_dest" ]] || return 0
         local resolved
         resolved=$(device_model_resolve_destination "$new_dest") || {
@@ -1340,7 +1844,7 @@ controller_handle_set_backup_destination() {
     fi
 }
 
-# 7. Diagnóstico y Gestión de Almacenamiento y Destinos
+# 7. Diagnóstico y Gestión de Almacenamiento y Destinos (Submenú 6)
 controller_handle_device_check() {
     local is_tui="${1:-false}"
 
@@ -1350,13 +1854,19 @@ controller_handle_device_check() {
     fi
 
     while true; do
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
+
         local choice
-        choice=$(whiptail_view_menu "Gestión y Diagnóstico de Almacenamiento" "Seleccione una operación:" \
-            "1" "Ver diagnóstico de almacenamiento y espacio libre" \
-            "2" "Cambiar ruta de destino de backup (BACKUP_DESTINATION)" \
-            "3" "Asistente de configuración guiada (Onboarding)" \
-            "4" "Desplegar marcador de seguridad en destino actual" \
-            "0" "Volver al Menú Principal") || return 0
+        choice=$(whiptail_view_menu "Gestión y Diagnóstico de Almacenamiento" \
+            "${telemetry_prompt}Configuración de soportes externos y rutas de almacenamiento:" \
+            "1" "📊  [DESTINO]  Ver diagnóstico de almacenamiento y espacio libre" \
+            "2" "📁  [DESTINO]  Cambiar ruta de destino de backup (BACKUP_DESTINATION)" \
+            "3" "🧙  [DESTINO]  Asistente de configuración guiada (Onboarding)" \
+            "4" "🛡️   [DESTINO]  Desplegar marcador de seguridad en destino actual" \
+            "0" "↩️   [VOLVER]   Regresar al Menú Principal") || return 0
 
         case "$choice" in
             1) _controller_show_device_diagnostics "true" ;;
@@ -1364,6 +1874,66 @@ controller_handle_device_check() {
             3) controller_handle_onboarding_wizard "true" ;;
             4) controller_handle_deploy_marker "" "true" ;;
             0) return 0 ;;
+        esac
+    done
+}
+
+# Submenú 7: Preferencias del Sistema y Temas Visuales
+controller_handle_settings_submenu() {
+    local is_tui="${1:-true}"
+    if [[ "$is_tui" != "true" ]]; then
+        return 0
+    fi
+
+    while true; do
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
+        local rem_status="[OFF]"
+        [[ "${REMEMBER_LAST_PROFILE:-true}" == "true" ]] && rem_status="[ON]"
+        local cur_theme="${TUI_THEME:-default}"
+
+        local choice
+        choice=$(whiptail_view_menu "Preferencias y Temas Visuales" \
+            "${telemetry_prompt}Ajustes del sistema y personalización visual:" \
+            "1" "🎨  [TEMAS]    Cambiar Tema Visual (Actual: $cur_theme)" \
+            "2" "🔄  [SISTEMA]  Recordar Último Perfil al Iniciar $rem_status" \
+            "3" "📋  [SISTEMA]  Ver Configuración General del Sistema" \
+            "0" "↩️   [VOLVER]   Regresar al Menú Principal") || return 0
+
+        case "$choice" in
+            1)
+                local theme_choice
+                theme_choice=$(whiptail_view_menu "Selector de Temas Visuales" \
+                    "Seleccione una paleta de color para la interfaz TUI:" \
+                    "default"    "🔲 Default: Paleta Gris Estándar del Sistema (Predeterminado)" \
+                    "midnight"   "🌌 Midnight: Azul Marino y Cian" \
+                    "cyberdark"  "📟 Cyberdark: Modo Oscuro Carbón y Verde Matrix" \
+                    "aubergine"  "🍆 Aubergine: Púrpura y Rojos Cálidos (Lliurex/Ubuntu)" \
+                    "amber"      "📺 Amber: Terminal Ámbar Retro sobre Negro") || continue
+
+                whiptail_view_apply_theme "$theme_choice"
+                _controller_update_config_theme "$theme_choice"
+                whiptail_view_msgbox "Tema Aplicado" "Se ha aplicado el tema visual '$theme_choice' y se ha guardado en config/config.conf."
+                ;;
+            2)
+                _controller_toggle_remember_profile
+                local new_st="ACTIVADA"
+                [[ "${REMEMBER_LAST_PROFILE:-true}" != "true" ]] && new_st="DESACTIVADA (iniciará siempre en 'default')"
+                whiptail_view_msgbox "Preferencia Actualizada" "La persistencia del último perfil usado ha sido $new_st."
+                ;;
+            3)
+                local cfg_file="$(_controller_get_config_file)"
+                local cfg_content=""
+                if [[ -f "$cfg_file" ]]; then
+                    cfg_content=$(grep -v '^[[:space:]]*#' "$cfg_file" | grep -v '^[[:space:]]*$' || true)
+                fi
+                whiptail_view_msgbox "Configuración General ($cfg_file)" "$cfg_content"
+                ;;
+            0)
+                return 0
+                ;;
         esac
     done
 }
@@ -1407,6 +1977,8 @@ controller_handle_enable_template() {
     local tmpl_id="${1:-}"
     local is_tui="${2:-false}"
     local target_profile="${3:-}"
+    local as_module_id="${4:-}"
+    local force_flag="${5:-false}"
     local tmpl_dir="${TEMPLATES_DIR:-${CONTROLLER_BASE_DIR}/templates.d}"
 
     if [[ -z "$tmpl_id" ]]; then
@@ -1435,20 +2007,74 @@ controller_handle_enable_template() {
 
     [[ -n "$tmpl_id" ]] || return 0
 
+    local tinfo
+    tinfo=$(module_model_get_template "$tmpl_id" "$tmpl_dir" 2>/dev/null) || {
+        local not_found_msg="No se encontró la plantilla '$tmpl_id' en la biblioteca ($tmpl_dir)."
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Plantilla No Encontrada" "$not_found_msg"
+        else
+            ansi_view_error "$not_found_msg"
+        fi
+        return 1
+    }
+
+    local tname ttags tpaths tsens tpurge thook
+    tname=$(echo "$tinfo" | grep '^NAME=' | cut -d'=' -f2-)
+    ttags=$(echo "$tinfo" | grep '^TAGS=' | cut -d'=' -f2-)
+    tpaths=$(echo "$tinfo" | grep '^PATHS=' | cut -d'=' -f2-)
+    tsens=$(echo "$tinfo" | grep '^IS_SENSITIVE=' | cut -d'=' -f2- || echo "false")
+    tpurge=$(echo "$tinfo" | grep '^PURGE_AFTER_BACKUP=' | cut -d'=' -f2- || echo "false")
+    thook=$(echo "$tinfo" | grep '^POST_RESTORE_HOOK=' | cut -d'=' -f2- || echo "")
+
+    # 1. Ficha Técnica y Confirmación Previa de Activación (RF-04.4)
+    if [[ "$is_tui" == "true" ]]; then
+        local sheet_msg="FICHA TÉCNICA DE LA PLANTILLA:\n\n"
+        sheet_msg+="• Identificador:   $tmpl_id\n"
+        sheet_msg+="• Nombre:          $tname\n"
+        sheet_msg+="• Etiquetas:       $ttags\n"
+        sheet_msg+="• Cifrado GPG:     $([[ "$tsens" == "true" ]] && echo "SÍ (AES-256)" || echo "No")\n"
+        sheet_msg+="• Purga Shred:     $([[ "$tpurge" == "true" ]] && echo "SÍ (Destrucción en origen tras backup)" || echo "No")\n"
+        if [[ -n "$thook" ]]; then
+            sheet_msg+="• Hook Post-Rest:  $thook\n"
+        fi
+        sheet_msg+="\n• Rutas a respaldar:\n$(echo "$tpaths" | tr '|' '\n' | sed 's/^/    - /')\n\n"
+        sheet_msg+="¿Desea proceder a activar esta plantilla en su sistema?"
+
+        if ! whiptail_view_yesno "Ficha Técnica: $tmpl_id" "$sheet_msg"; then
+            return 0
+        fi
+    fi
+
+    # 2. Consentimiento activo obligatorio para purga shred si viene de fábrica (RF-04 / RF-04.4)
+    local override_purge=""
+    if [[ "$tpurge" == "true" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            if ! whiptail_view_confirm_critical "Atención: Purga Activa de Fábrica" \
+                "AVISO CRÍTICO DE SEGURIDAD:\n\nLa plantilla '$tmpl_id' incluye por defecto la purga irreversible con 'shred -u' de los archivos originales en su equipo tras la copia.\n\n¿Desea MANTENER la purga automática activa?"; then
+                override_purge="false"
+            else
+                override_purge="true"
+            fi
+        fi
+    fi
+
+    # 3. Selector Universal de Ámbito de Activación (RF-04.5)
     local act_prof="${target_profile:-$(_controller_get_active_profile)}"
     local target_dir="$MODULES_DIR"
     local scope_desc="Catálogo Global"
 
     if [[ "$is_tui" == "true" ]]; then
-        if [[ "$act_prof" != "default" && -n "$act_prof" ]]; then
-            local scope_choice
-            scope_choice=$(whiptail_view_menu "Ámbito de Activación" "¿Dónde desea activar esta plantilla?" \
-                "1" "Catálogo Global (modules.d/ - disponible para todos)" \
-                "2" "Exclusivo del Perfil '$act_prof' (profiles/$act_prof/modules.d/)") || return 0
-            if [[ "$scope_choice" == "2" ]]; then
-                target_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}/${act_prof}/modules.d"
-                scope_desc="Perfil '$act_prof'"
-            fi
+        local scope_choice
+        scope_choice=$(whiptail_view_menu "Ámbito de Activación" "¿Dónde desea registrar esta receta?" \
+            "1" "Catálogo Global (modules.d/ - disponible para todos los perfiles)" \
+            "2" "Exclusivo del Perfil '$act_prof' (profiles/$act_prof/modules.d/)") || return 0
+        if [[ "$scope_choice" == "2" ]]; then
+            target_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}/${act_prof}/modules.d"
+            scope_desc="Perfil '$act_prof'"
+            mkdir -p "$target_dir" 2>/dev/null || true
+        else
+            target_dir="$MODULES_DIR"
+            scope_desc="Catálogo Global"
         fi
     else
         if [[ -n "$target_profile" && "$target_profile" != "default" ]]; then
@@ -1457,24 +2083,82 @@ controller_handle_enable_template() {
         fi
     fi
 
+    # 4. Gestión y Resolución de Colisiones (RF-04.1 & RF-04.2)
+    local target_mod_id="${as_module_id:-$tmpl_id}"
+    local target_name="$tname"
+    local effective_force="$force_flag"
+    local dest_conf="${target_dir}/${target_mod_id}.conf"
+
+    if [[ -f "$dest_conf" ]]; then
+        if [[ "$effective_force" == "true" ]]; then
+            : # Forzado explícito
+        elif [[ "$is_tui" == "true" ]]; then
+            local col_choice
+            col_choice=$(whiptail_view_menu "Colisión de Módulo" \
+                "El módulo '$target_mod_id' ya existe en ($scope_desc).\n¿Cómo desea proceder?" \
+                "1" "Clonar con nuevo identificador (Derivar receta)" \
+                "2" "Sobrescribir y restablecer a la plantilla limpia" \
+                "0" "Cancelar") || return 0
+
+            case "$col_choice" in
+                1)
+                    local def_clone_id="${target_mod_id}-copia"
+                    target_mod_id=$(whiptail_view_input "Clonar Módulo" "Introduzca el nuevo ID único:" "$def_clone_id") || return 0
+                    [[ -n "$target_mod_id" ]] || return 0
+                    target_name=$(whiptail_view_input "Clonar Módulo" "Nombre descriptivo:" "$tname (Copia)") || return 0
+                    [[ -n "$target_name" ]] || target_name="$tname (Copia)"
+                    if [[ -f "${target_dir}/${target_mod_id}.conf" ]]; then
+                        whiptail_view_error "Colisión" "El identificador clonado '$target_mod_id' ya existe en ($scope_desc)."
+                        return 1
+                    fi
+                    ;;
+                2)
+                    if ! whiptail_view_yesno "Confirmar Sobrescritura" \
+                        "¿Está completamente seguro de SOBRESCRIBIR '$target_mod_id' en ($scope_desc)?\nSe perderán todas las modificaciones anteriores."; then
+                        return 0
+                    fi
+                    effective_force="true"
+                    ;;
+                0|*)
+                    return 0
+                    ;;
+            esac
+        else
+            ansi_view_error "El módulo '$target_mod_id' ya está activo en ($scope_desc). Use --force para sobrescribir o --as-module <nuevo_id> para clonar."
+            return 1
+        fi
+    fi
+
     local act_status=0
-    module_model_activate_template "$tmpl_id" "$target_dir" "$tmpl_dir" || act_status=$?
+    module_model_activate_template_as "$tmpl_id" "$target_dir" "$tmpl_dir" "$target_mod_id" "$target_name" "$effective_force" "$override_purge" || act_status=$?
 
     if (( act_status == 0 )); then
         if [[ "$scope_desc" == "Catálogo Global" && "$act_prof" != "default" ]]; then
-            profile_model_enable_module "$act_prof" "$tmpl_id" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null || true
+            profile_model_enable_module "$act_prof" "$target_mod_id" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null || true
         fi
+
+        local purge_status_str="Desactivada"
+        if [[ "$override_purge" == "false" ]]; then
+            purge_status_str="Desactivada por usuario"
+        elif [[ "$override_purge" == "true" || ("$tpurge" == "true" && -z "$override_purge") ]]; then
+            purge_status_str="Activa (shred -u)"
+        fi
+
         if [[ "$is_tui" == "true" ]]; then
-            whiptail_view_msgbox "Plantilla Activada" "La plantilla '$tmpl_id' ha sido activada en ($scope_desc):\n${target_dir}/${tmpl_id}.conf\n\nYa forma parte de los módulos a respaldar."
+            whiptail_view_msgbox "Plantilla Activada" "La receta se ha registrado con éxito:\n\n• ID:      $target_mod_id\n• Nombre:  $target_name\n• Ámbito:  $scope_desc\n• Purga:   $purge_status_str\n• Archivo: ${target_dir}/${target_mod_id}.conf\n\nEl módulo está [ON] y listo para respaldos."
         else
-            ansi_view_success "Plantilla '$tmpl_id' activada en ($scope_desc): ${target_dir}/${tmpl_id}.conf"
+            if [[ "$target_mod_id" == "$tmpl_id" ]]; then
+                ansi_view_success "Plantilla '$tmpl_id' activada en ($scope_desc): ${target_dir}/${target_mod_id}.conf (Purga: $purge_status_str)"
+            else
+                ansi_view_success "Plantilla '$tmpl_id' activada (como '$target_mod_id') en ($scope_desc): ${target_dir}/${target_mod_id}.conf (Purga: $purge_status_str)"
+            fi
         fi
         return 0
     elif (( act_status == MOD_ERR_ALREADY_EXISTS )); then
         if [[ "$is_tui" == "true" ]]; then
-            whiptail_view_error "Módulo Existente" "Ya existe un módulo activo con ID '$tmpl_id' en ($scope_desc)."
+            whiptail_view_error "Módulo Existente" "Ya existe un módulo activo con ID '$target_mod_id' en ($scope_desc)."
         else
-            ansi_view_error "El módulo '$tmpl_id' ya está activo en ($scope_desc)."
+            ansi_view_error "El módulo '$target_mod_id' ya está activo en ($scope_desc)."
         fi
         return 1
     else
@@ -1491,15 +2175,16 @@ controller_handle_export_template() {
     local mod_id="${1:-}"
     local is_tui="${2:-false}"
     local target_tmpl_id="${3:-}"
+    local force_flag="${4:-false}"
     local tmpl_dir="${TEMPLATES_DIR:-${CONTROLLER_BASE_DIR}/templates.d}"
     local act_prof
     act_prof=$(_controller_get_active_profile)
 
     if [[ "$is_tui" == "true" && -z "$mod_id" ]]; then
         local all_mods
-        all_mods=$(_controller_list_modules) || true
+        all_mods=$(_controller_list_all_modules "$act_prof") || true
         if [[ -z "$all_mods" ]]; then
-            whiptail_view_msgbox "Sin Módulos" "No hay módulos activos en el perfil '$act_prof' para exportar."
+            whiptail_view_msgbox "Sin Módulos" "No hay módulos registrados en el perfil '$act_prof' para exportar."
             return 0
         fi
         local m_items=()
@@ -1510,7 +2195,7 @@ controller_handle_export_template() {
             mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
             m_items+=("$m" "$mname")
         done
-        mod_id=$(whiptail_view_menu "Exportar a Plantilla" "Seleccione el módulo activo a promover como plantilla:" "${m_items[@]}") || return 0
+        mod_id=$(whiptail_view_menu "Exportar a Plantilla" "Seleccione el módulo a promover como plantilla:" "${m_items[@]}") || return 0
     fi
 
     [[ -n "$mod_id" ]] || return 1
@@ -1533,15 +2218,39 @@ controller_handle_export_template() {
     target_tmpl_id="${target_tmpl_id:-$mod_id}"
 
     if [[ -f "${tmpl_dir}/${target_tmpl_id}.conf" ]]; then
-        if [[ "$is_tui" == "true" ]]; then
-            if ! whiptail_view_yesno "Plantilla Existente" "Ya existe una plantilla con ID '$target_tmpl_id' en la biblioteca.\n¿Desea sobrescribirla?"; then
-                return 0
-            fi
+        if [[ "$force_flag" == "true" ]]; then
+            :
+        elif [[ "$is_tui" == "true" ]]; then
+            local exp_choice
+            exp_choice=$(whiptail_view_menu "Plantilla Existente" \
+                "Ya existe una plantilla con ID '$target_tmpl_id' en la biblioteca.\n¿Cómo desea proceder?" \
+                "1" "Guardar con un nuevo identificador de plantilla" \
+                "2" "Sobrescribir la plantilla existente" \
+                "0" "Cancelar") || return 0
+            case "$exp_choice" in
+                1)
+                    target_tmpl_id=$(whiptail_view_input "Nuevo ID de Plantilla" "Introduzca el nuevo ID:" "${target_tmpl_id}-copia") || return 0
+                    [[ -n "$target_tmpl_id" ]] || return 0
+                    if [[ -f "${tmpl_dir}/${target_tmpl_id}.conf" ]]; then
+                        whiptail_view_error "Colisión" "La plantilla '$target_tmpl_id' también existe ya."
+                        return 1
+                    fi
+                    ;;
+                2)
+                    force_flag="true"
+                    ;;
+                0|*)
+                    return 0
+                    ;;
+            esac
+        else
+            ansi_view_error "La plantilla '$target_tmpl_id' ya existe en $tmpl_dir. Use --force para sobrescribirla."
+            return 1
         fi
     fi
 
     local exp_status=0
-    module_model_export_to_template "$mod_path" "$target_tmpl_id" "$tmpl_dir" || exp_status=$?
+    module_model_export_to_template "$mod_path" "$target_tmpl_id" "$tmpl_dir" "$force_flag" || exp_status=$?
 
     if (( exp_status == 0 )); then
         if [[ "$is_tui" == "true" ]]; then
@@ -1560,6 +2269,290 @@ controller_handle_export_template() {
     fi
 }
 
+# Conmutar estado de un módulo (Activar [ON] / Desactivar [OFF])
+controller_handle_toggle_module() {
+    local mod_id="${1:-}"
+    local new_state="${2:-true}"
+    local target_profile="${3:-}"
+    local is_tui="${4:-false}"
+    local act_prof="${target_profile:-$(_controller_get_active_profile)}"
+
+    if [[ -z "$mod_id" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            local all_mods
+            all_mods=$(_controller_list_all_modules "$act_prof") || true
+            if [[ -z "$all_mods" ]]; then
+                whiptail_view_msgbox "Sin Módulos" "No hay módulos registrados en el perfil '$act_prof'."
+                return 0
+            fi
+            local m_items=()
+            for m in $all_mods; do
+                local m_path
+                m_path=$(profile_model_resolve_module "$m" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null || true)
+                local st_badge="[OFF]"
+                local is_dis_prof="false"
+                if profile_model_get_disabled_modules "$act_prof" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null | grep -qw "$m"; then
+                    is_dis_prof="true"
+                fi
+                if [[ -n "$m_path" && -f "$m_path" ]] && module_model_is_enabled "$m_path" && [[ "$is_dis_prof" != "true" ]]; then
+                    st_badge="[ON]"
+                fi
+                local minfo
+                minfo=$(module_model_get "$m" "$(dirname "$m_path")" 2>/dev/null) || continue
+                local mname
+                mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
+                m_items+=("$m" "$st_badge $mname")
+            done
+            mod_id=$(whiptail_view_menu "Activar / Desactivar Módulo" "Seleccione el módulo cuyo estado desea conmutar:" "${m_items[@]}") || return 0
+            [[ -n "$mod_id" ]] || return 0
+
+            local cur_path
+            cur_path=$(profile_model_resolve_module "$mod_id" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null || true)
+            local is_dis_cur="false"
+            if profile_model_get_disabled_modules "$act_prof" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null | grep -qw "$mod_id"; then
+                is_dis_cur="true"
+            fi
+            if [[ -n "$cur_path" && -f "$cur_path" ]] && module_model_is_enabled "$cur_path" && [[ "$is_dis_cur" != "true" ]]; then
+                new_state="false"
+            else
+                new_state="true"
+            fi
+        else
+            ansi_view_error "Debe especificar el ID del módulo a activar o desactivar."
+            return 1
+        fi
+    fi
+
+    local mod_path
+    mod_path=$(profile_model_resolve_module "$mod_id" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null || true)
+    if [[ -z "$mod_path" || ! -f "$mod_path" ]]; then
+        local not_found_err="El módulo '$mod_id' no existe o no es accesible para el perfil '$act_prof'."
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Módulo No Encontrado" "$not_found_err"
+        else
+            ansi_view_error "$not_found_err"
+        fi
+        return 1
+    fi
+
+    if [[ "$new_state" == "false" ]]; then
+        if [[ "$mod_path" =~ /profiles/ ]]; then
+            module_model_set_enabled "$mod_path" "false"
+        else
+            if [[ "$is_tui" == "true" ]]; then
+                local scope_choice
+                scope_choice=$(whiptail_view_menu "Desactivar Módulo" "¿Cómo desea desactivar el módulo '$mod_id'?" \
+                    "1" "Desactivar solo para el perfil activo ('$act_prof')" \
+                    "2" "Desactivar globalmente para todos los perfiles") || return 0
+                if [[ "$scope_choice" == "1" ]]; then
+                    profile_model_disable_module "$act_prof" "$mod_id" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}"
+                else
+                    module_model_set_enabled "$mod_path" "false"
+                fi
+            else
+                if [[ -n "$target_profile" ]]; then
+                    profile_model_disable_module "$target_profile" "$mod_id" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}"
+                else
+                    module_model_set_enabled "$mod_path" "false"
+                fi
+            fi
+        fi
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_msgbox "Módulo Desactivado" "El módulo '$mod_id' ha sido desactivado [OFF].\nNo se incluirá en las copias de seguridad."
+        else
+            ansi_view_success "Módulo '$mod_id' desactivado [OFF]."
+        fi
+    else
+        profile_model_enable_module "$act_prof" "$mod_id" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null || true
+        module_model_set_enabled "$mod_path" "true"
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_msgbox "Módulo Activado" "El módulo '$mod_id' ha sido activado [ON].\nSe incluirá en las copias de seguridad."
+        else
+            ansi_view_success "Módulo '$mod_id' activado [ON]."
+        fi
+    fi
+    return 0
+}
+
+# Asistente de modificación interactiva de módulos (RF-03)
+controller_handle_edit_module() {
+    local is_tui="${1:-true}"
+    local act_prof
+    act_prof=$(_controller_get_active_profile)
+
+    local all_mods
+    all_mods=$(_controller_list_all_modules "$act_prof") || true
+    if [[ -z "$all_mods" ]]; then
+        whiptail_view_msgbox "Módulos" "No hay módulos registrados para el perfil activo ($act_prof).\nPuede crear o activar recetas desde el menú de módulos."
+        return 0
+    fi
+
+    local m_items=()
+    for m in $all_mods; do
+        local m_path
+        m_path=$(profile_model_resolve_module "$m" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null || true)
+        local scope_tag="[Global]"
+        if [[ "$m_path" =~ /profiles/ ]]; then
+            scope_tag="[Perfil: $act_prof]"
+        fi
+        local st_tag="[OFF]"
+        local is_dis_prof="false"
+        if profile_model_get_disabled_modules "$act_prof" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null | grep -qw "$m"; then
+            is_dis_prof="true"
+        fi
+        if [[ -n "$m_path" && -f "$m_path" ]] && module_model_is_enabled "$m_path" && [[ "$is_dis_prof" != "true" ]]; then
+            st_tag="[ON]"
+        fi
+        local minfo
+        minfo=$(module_model_get "$m" "$(dirname "$m_path")" 2>/dev/null) || continue
+        local mname
+        mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
+        m_items+=("$m" "$scope_tag $st_tag $mname")
+    done
+
+    local sel_m
+    sel_m=$(whiptail_view_menu "Modificar Módulo" "Seleccione el módulo que desea editar:" "${m_items[@]}") || return 0
+    [[ -n "$sel_m" ]] || return 0
+
+    local sel_path
+    sel_path=$(profile_model_resolve_module "$sel_m" "$act_prof" "$CONTROLLER_BASE_DIR") || return 0
+    local cur_dir
+    cur_dir=$(dirname "$sel_path")
+
+    local target_dir="$cur_dir"
+    local scope_desc="Catálogo Global"
+    if [[ "$sel_path" =~ /profiles/ ]]; then
+        scope_desc="Perfil '$act_prof'"
+    fi
+
+    # Bifurcación de Override si es global y estamos en un perfil específico
+    if [[ "$act_prof" != "default" && ! "$sel_path" =~ /profiles/ ]]; then
+        local override_choice
+        override_choice=$(whiptail_view_menu "Ámbito de Edición" \
+            "El módulo '$sel_m' es compartido a nivel global.\n¿Cómo desea aplicar los cambios?" \
+            "1" "Crear copia exclusiva (Override) para el perfil '$act_prof' (Recomendado)" \
+            "2" "Modificar la receta global compartida para todos los perfiles" \
+            "0" "Cancelar") || return 0
+
+        case "$override_choice" in
+            1)
+                target_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}/${act_prof}/modules.d"
+                mkdir -p "$target_dir" 2>/dev/null || true
+                scope_desc="Override para Perfil '$act_prof'"
+                ;;
+            2)
+                target_dir="$cur_dir"
+                scope_desc="Catálogo Global"
+                ;;
+            0|*)
+                return 0
+                ;;
+        esac
+    fi
+
+    local minfo
+    minfo=$(module_model_get "$sel_m" "$cur_dir") || {
+        whiptail_view_error "Error" "No se pudo leer la definición del módulo '$sel_m'."
+        return 1
+    }
+
+    local cur_name cur_tags cur_paths cur_sens cur_purge cur_enabled cur_hook
+    cur_name=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2-)
+    cur_tags=$(echo "$minfo" | grep '^TAGS=' | cut -d'=' -f2-)
+    cur_paths=$(echo "$minfo" | grep '^PATHS=' | cut -d'=' -f2-)
+    cur_sens=$(echo "$minfo" | grep '^IS_SENSITIVE=' | cut -d'=' -f2-)
+    cur_purge=$(echo "$minfo" | grep '^PURGE_AFTER_BACKUP=' | cut -d'=' -f2-)
+    cur_enabled=$(echo "$minfo" | grep '^ENABLED=' | cut -d'=' -f2-)
+    cur_hook=$(echo "$minfo" | grep '^POST_RESTORE_HOOK=' | cut -d'=' -f2-)
+
+    # 1. Nombre descriptivo
+    local new_name
+    new_name=$(whiptail_view_input "Modificar Módulo ($scope_desc)" "Nombre descriptivo:" "$cur_name") || return 0
+    [[ -n "$new_name" ]] || new_name="$cur_name"
+
+    # 2. Rutas del módulo
+    local new_paths="$cur_paths"
+    local paths_disp
+    paths_disp=$(echo "$cur_paths" | tr '|' '\n' | sed 's/^/  • /')
+    if whiptail_view_yesno "Rutas del Módulo ($scope_desc)" \
+        "Rutas actualmente configuradas:\n$paths_disp\n\n¿Desea modificar o añadir rutas a este módulo?"; then
+        new_paths=$(whiptail_view_input_paths "Modificar Rutas ($scope_desc)" "$new_name") || return 0
+        [[ -z "$new_paths" ]] && new_paths="$cur_paths"
+    fi
+
+    # 3. Etiquetas (checklist precargado)
+    local all_tags
+    all_tags=$(module_model_get_all_tags) || true
+    local tag_checks=()
+    local -A cur_tag_map=()
+    IFS=',' read -r -a cur_tags_arr <<< "$cur_tags"
+    for ct in "${cur_tags_arr[@]}"; do
+        cur_tag_map["$ct"]=1
+    done
+
+    for t in $all_tags; do
+        local st="OFF"
+        [[ -n "${cur_tag_map[$t]:-}" ]] && st="ON"
+        tag_checks+=("$t" "Etiqueta $t" "$st")
+    done
+
+    local sel_tags
+    sel_tags=$(whiptail_view_checklist "Etiquetas ($scope_desc)" "Seleccione las etiquetas para este módulo:" "${tag_checks[@]}") || return 0
+
+    local tags_arr=()
+    read -r -a tags_arr <<< "$sel_tags"
+    local has_sensitive_tag=0
+    for t in "${tags_arr[@]}"; do
+        [[ "$t" == "sensitive" ]] && has_sensitive_tag=1
+    done
+
+    # 4. Sincronización inteligente de sensitive y cifrado GPG
+    local new_sens="false"
+    if [[ $has_sensitive_tag -eq 1 ]]; then
+        new_sens="true"
+    else
+        if whiptail_view_yesno "Cifrado de Seguridad" "¿Desea cifrar este módulo con GPG (AES-256)?"; then
+            new_sens="true"
+            tags_arr+=("sensitive")
+        fi
+    fi
+
+    # 5. Purga universal con foco obligatorio en NO
+    local new_purge="false"
+    if whiptail_view_confirm_critical "Purga Automática (Shred)" \
+        "ADVERTENCIA DE SEGURIDAD:\n\n¿Desea activar la purga automática (shred -u) tras el respaldo?\n\nLos archivos originales en su equipo serán destruidos de forma irreversible tras empaquetarse."; then
+        new_purge="true"
+    fi
+
+    # 6. Estado del módulo (MODULE_ENABLED)
+    local new_enabled="true"
+    if ! whiptail_view_yesno "Estado del Módulo" "¿Desea que este módulo esté ACTIVO para copias de seguridad?"; then
+        new_enabled="false"
+    fi
+
+    local tags_joined=""
+    for t in "${tags_arr[@]}"; do
+        [[ -n "$t" ]] || continue
+        if [[ -n "$tags_joined" ]]; then
+            tags_joined+=",$t"
+        else
+            tags_joined="$t"
+        fi
+    done
+    [[ -z "$tags_joined" ]] && tags_joined="dev"
+
+    if module_model_save "$sel_m" "$new_name" "$tags_joined" "$new_paths" "$new_sens" "$new_purge" "$cur_hook" "$target_dir" "$new_enabled"; then
+        if [[ "$target_dir" =~ /profiles/ ]]; then
+            profile_model_enable_module "$act_prof" "$sel_m" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null || true
+        fi
+        whiptail_view_msgbox "Módulo Actualizado" "El módulo '$sel_m' se ha actualizado correctamente en ($scope_desc):\n${target_dir}/${sel_m}.conf\n\n• Cifrado GPG: $new_sens\n• Purga Shred: $new_purge\n• Estado: $([[ "$new_enabled" == "true" ]] && echo "Activo [ON]" || echo "Inactivo [OFF]")"
+        return 0
+    else
+        whiptail_view_error "Fallo al Guardar" "No se pudo actualizar el archivo del módulo '$sel_m'."
+        return 1
+    fi
+}
+
 controller_handle_modules_admin() {
     local is_tui="${1:-true}"
 
@@ -1569,25 +2562,33 @@ controller_handle_modules_admin() {
     fi
 
     while true; do
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
+
         local admin_choice
-        admin_choice=$(whiptail_view_menu "Administración de Módulos y Plantillas" "Seleccione una acción:" \
-            "1" "Listar y ver detalle de módulos activos" \
-            "2" "Activar módulo desde plantilla" \
-            "3" "Crear un nuevo módulo activo" \
-            "4" "Crear una nueva plantilla en la biblioteca" \
-            "5" "Exportar módulo activo a la biblioteca de plantillas" \
-            "6" "Eliminar un módulo activo" \
-            "7" "Añadir etiqueta al catálogo" \
-            "0" "Volver al Menú Principal") || return 0
+        admin_choice=$(whiptail_view_menu "Administración de Módulos y Plantillas" \
+            "${telemetry_prompt}Gestión de recetas de respaldo y biblioteca de plantillas:" \
+            "1" "📋  [MÓDULOS]  Listar y ver detalle de módulos registrados" \
+            "2" "✏️   [MÓDULOS]  Modificar un módulo existente" \
+            "3" "🔘  [MÓDULOS]  Activar o desactivar módulo (ON/OFF)" \
+            "4" "📥  [MÓDULOS]  Activar módulo desde plantilla" \
+            "5" "➕  [MÓDULOS]  Crear un nuevo módulo activo" \
+            "6" "📝  [MÓDULOS]  Crear una nueva plantilla en la biblioteca" \
+            "7" "📤  [MÓDULOS]  Exportar módulo activo a la biblioteca de plantillas" \
+            "8" "🗑️   [MÓDULOS]  Eliminar un módulo activo" \
+            "9" "🏷️   [MÓDULOS]  Añadir etiqueta al catálogo" \
+            "0" "↩️   [VOLVER]   Regresar al Menú Principal") || return 0
 
         case "$admin_choice" in
             1)
                 local act_prof
                 act_prof=$(_controller_get_active_profile)
                 local all_mods
-                all_mods=$(profile_model_list_modules "$act_prof" "$CONTROLLER_BASE_DIR") || true
+                all_mods=$(_controller_list_all_modules "$act_prof") || true
                 if [[ -z "$all_mods" ]]; then
-                    whiptail_view_msgbox "Módulos" "No hay módulos registrados para el perfil activo ($act_prof).\nPuede activar recetas desde la opción '2) Activar módulo desde plantilla'."
+                    whiptail_view_msgbox "Módulos" "No hay módulos registrados para el perfil activo ($act_prof).\nPuede activar recetas desde la opción '4) Activar módulo desde plantilla'."
                     continue
                 fi
                 local m_items=()
@@ -1598,11 +2599,19 @@ controller_handle_modules_admin() {
                     if [[ "$m_path" =~ /profiles/ ]]; then
                         scope_tag="[Perfil: $act_prof]"
                     fi
+                    local st_tag="[OFF]"
+                    local is_dis_prof="false"
+                    if profile_model_get_disabled_modules "$act_prof" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null | grep -qw "$m"; then
+                        is_dis_prof="true"
+                    fi
+                    if [[ -n "$m_path" && -f "$m_path" ]] && module_model_is_enabled "$m_path" && [[ "$is_dis_prof" != "true" ]]; then
+                        st_tag="[ON]"
+                    fi
                     local minfo
-                    minfo=$(module_model_get "$m" "$(dirname "$m_path")") || continue
+                    minfo=$(module_model_get "$m" "$(dirname "$m_path")" 2>/dev/null) || continue
                     local mname
                     mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
-                    m_items+=("$m" "$scope_tag $mname")
+                    m_items+=("$m" "$scope_tag $st_tag $mname")
                 done
                 local sel_m
                 sel_m=$(whiptail_view_menu "Módulos Registrados" "Seleccione un módulo para inspeccionar:" "${m_items[@]}") || continue
@@ -1613,10 +2622,15 @@ controller_handle_modules_admin() {
                 whiptail_view_msgbox "Detalle del Módulo '$sel_m'" "$detail"
                 ;;
             2)
-                # Activar módulo desde plantilla
-                controller_handle_enable_template "" "true"
+                controller_handle_edit_module "true"
                 ;;
             3)
+                controller_handle_toggle_module "" "" "" "true"
+                ;;
+            4)
+                controller_handle_enable_template "" "true"
+                ;;
+            5)
                 # Asistente de creación de módulo activo
                 local act_prof
                 act_prof=$(_controller_get_active_profile)
@@ -1656,19 +2670,29 @@ controller_handle_modules_admin() {
                 sel_tags=$(whiptail_view_checklist "Etiquetas" "Seleccione las etiquetas para este módulo:" "${tag_checks[@]}") || sel_tags="dev"
 
                 local is_sens="false"
-                if whiptail_view_yesno "Seguridad" "¿Contiene este módulo datos sensibles o confidenciales? (Requiere GPG)"; then
-                    is_sens="true"
-                fi
+                local has_sensitive_tag=0
+                local tags_arr=()
+                read -r -a tags_arr <<< "$sel_tags"
+                for t in "${tags_arr[@]}"; do
+                    [[ "$t" == "sensitive" ]] && has_sensitive_tag=1
+                done
 
-                local purge_val="false"
-                if [[ "$is_sens" == "true" ]]; then
-                    if whiptail_view_yesno "Vault & Shred" "¿Desea activar purga automática (shred -u) tras el respaldo?"; then
-                        purge_val="true"
+                # Sincronización inteligente de sensitive y cifrado GPG
+                if [[ $has_sensitive_tag -eq 1 ]]; then
+                    is_sens="true"
+                else
+                    if whiptail_view_yesno "Cifrado de Seguridad" "¿Desea cifrar este módulo con GPG (AES-256)?"; then
+                        is_sens="true"
+                        tags_arr+=("sensitive")
                     fi
                 fi
 
-                local tags_arr=()
-                read -r -a tags_arr <<< "$sel_tags"
+                # Purga universal con foco obligatorio en NO
+                local purge_val="false"
+                if whiptail_view_confirm_critical "Purga Automática (Shred)" \
+                    "ADVERTENCIA DE SEGURIDAD:\n\n¿Desea activar la purga automática (shred -u) tras el respaldo?\n\nLos archivos originales en su equipo serán destruidos de forma irreversible tras empaquetarse."; then
+                    purge_val="true"
+                fi
 
                 local tags_joined=""
                 for t in "${tags_arr[@]}"; do
@@ -1681,13 +2705,18 @@ controller_handle_modules_admin() {
                 done
                 [[ -z "$tags_joined" ]] && tags_joined="dev"
 
-                if module_model_save "$mod_id" "$mod_name" "$tags_joined" "$paths_joined" "$is_sens" "$purge_val" "" "$target_modules_dir"; then
-                    whiptail_view_msgbox "Módulo Creado" "El módulo '$mod_id' se ha registrado correctamente en:\n${target_modules_dir}/${mod_id}.conf"
+                local is_enabled="true"
+                if ! whiptail_view_yesno "Estado del Módulo" "¿Desea que este módulo esté ACTIVO para copias de seguridad?"; then
+                    is_enabled="false"
+                fi
+
+                if module_model_save "$mod_id" "$mod_name" "$tags_joined" "$paths_joined" "$is_sens" "$purge_val" "" "$target_modules_dir" "$is_enabled"; then
+                    whiptail_view_msgbox "Módulo Creado" "El módulo '$mod_id' se ha registrado correctamente en ($scope_desc):\n${target_modules_dir}/${mod_id}.conf\n\n• Cifrado GPG: $is_sens\n• Purga Shred: $purge_val\n• Estado: $([[ "$is_enabled" == "true" ]] && echo "Activo [ON]" || echo "Inactivo [OFF]")"
                 else
                     whiptail_view_error "Fallo de Creación" "No se pudo crear el archivo del módulo."
                 fi
                 ;;
-            4)
+            6)
                 # Crear nueva plantilla en templates.d/
                 local tmpl_dir="${TEMPLATES_DIR:-${CONTROLLER_BASE_DIR}/templates.d}"
                 local tmpl_id
@@ -1716,10 +2745,8 @@ controller_handle_modules_admin() {
                 fi
 
                 local purge_val="false"
-                if [[ "$is_sens" == "true" ]]; then
-                    if whiptail_view_yesno "Vault & Shred" "¿Desea activar purga automática (shred -u)?"; then
-                        purge_val="true"
-                    fi
+                if whiptail_view_confirm_critical "Purga Automática (Shred)" "¿Desea activar purga automática (shred -u)?"; then
+                    purge_val="true"
                 fi
 
                 local tags_arr=()
@@ -1742,15 +2769,15 @@ controller_handle_modules_admin() {
                     whiptail_view_error "Error" "No se pudo registrar la plantilla en $tmpl_dir."
                 fi
                 ;;
-            5)
+            7)
                 # Exportar módulo activo a la biblioteca de plantillas
                 controller_handle_export_template "" "true" ""
                 ;;
-            6)
+            8)
                 local act_prof
                 act_prof=$(_controller_get_active_profile)
                 local all_mods
-                all_mods=$(profile_model_list_modules "$act_prof" "$CONTROLLER_BASE_DIR") || true
+                all_mods=$(_controller_list_all_modules "$act_prof") || true
                 if [[ -z "$all_mods" ]]; then
                     whiptail_view_msgbox "Eliminación" "No hay módulos para eliminar."
                     continue
@@ -1783,7 +2810,7 @@ controller_handle_modules_admin() {
                     fi
                 fi
                 ;;
-            7)
+            9)
                 local new_tag
                 new_tag=$(whiptail_view_input "Nueva Etiqueta" "Introduzca el nombre de la nueva etiqueta (alfanumérico):") || continue
                 if [[ -n "$new_tag" ]]; then
@@ -1935,7 +2962,20 @@ controller_handle_create_profile() {
 
         name=$(whiptail_view_input "Nuevo Perfil" "Nombre descriptivo:" "$profile_id") || return 0
         desc=$(whiptail_view_input "Nuevo Perfil" "Descripción del perfil:" "") || return 0
-        target_subdir=$(whiptail_view_input "Nuevo Perfil" "Subcarpeta de backup asociada (opcional, ej: Backups/Docente):" "") || return 0
+        local base_dest="${BACKUP_DESTINATION:-}"
+        if [[ -z "$base_dest" ]]; then
+            local cfg_file="$(_controller_get_config_file)"
+            base_dest=$(grep '^BACKUP_DESTINATION=' "$cfg_file" 2>/dev/null | cut -d'=' -f2- | tr -d '"')
+            base_dest="${base_dest:-~/Backups/KeepMyConfig}"
+        fi
+        local prompt_sub="Ubicación o subcarpeta de backup para este perfil:\n\n"
+        prompt_sub+="• Destino base actual: $base_dest\n\n"
+        prompt_sub+="Opciones disponibles:\n"
+        prompt_sub+="• Dejar VACÍO: Aplica Zero-Config automático -> $base_dest/$profile_id\n"
+        prompt_sub+="• Subcarpeta relativa (ej: 'Trabajo/$profile_id'): Se ubica dentro del destino base.\n"
+        prompt_sub+="• Ruta absoluta o '~' (ej: '~/MisBackups/$profile_id'): Destino independiente fuera del base.\n\n"
+        prompt_sub+="Ingrese la subcarpeta o ruta deseada (o deje en blanco para predeterminada):"
+        target_subdir=$(whiptail_view_input "Nuevo Perfil - Destino" "$prompt_sub" "") || return 0
     fi
 
     if [[ -z "$profile_id" ]]; then
@@ -1989,16 +3029,19 @@ controller_handle_profiles_admin() {
     while true; do
         local act_prof
         act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
 
         local choice
-        choice=$(whiptail_view_menu "Gestión de Perfiles [Activo: $act_prof]" "Seleccione una acción:" \
-            "1" "Ver detalles del perfil activo" \
-            "2" "Cambiar perfil activo" \
-            "3" "Crear un nuevo perfil" \
-            "4" "Listar recetas y módulos del perfil activo" \
-            "5" "Gestionar exclusiones de módulos globales" \
-            "6" "Eliminar un perfil" \
-            "0" "Volver al Menú Principal") || return 0
+        choice=$(whiptail_view_menu "Gestión de Perfiles [Activo: $act_prof]" \
+            "${telemetry_prompt}Administración y configuración de perfiles de backup:" \
+            "1" "ℹ️   [PERFILES] Ver detalles del perfil activo" \
+            "2" "🔄  [PERFILES] Cambiar perfil activo" \
+            "3" "➕  [PERFILES] Crear un nuevo perfil" \
+            "4" "📋  [PERFILES] Listar recetas y módulos del perfil activo" \
+            "5" "🚫  [PERFILES] Gestionar exclusiones de módulos globales" \
+            "6" "🗑️   [PERFILES] Eliminar un perfil" \
+            "0" "↩️   [VOLVER]   Regresar al Menú Principal") || return 0
 
         case "$choice" in
             1)
@@ -2113,7 +3156,10 @@ controller_handle_profiles_admin() {
                 to_delete=$(whiptail_view_radiolist "Eliminar Perfil" "Seleccione el perfil a borrar:" "${del_items[@]}") || continue
                 [[ -z "$to_delete" ]] && continue
 
-                if whiptail_view_yesno "Confirmar Eliminación" "¿Está completamente seguro de eliminar el perfil '$to_delete' y todas sus recetas específicas?\nEsta acción no se puede deshacer."; then
+                local del_prompt="¿Está completamente seguro de eliminar la definición del perfil '$to_delete' y sus recetas exclusivas locales?\n\n"
+                del_prompt+="NOTA DE SEGURIDAD: Las copias de seguridad físicas ya existentes en su almacenamiento permanecerán protegidas y NO serán eliminadas.\n\n"
+                del_prompt+="¿Desea proceder con la eliminación definitiva de este perfil?"
+                if whiptail_view_yesno "Confirmar Eliminación" "$del_prompt"; then
                     local del_status=0
                     profile_model_delete "$to_delete" "$profiles_dir" || del_status=$?
                     if (( del_status == 0 )); then
@@ -2159,22 +3205,26 @@ controller_run_tui() {
         source "$(_controller_get_config_file)" 2>/dev/null || true
     fi
 
+    # Aplicar tema visual configurado al arranque
+    whiptail_view_apply_theme "${TUI_THEME:-default}"
+
     while true; do
         local act_prof
         act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
         local choice
-        choice=$(whiptail_view_main_menu "$act_prof" "$IS_SANDBOX_MODE") || break
+        choice=$(whiptail_view_main_menu "$act_prof" "$IS_SANDBOX_MODE" "$telemetry_prompt") || break
 
         case "$choice" in
             1) controller_handle_backup_all "true" "auto" || true ;;
-            2) controller_handle_backup_tag "" "true" "auto" || true ;;
-            3) controller_handle_backup_module "" "true" "auto" || true ;;
-            4) controller_handle_restore_sensitive "true" || true ;;
-            5) controller_handle_restore_module "" "" "true" || true ;;
-            6) controller_handle_restore_all "true" || true ;;
-            7) controller_handle_modules_admin "true" || true ;;
-            8) controller_handle_device_check "true" || true ;;
-            9) controller_handle_profiles_admin "true" || true ;;
+            2) controller_handle_restore_sensitive "true" || true ;;
+            3) controller_handle_backup_submenu "true" || true ;;
+            4) controller_handle_restore_submenu "true" || true ;;
+            5) controller_handle_profiles_admin "true" || true ;;
+            6) controller_handle_modules_admin "true" || true ;;
+            7) controller_handle_device_check "true" || true ;;
+            8) controller_handle_settings_submenu "true" || true ;;
             0) break ;;
             *) whiptail_view_error "Opción no reconocida" "La opción seleccionada no es válida." || true ;;
         esac
@@ -2194,6 +3244,8 @@ controller_run_cli() {
     local action=""
     local param_val=""
     local timestamp_val=""
+    local as_module_val=""
+    local force_flag="false"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -2218,7 +3270,11 @@ controller_run_cli() {
                 echo "  --list-targets                                 Listar destinos/carpetas con marcador en almacenamiento."
                 echo "  --set-active-target <subdir>                   Fijar subdirectorio activo en config/config.conf."
                 echo "  --target-subdir <subdir>                       Usar destino temporal para la operación actual."
-                echo "  --list-modules                                 Listar módulos configurados y su estado."
+                echo ""
+                echo "Gestión de Módulos:"
+                echo "  --list-modules                                 Listar módulos configurados y su estado ([ON]/[OFF])."
+                echo "  --enable-module <id> [--profile <perfil>]      Activar un módulo [ON] para respaldos."
+                echo "  --disable-module <id> [--profile <perfil>]     Desactivar un módulo [OFF] de los respaldos."
                 echo "  --list-tags                                    Listar catálogo de etiquetas activas."
                 echo ""
                 echo "Gestión de Perfiles de Backup:"
@@ -2229,16 +3285,26 @@ controller_run_cli() {
                 echo ""
                 echo "Biblioteca de Plantillas y Recetas:"
                 echo "  --list-templates                               Listar plantillas disponibles en la biblioteca."
-                echo "  --enable-template <id> [--profile <perfil>]    Activar una plantilla en global o en un perfil."
-                echo "  --export-template <id>                         Exportar un módulo activo a la biblioteca de plantillas."
+                echo "  --enable-template <id> [opciones]              Activar una plantilla en global o en un perfil."
+                echo "      --profile <perfil>                         Activar en el perfil indicado."
+                echo "      --as-module <nuevo_id>                     Clonar/derivar con un identificador diferente."
+                echo "      --force                                    Sobrescribir si el módulo ya existe."
+                echo "  --export-template <id> [--force]               Exportar un módulo activo a la biblioteca de plantillas."
                 echo ""
                 echo "Entorno de Pruebas y Desarrollo (Sandbox):"
                 echo "  --test-mode, --sandbox                         Activar entorno aislado en user_data/sandbox/."
                 echo "  --clean-sandbox                                Purgar por completo el entorno user_data/sandbox/."
                 echo ""
+                echo "Modo Desatendido y Seguridad:"
+                echo "  -y, --yes                                      Asumir confirmaciones en Pre-Flight Gate (modo no interactivo)."
+                echo ""
                 echo "Ayuda:"
                 echo "  -h, --help                                     Mostrar este menú de ayuda."
                 return 0
+                ;;
+            -y|--yes)
+                export CLI_ASSUME_YES="true"
+                shift
                 ;;
             --purge)
                 purge_flag="true"
@@ -2331,6 +3397,16 @@ controller_run_cli() {
                 action="list-modules"
                 shift
                 ;;
+            --enable-module)
+                action="enable-module"
+                param_val="${2:-}"
+                shift 2 || true
+                ;;
+            --disable-module)
+                action="disable-module"
+                param_val="${2:-}"
+                shift 2 || true
+                ;;
             --list-tags)
                 action="list-tags"
                 shift
@@ -2348,6 +3424,14 @@ controller_run_cli() {
                 action="export-template"
                 param_val="${2:-}"
                 shift 2 || true
+                ;;
+            --as-module)
+                as_module_val="${2:-}"
+                shift 2 || true
+                ;;
+            --force)
+                force_flag="true"
+                shift
                 ;;
             --test-mode|--sandbox)
                 controller_enable_sandbox_mode
@@ -2421,17 +3505,23 @@ controller_run_cli() {
             controller_handle_list_templates "false"
             ;;
         enable-template)
-            controller_handle_enable_template "$param_val" "false" "$ACTIVE_PROFILE_OVERRIDE"
+            controller_handle_enable_template "$param_val" "false" "$ACTIVE_PROFILE_OVERRIDE" "$as_module_val" "$force_flag"
             ;;
         export-template)
-            controller_handle_export_template "$param_val" "false" "$param_val"
+            controller_handle_export_template "$param_val" "false" "$param_val" "$force_flag"
+            ;;
+        enable-module)
+            controller_handle_toggle_module "$param_val" "true" "$ACTIVE_PROFILE_OVERRIDE" "false"
+            ;;
+        disable-module)
+            controller_handle_toggle_module "$param_val" "false" "$ACTIVE_PROFILE_OVERRIDE" "false"
             ;;
         list-modules)
             local act_prof
-            act_prof=$(_controller_get_active_profile)
+            act_prof="${ACTIVE_PROFILE_OVERRIDE:-$(_controller_get_active_profile)}"
             ansi_view_header "MÓDULOS REGISTRADOS (Perfil: $act_prof)"
             local mods
-            mods=$(_controller_list_modules) || true
+            mods=$(_controller_list_all_modules "$act_prof") || true
             for m in $mods; do
                 local minfo
                 minfo=$(_controller_get_module_info "$m") || continue
@@ -2439,6 +3529,16 @@ controller_run_cli() {
                 mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
                 local msens
                 msens=$(echo "$minfo" | grep '^IS_SENSITIVE=' | cut -d'=' -f2- || echo "false")
+                local st_badge="[OFF]"
+                local m_path
+                m_path=$(profile_model_resolve_module "$m" "$act_prof" "$CONTROLLER_BASE_DIR" 2>/dev/null || true)
+                local is_dis_prof="false"
+                if profile_model_get_disabled_modules "$act_prof" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null | grep -qw "$m"; then
+                    is_dis_prof="true"
+                fi
+                if [[ -n "$m_path" && -f "$m_path" ]] && module_model_is_enabled "$m_path" && [[ "$is_dis_prof" != "true" ]]; then
+                    st_badge="[ON]"
+                fi
                 local scope="[Global]"
                 if [[ "$act_prof" != "default" ]]; then
                     if [[ -f "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}/${act_prof}/modules.d/${m}.conf" ]]; then
@@ -2449,7 +3549,7 @@ controller_run_cli() {
                         fi
                     fi
                 fi
-                ansi_view_key_value "$m" "$mname $scope (Sensible: $msens)"
+                ansi_view_key_value "$m" "$st_badge $mname $scope (Sensible: $msens)"
             done
             return 0
             ;;

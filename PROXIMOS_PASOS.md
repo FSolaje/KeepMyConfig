@@ -1,8 +1,8 @@
 # Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
-> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Hito 12 Base consolidado en commit `1ba2f20`, Sub-Hito 12.1 en `a5e5ea3`, Sub-Hito 12.3 en `7b34f9e`, Sub-Hito 12.4 en `264cc7c`, Sub-Hito 12.4.1 en `18ec12f`, y Gobernanza de Commits Atómicos y Reglas AGENT.md en `3988e52` en la rama `dev/feature/backup-profiles`. Toda la suite de 10 baterías con **458/458 pruebas unitarias al 100%**, escáner SAST impecable y aislamiento total en Git.  
-> **Paso inmediato para la próxima sesión:** Iniciar el **Sub-Hito 12.4.2: Arquitectura Universal TUI, Asistente de Edición de Módulos, Pre-Flight Safety Gate y Personalización Visual** bajo el flujo SDD estricto (rama dedicada `dev/feature/tui-ux-module-edit-and-safety`, commit previo `docs(spec)`, fases atómicas con pruebas y commit final `docs`).
+> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.1`** publicada en Releases. Sub-Hito 12.4.2 (Arquitectura Universal TUI, Asistente de Edición de Módulos, Pre-Flight Safety Gate y Personalización Visual) completado en la rama `dev/feature/tui-ux-module-edit-and-safety`. Toda la suite de 10 baterías con **528/528 pruebas unitarias al 100%**, escáner SAST impecable y aislamiento total en Git.  
+> **Paso inmediato para la próxima sesión:** Integración de la rama `dev/feature/tui-ux-module-edit-and-safety` en `develop` e iniciar el **Sub-Hito 12.5: Sistema de Empaquetado y Distribución Automatizada para Releases** bajo el flujo SDD estricto (rama dedicada `dev/feature/packaging-distribution`, commit previo `docs(spec)`, fases atómicas con pruebas y commit final `docs`).
 
 ---
 
@@ -120,24 +120,28 @@
     - [x] Actualización de `.agents/rules/AGENT.md` con prohibición de commits híbridos (`fix` + `feat`), obligatoriedad de commits previos de especificación (`docs(spec)`), atomicidad por fases en `tasks.md`, desacoplamiento temprano de bugs y commits atómicos independientes para documentación pública (`docs:`).
     - [x] **Commit Atómico Dedicado:** Registrado bajo Conventional Commits (`3988e52`).
 
+19. **Arquitectura Universal TUI, Asistente de Edición de Módulos, Pre-Flight Safety Gate y Personalización Visual (Sub-Hito 12.4.2):**
+    - [x] Rama GitFlow dedicada `dev/feature/tui-ux-module-edit-and-safety`.
+    - [x] Documentos SDD: `specs/tui_ux_module_edit_and_safety/` (`spec.md`, `plan.md`, `tasks.md`).
+    - [x] Commit previo de especificación: `c69af43` (`docs(spec)`).
+    - [x] **Fase 1 (Bugfix Sandbox):** Sembrado automático de recetas `.conf` en `user_data/sandbox/modules.d/` (`_sandbox_seed_modules`) y guardas defensivas ante listas vacías (`b2c6b7b`).
+    - [x] **Fase 2 (UX Rutas):** Clarificación contextual de rutas relativas/absolutas y ruta base en asistentes TUI (`63af71a`).
+    - [x] **Fase 3 (Edición de Módulos y Flag de Estado):** Asistente interactivo `controller_handle_edit_module`, sincronización inteligente de cifrado sensible, consentimiento activo obligatorio para purga (`shred -u`), selector de ámbito con opción *Override*, y conmutador de estado `MODULE_ENABLED` (`[ON]`/`[OFF]`) con flags CLI `--enable-module` y `--disable-module` (`19e7e21`).
+    - [x] **Fase 4 (Resolución de Colisiones en Plantillas):** Ficha técnica previa a la activación, consentimiento sobre purga de fábrica, selector universal de ámbito (catálogo global vs perfil activo), resolución interactiva de colisiones (clonar con nuevo ID `--as-module`, sobrescribir `--force`, cancelar) (`7c7942a`).
+    - [x] **Fase 5 (Pre-Flight Safety Gate):** Interceptor preventivo con matriz de módulos y destinos, alertas rojas irreversibles para `shred -u` (`\033[41;97;1m` / `--defaultno`), confirmación explícita con `SI` en CLI / flag `--yes`, y advertencias de sobreescritura previa en restauración (`5903fc8`).
+    - [x] **Fase 6 (Arquitectura Universal de Menús y Temas TUI):** Menú Principal híbrido (Menú 1) y 6 submenús especializados con telemetría en tiempo real, iconografía uniforme y catálogo de temas `NEWT_COLORS` (`default`, `midnight`, `cyberdark`, `aubergine`, `amber`) (`77bb8d9`).
+    - [x] **Fase 7 (Batería de Pruebas Unitarias):** 70 nuevas aserciones en `test_views.sh`, `test_module_model.sh` y `test_controller.sh` (totalizando 528 pruebas unitarias al 100% de éxito) (`9deb859`).
+    - [x] **Fase 8 (Documentación Pública):** Sincronización mandatoria de `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md`.
+
 ---
 
 ## Hoja de Ruta Inmediata y Futuras Funcionalidades (Roadmap):
 
-### Sub-Hito 12.4.2 (Siguiente Tarea Inmediata): Arquitectura Universal TUI, Asistente de Edición de Módulos, Pre-Flight Safety Gate y Personalización Visual
-- [ ] Creación de rama GitFlow dedicada: `dev/feature/tui-ux-module-edit-and-safety`.
-- [ ] Especificación SDD en `specs/tui_ux_module_edit_and_safety/` (`spec.md`, `plan.md`, `tasks.md`).
-- [ ] Commit previo obligatorio de especificación: `docs(spec): definir arquitectura universal TUI, edicion de modulos, safety gate y temas`.
-- [ ] **Fase 1 (Bugfix Sandbox):** Sembrado automático de recetas `.conf` en `user_data/sandbox/modules.d/` y guardas defensivas ante listas vacías.
-- [ ] **Fase 2 (UX Rutas):** Clarificación contextual de rutas relativas/absolutas y ruta base en asistentes.
-- [ ] **Fase 3 (Edición de Módulos en TUI):** Asistente interactivo para modificar nombre, rutas, etiquetas, sensible (GPG) y purga (`shred -u`), respetando ámbito global vs perfil.
-- [ ] **Fase 4 (Resolución de Colisiones en Plantillas):** Menú para clonar/derivar con nuevo ID (`--as-module`), sobrescribir o cancelar.
-- [ ] **Fase 5 (Pre-Flight Safety Gate):** Matriz resumen y confirmación interactiva en TUI y CLI con alertas rojas para `shred -u` y matriz de acciones críticas.
-- [ ] **Fase 6 (Arquitectura Universal de Menús y Temas TUI):** Homogeneización de los 7 menús con telemetría, badges e iconos; soporte de paletas (`midnight`, `cyberdark`, `aubergine`, `amber`, `default`) mediante `NEWT_COLORS`.
-- [ ] **Fase 7 (Suites de Tests Unitarios):** Batería de pruebas para edición de módulos, clonación de plantillas, sembrado de sandbox y pre-flight gate.
-- [ ] **Fase 8 (Documentación Pública):** Actualización y commit atómico independiente `docs: ...` de `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md`.
-
-### Sub-Hito 12.5: Sistema de Empaquetado y Distribución Automatizada para Releases
+### Sub-Hito 12.5 (Siguiente Tarea Inmediata): Sistema de Empaquetado y Distribución Automatizada para Releases
+- [ ] Integración de `dev/feature/tui-ux-module-edit-and-safety` en `develop`.
+- [ ] Creación de rama GitFlow dedicada: `dev/feature/packaging-distribution`.
+- [ ] Documentos SDD en `specs/packaging_and_distribution/` (`spec.md`, `plan.md`, `tasks.md`).
+- [ ] Commit previo obligatorio de especificación: `docs(spec): definir sistema de empaquetado y distribucion para releases`.
 - [ ] Definición de Manifiesto de Distribución con Lista Blanca estricta (exclusión de `.agents/`, `specs/`, `tests/`, `user_data/`, etc.).
 - [ ] Script reproducible de empaquetado `scripts/package.sh` para generar `KeepMyConfig-vX.Y.Z.tar.gz` (sin tarbomb) y `SHA256SUMS.txt`.
 - [ ] Script de instalación opcional sin sudo `install.sh` (`~/.local/bin` y lanzador desktop para Lliurex 25 / Ubuntu 24.04).

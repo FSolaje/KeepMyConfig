@@ -393,7 +393,6 @@ profile_model_get_disabled_modules() {
     local profiles_dir="${2:-${PROFILES_DIR:-$_PROFILE_MODEL_DEFAULT_DIR}}"
 
     [[ -n "$profile_id" ]] || return "$PROFILE_ERR_PARAM"
-    [[ "$profile_id" == "default" ]] && return "$PROFILE_OK"
 
     local conf_file="$profiles_dir/$profile_id/profile.conf"
     [[ -f "$conf_file" && -r "$conf_file" ]] || return "$PROFILE_ERR_NOT_FOUND"
@@ -478,9 +477,6 @@ profile_model_disable_module() {
 
     [[ -n "$profile_id" && -n "$mod_id" ]] || return "$PROFILE_ERR_PARAM"
     profile_model_validate_id "$profile_id" || return "$PROFILE_ERR_INVALID_ID"
-    if [[ "$profile_id" == "default" ]]; then
-        return "$PROFILE_ERR_CANNOT_DELETE"
-    fi
 
     local current_disabled=()
     local d
@@ -514,9 +510,6 @@ profile_model_enable_module() {
 
     [[ -n "$profile_id" && -n "$mod_id" ]] || return "$PROFILE_ERR_PARAM"
     profile_model_validate_id "$profile_id" || return "$PROFILE_ERR_INVALID_ID"
-    if [[ "$profile_id" == "default" ]]; then
-        return "$PROFILE_ERR_PARAM"
-    fi
 
     local current_disabled=()
     local found=0
@@ -568,8 +561,10 @@ profile_model_resolve_module() {
             echo "$profile_mod"
             return "$PROFILE_OK"
         fi
+    fi
 
-        # Si el módulo no tiene override local, verificar si está excluido en este perfil
+    # Comprobar si el módulo está excluido en este perfil (incluyendo default)
+    if [[ -n "$active_profile" ]]; then
         local disabled_list
         disabled_list=$(profile_model_get_disabled_modules "$active_profile" "$profiles_base" 2>/dev/null)
         while IFS= read -r dis_id; do
@@ -610,9 +605,9 @@ profile_model_list_modules() {
     local profiles_base="${PROFILES_DIR:-$base_dir/profiles}"
     local modules=()
 
-    # 1. Obtener exclusiones si el perfil activo no es 'default'
+    # 1. Obtener exclusiones para el perfil activo (incluyendo default)
     local -A disabled_map=()
-    if [[ -n "$active_profile" && "$active_profile" != "default" ]]; then
+    if [[ -n "$active_profile" ]]; then
         local dis_id
         while IFS= read -r dis_id; do
             [[ -n "$dis_id" ]] || continue

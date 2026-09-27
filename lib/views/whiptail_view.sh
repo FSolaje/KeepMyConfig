@@ -23,6 +23,29 @@ whiptail_view_check_deps() {
     return "$VIEW_OK"
 }
 
+# Configuración de temas visuales mediante NEWT_COLORS
+whiptail_view_apply_theme() {
+    local theme="${1:-default}"
+    case "$theme" in
+        midnight)
+            export NEWT_COLORS="root=blue,black;window=cyan,blue;border=brightcyan,blue;title=brightwhite,blue;button=black,cyan;actbutton=white,black;checkbox=cyan,blue;actcheckbox=white,black;entry=white,blue;label=brightwhite,blue;listbox=brightwhite,blue;actlistbox=white,black;textbox=brightwhite,blue;acttextbox=white,black;helpline=white,blue;roottext=brightcyan,black"
+            ;;
+        cyberdark)
+            export NEWT_COLORS="root=black,black;window=gray,black;border=green,black;title=brightgreen,black;button=black,green;actbutton=black,brightgreen;checkbox=green,black;actcheckbox=black,green;entry=brightgreen,black;label=lightgray,black;listbox=lightgray,black;actlistbox=black,green;textbox=lightgray,black;acttextbox=brightgreen,black;helpline=green,black;roottext=brightgreen,black"
+            ;;
+        aubergine)
+            export NEWT_COLORS="root=lightgray,black;window=white,black;border=magenta,black;title=brightred,black;button=white,magenta;actbutton=white,red;checkbox=magenta,black;actcheckbox=white,magenta;entry=white,black;label=white,black;listbox=white,black;actlistbox=white,magenta;textbox=white,black;acttextbox=white,magenta;helpline=white,magenta;roottext=magenta,black"
+            ;;
+        amber)
+            export NEWT_COLORS="root=brown,black;window=brown,black;border=yellow,black;title=brightyellow,black;button=black,brown;actbutton=black,yellow;checkbox=yellow,black;actcheckbox=black,yellow;entry=yellow,black;label=brown,black;listbox=brown,black;actlistbox=black,yellow;textbox=brown,black;acttextbox=yellow,black;helpline=yellow,black;roottext=yellow,black"
+            ;;
+        default|*)
+            unset NEWT_COLORS
+            ;;
+    esac
+    return 0
+}
+
 # Calcular dimensiones de ventana adaptativas según la terminal
 whiptail_view_calc_dimensions() {
     local lines
@@ -92,6 +115,27 @@ whiptail_view_yesno() {
     return $?
 }
 
+# Diálogo de confirmación crítica con foco predeterminado obligatorio en NO (--defaultno)
+# Retorna 0 si el usuario pulsa deliberadamente "Sí", 1 si pulsa "No" o Cancelar
+whiptail_view_confirm_critical() {
+    local title="${1:-¡Alerta de Seguridad!}"
+    local question="${2:-¿Está seguro de continuar?}"
+
+    whiptail_view_calc_dimensions
+    whiptail --title "⚠️  $title" --defaultno --yesno "$question" "$WT_HEIGHT" "$WT_WIDTH"
+    return $?
+}
+
+# Diálogo Pre-Flight de Seguridad con resumen de módulos a procesar
+whiptail_view_preflight_summary() {
+    local title="${1:-Pre-Flight Safety Gate}"
+    local summary_text="${2:-¿Desea continuar con la operación?}"
+
+    whiptail_view_calc_dimensions
+    whiptail --title "🛡️  $title" --yesno "$summary_text" "$WT_HEIGHT" "$WT_WIDTH"
+    return $?
+}
+
 # Cuadro de entrada de texto simple (--inputbox)
 whiptail_view_input() {
     local title="${1:-Entrada de datos}"
@@ -154,10 +198,11 @@ whiptail_view_password_confirm() {
     return "$VIEW_OK"
 }
 
-# Menú Principal del Gestor de Backup y Recuperación
+# Menú Principal del Gestor de Backup y Recuperación (Modelo Híbrido)
 whiptail_view_main_menu() {
     local profile_name="${1:-}"
     local is_sandbox="${2:-${IS_SANDBOX_MODE:-false}}"
+    local prompt="${3:-Seleccione la operación que desea realizar:}"
     local title="KeepMyConfig - Gestor de Backup y Recuperación"
     if [[ "$is_sandbox" == "true" ]]; then
         if [[ -n "$profile_name" ]]; then
@@ -168,23 +213,21 @@ whiptail_view_main_menu() {
     elif [[ -n "$profile_name" ]]; then
         title="KeepMyConfig [Perfil: $profile_name]"
     fi
-    local prompt="Seleccione la operación que desea realizar:"
     local choice=""
     local status=0
 
     whiptail_view_calc_dimensions
 
     choice=$(whiptail --title "$title" --menu "$prompt" "$WT_HEIGHT" "$WT_WIDTH" "$WT_LIST_HEIGHT" \
-        "1" "[BACKUP]   Realizar Backup Completo" \
-        "2" "[BACKUP]   Realizar Backup por Etiquetas (Tags)" \
-        "3" "[BACKUP]   Realizar Backup por Módulo Individual" \
-        "4" "[RESTORE]  Restauración Rápida de Datos Sensibles" \
-        "5" "[RESTORE]  Restauración Selectiva (Módulo / Histórico)" \
-        "6" "[RESTORE]  Restauración Total" \
-        "7" "[MODULES]  Administrar Módulos y Etiquetas" \
-        "8" "[STORAGE]  Gestión de Almacenamiento y Diagnóstico" \
-        "9" "[PROFILES] Gestión de Perfiles de Backup" \
-        "0" "[SALIR]    Salir del gestor" \
+        "1" "🚀  [BACKUP]   Realizar Backup Completo" \
+        "2" "⚡  [RESTORE]  Restauración Rápida de Datos Sensibles" \
+        "3" "📦  [BACKUP]   Opciones Avanzadas de Respaldo" \
+        "4" "🔄  [RESTORE]  Centro de Recuperación" \
+        "5" "👤  [PERFILES] Gestión de Perfiles de Backup" \
+        "6" "🧩  [MÓDULOS]  Administración de Módulos y Plantillas" \
+        "7" "💾  [DESTINO]  Destinos de Almacenamiento y Diagnóstico" \
+        "8" "⚙️   [AJUSTES]  Preferencias del Sistema y Temas Visuales" \
+        "0" "🚪  [SALIR]    Salir de KeepMyConfig" \
         3>&1 1>&2 2>&3)
     status=$?
 
