@@ -268,6 +268,7 @@ COMPRESSION_LEVEL="3"
 GPG_CIPHER="AES256"
 SHRED_ITERATIONS=3
 SHRED_ZERO_PASS=true
+TUI_THEME="default"
 EOF
         fi
     fi
@@ -360,6 +361,53 @@ _controller_get_backup_dir() {
     bdir=$(echo "$val_out" | grep '^BACKUP_DIR=' | cut -d'=' -f2-)
     echo "$bdir"
     return 0
+}
+
+# Genera el encabezado dinámico con telemetría en vivo para todos los menús TUI
+_controller_build_tui_telemetry_header() {
+    local act_prof
+    act_prof=$(_controller_get_active_profile)
+    local dest_info="${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}"
+    if (( ${#dest_info} > 26 )); then
+        dest_info="...${dest_info: -23}"
+    fi
+    local active_mods=()
+    local m
+    while IFS= read -r m; do
+        [[ -n "$m" ]] && active_mods+=("$m")
+    done < <(_controller_list_modules 2>/dev/null || true)
+    local mods_cnt="${#active_mods[@]}"
+    local cur_theme="${TUI_THEME:-default}"
+
+    local header="📊 Telemetría: Perfil: [$act_prof] | Destino: [$dest_info] | Módulos: [$mods_cnt] | Tema: [$cur_theme]\n"
+    header+="────────────────────────────────────────────────────────────────────────\n"
+    echo -e "$header"
+}
+
+# Actualiza de forma atómica la preferencia TUI_THEME en config.conf
+_controller_update_config_theme() {
+    local new_theme="$1"
+    local cfg_file="$(_controller_get_config_file)"
+    if grep -q '^TUI_THEME=' "$cfg_file" 2>/dev/null; then
+        sed -i "s|^TUI_THEME=.*|TUI_THEME=\"$new_theme\"|" "$cfg_file"
+    else
+        echo "TUI_THEME=\"$new_theme\"" >> "$cfg_file"
+    fi
+    TUI_THEME="$new_theme"
+}
+
+# Conmuta la preferencia REMEMBER_LAST_PROFILE en config.conf
+_controller_toggle_remember_profile() {
+    local cfg_file="$(_controller_get_config_file)"
+    local cur_val="${REMEMBER_LAST_PROFILE:-true}"
+    local new_val="true"
+    [[ "$cur_val" == "true" ]] && new_val="false"
+    if grep -q '^REMEMBER_LAST_PROFILE=' "$cfg_file" 2>/dev/null; then
+        sed -i "s|^REMEMBER_LAST_PROFILE=.*|REMEMBER_LAST_PROFILE=\"$new_val\"|" "$cfg_file"
+    else
+        echo "REMEMBER_LAST_PROFILE=\"$new_val\"" >> "$cfg_file"
+    fi
+    REMEMBER_LAST_PROFILE="$new_val"
 }
 
 # Advertencia interactiva de seguridad post-backup si quedaron ficheros sensibles sin purgar
@@ -574,6 +622,36 @@ _controller_run_preflight_gate() {
 # ==============================================================================
 # Manejadores de Casos de Uso (Handlers)
 # ==============================================================================
+
+# Submenú 2: Opciones Avanzadas de Respaldo
+controller_handle_backup_submenu() {
+    local is_tui="${1:-true}"
+    if [[ "$is_tui" != "true" ]]; then
+        return 0
+    fi
+
+    while true; do
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
+
+        local choice
+        choice=$(whiptail_view_menu "Opciones de Respaldo [Perfil: $act_prof]" \
+            "${telemetry_prompt}Seleccione la modalidad de respaldo:" \
+            "1" "🏷️   [BACKUP]   Respaldo por Etiquetas (Tags)" \
+            "2" "📦  [BACKUP]   Respaldo por Módulo Individual" \
+            "3" "🚀  [BACKUP]   Respaldo Completo (Todos los Módulos)" \
+            "0" "↩️   [VOLVER]   Regresar al Menú Principal") || return 0
+
+        case "$choice" in
+            1) controller_handle_backup_tag "" "true" "auto" || true ;;
+            2) controller_handle_backup_module "" "true" "auto" || true ;;
+            3) controller_handle_backup_all "true" "auto" || true ;;
+            0) return 0 ;;
+        esac
+    done
+}
 
 # 1. Respaldo Completo (Todos los módulos)
 controller_handle_backup_all() {
@@ -926,6 +1004,36 @@ controller_handle_backup_module() {
     fi
 
     return "$ret"
+}
+
+# Submenú 3: Centro de Recuperación
+controller_handle_restore_submenu() {
+    local is_tui="${1:-true}"
+    if [[ "$is_tui" != "true" ]]; then
+        return 0
+    fi
+
+    while true; do
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
+
+        local choice
+        choice=$(whiptail_view_menu "Centro de Recuperación [Perfil: $act_prof]" \
+            "${telemetry_prompt}Seleccione el método de restauración:" \
+            "1" "⚡  [RESTORE]  Restauración Rápida de Datos Sensibles" \
+            "2" "🔍  [RESTORE]  Restauración Selectiva (Módulo / Histórico)" \
+            "3" "🌐  [RESTORE]  Restauración Total (Todos los Módulos)" \
+            "0" "↩️   [VOLVER]   Regresar al Menú Principal") || return 0
+
+        case "$choice" in
+            1) controller_handle_restore_sensitive "true" || true ;;
+            2) controller_handle_restore_module "" "" "true" || true ;;
+            3) controller_handle_restore_all "true" || true ;;
+            0) return 0 ;;
+        esac
+    done
 }
 
 # 4. Restauración Exprés de Datos Sensibles
@@ -1736,7 +1844,7 @@ controller_handle_set_backup_destination() {
     fi
 }
 
-# 7. Diagnóstico y Gestión de Almacenamiento y Destinos
+# 7. Diagnóstico y Gestión de Almacenamiento y Destinos (Submenú 6)
 controller_handle_device_check() {
     local is_tui="${1:-false}"
 
@@ -1746,13 +1854,19 @@ controller_handle_device_check() {
     fi
 
     while true; do
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
+
         local choice
-        choice=$(whiptail_view_menu "Gestión y Diagnóstico de Almacenamiento" "Seleccione una operación:" \
-            "1" "Ver diagnóstico de almacenamiento y espacio libre" \
-            "2" "Cambiar ruta de destino de backup (BACKUP_DESTINATION)" \
-            "3" "Asistente de configuración guiada (Onboarding)" \
-            "4" "Desplegar marcador de seguridad en destino actual" \
-            "0" "Volver al Menú Principal") || return 0
+        choice=$(whiptail_view_menu "Gestión y Diagnóstico de Almacenamiento" \
+            "${telemetry_prompt}Configuración de soportes externos y rutas de almacenamiento:" \
+            "1" "📊  [DESTINO]  Ver diagnóstico de almacenamiento y espacio libre" \
+            "2" "📁  [DESTINO]  Cambiar ruta de destino de backup (BACKUP_DESTINATION)" \
+            "3" "🧙  [DESTINO]  Asistente de configuración guiada (Onboarding)" \
+            "4" "🛡️   [DESTINO]  Desplegar marcador de seguridad en destino actual" \
+            "0" "↩️   [VOLVER]   Regresar al Menú Principal") || return 0
 
         case "$choice" in
             1) _controller_show_device_diagnostics "true" ;;
@@ -1760,6 +1874,66 @@ controller_handle_device_check() {
             3) controller_handle_onboarding_wizard "true" ;;
             4) controller_handle_deploy_marker "" "true" ;;
             0) return 0 ;;
+        esac
+    done
+}
+
+# Submenú 7: Preferencias del Sistema y Temas Visuales
+controller_handle_settings_submenu() {
+    local is_tui="${1:-true}"
+    if [[ "$is_tui" != "true" ]]; then
+        return 0
+    fi
+
+    while true; do
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
+        local rem_status="[OFF]"
+        [[ "${REMEMBER_LAST_PROFILE:-true}" == "true" ]] && rem_status="[ON]"
+        local cur_theme="${TUI_THEME:-default}"
+
+        local choice
+        choice=$(whiptail_view_menu "Preferencias y Temas Visuales" \
+            "${telemetry_prompt}Ajustes del sistema y personalización visual:" \
+            "1" "🎨  [TEMAS]    Cambiar Tema Visual (Actual: $cur_theme)" \
+            "2" "🔄  [SISTEMA]  Recordar Último Perfil al Iniciar $rem_status" \
+            "3" "📋  [SISTEMA]  Ver Configuración General del Sistema" \
+            "0" "↩️   [VOLVER]   Regresar al Menú Principal") || return 0
+
+        case "$choice" in
+            1)
+                local theme_choice
+                theme_choice=$(whiptail_view_menu "Selector de Temas Visuales" \
+                    "Seleccione una paleta de color para la interfaz TUI:" \
+                    "default"    "🔲 Default: Paleta Gris Estándar del Sistema (Predeterminado)" \
+                    "midnight"   "🌌 Midnight: Azul Marino y Cian" \
+                    "cyberdark"  "📟 Cyberdark: Modo Oscuro Carbón y Verde Matrix" \
+                    "aubergine"  "🍆 Aubergine: Púrpura y Rojos Cálidos (Lliurex/Ubuntu)" \
+                    "amber"      "📺 Amber: Terminal Ámbar Retro sobre Negro") || continue
+
+                whiptail_view_apply_theme "$theme_choice"
+                _controller_update_config_theme "$theme_choice"
+                whiptail_view_msgbox "Tema Aplicado" "Se ha aplicado el tema visual '$theme_choice' y se ha guardado en config/config.conf."
+                ;;
+            2)
+                _controller_toggle_remember_profile
+                local new_st="ACTIVADA"
+                [[ "${REMEMBER_LAST_PROFILE:-true}" != "true" ]] && new_st="DESACTIVADA (iniciará siempre en 'default')"
+                whiptail_view_msgbox "Preferencia Actualizada" "La persistencia del último perfil usado ha sido $new_st."
+                ;;
+            3)
+                local cfg_file="$(_controller_get_config_file)"
+                local cfg_content=""
+                if [[ -f "$cfg_file" ]]; then
+                    cfg_content=$(grep -v '^[[:space:]]*#' "$cfg_file" | grep -v '^[[:space:]]*$' || true)
+                fi
+                whiptail_view_msgbox "Configuración General ($cfg_file)" "$cfg_content"
+                ;;
+            0)
+                return 0
+                ;;
         esac
     done
 }
@@ -2388,18 +2562,24 @@ controller_handle_modules_admin() {
     fi
 
     while true; do
+        local act_prof
+        act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
+
         local admin_choice
-        admin_choice=$(whiptail_view_menu "Administración de Módulos y Plantillas" "Seleccione una acción:" \
-            "1" "Listar y ver detalle de módulos registrados" \
-            "2" "Modificar un módulo existente" \
-            "3" "Activar o desactivar módulo (ON/OFF)" \
-            "4" "Activar módulo desde plantilla" \
-            "5" "Crear un nuevo módulo activo" \
-            "6" "Crear una nueva plantilla en la biblioteca" \
-            "7" "Exportar módulo activo a la biblioteca de plantillas" \
-            "8" "Eliminar un módulo activo" \
-            "9" "Añadir etiqueta al catálogo" \
-            "0" "Volver al Menú Principal") || return 0
+        admin_choice=$(whiptail_view_menu "Administración de Módulos y Plantillas" \
+            "${telemetry_prompt}Gestión de recetas de respaldo y biblioteca de plantillas:" \
+            "1" "📋  [MÓDULOS]  Listar y ver detalle de módulos registrados" \
+            "2" "✏️   [MÓDULOS]  Modificar un módulo existente" \
+            "3" "🔘  [MÓDULOS]  Activar o desactivar módulo (ON/OFF)" \
+            "4" "📥  [MÓDULOS]  Activar módulo desde plantilla" \
+            "5" "➕  [MÓDULOS]  Crear un nuevo módulo activo" \
+            "6" "📝  [MÓDULOS]  Crear una nueva plantilla en la biblioteca" \
+            "7" "📤  [MÓDULOS]  Exportar módulo activo a la biblioteca de plantillas" \
+            "8" "🗑️   [MÓDULOS]  Eliminar un módulo activo" \
+            "9" "🏷️   [MÓDULOS]  Añadir etiqueta al catálogo" \
+            "0" "↩️   [VOLVER]   Regresar al Menú Principal") || return 0
 
         case "$admin_choice" in
             1)
@@ -2849,16 +3029,19 @@ controller_handle_profiles_admin() {
     while true; do
         local act_prof
         act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
 
         local choice
-        choice=$(whiptail_view_menu "Gestión de Perfiles [Activo: $act_prof]" "Seleccione una acción:" \
-            "1" "Ver detalles del perfil activo" \
-            "2" "Cambiar perfil activo" \
-            "3" "Crear un nuevo perfil" \
-            "4" "Listar recetas y módulos del perfil activo" \
-            "5" "Gestionar exclusiones de módulos globales" \
-            "6" "Eliminar un perfil" \
-            "0" "Volver al Menú Principal") || return 0
+        choice=$(whiptail_view_menu "Gestión de Perfiles [Activo: $act_prof]" \
+            "${telemetry_prompt}Administración y configuración de perfiles de backup:" \
+            "1" "ℹ️   [PERFILES] Ver detalles del perfil activo" \
+            "2" "🔄  [PERFILES] Cambiar perfil activo" \
+            "3" "➕  [PERFILES] Crear un nuevo perfil" \
+            "4" "📋  [PERFILES] Listar recetas y módulos del perfil activo" \
+            "5" "🚫  [PERFILES] Gestionar exclusiones de módulos globales" \
+            "6" "🗑️   [PERFILES] Eliminar un perfil" \
+            "0" "↩️   [VOLVER]   Regresar al Menú Principal") || return 0
 
         case "$choice" in
             1)
@@ -3022,22 +3205,26 @@ controller_run_tui() {
         source "$(_controller_get_config_file)" 2>/dev/null || true
     fi
 
+    # Aplicar tema visual configurado al arranque
+    whiptail_view_apply_theme "${TUI_THEME:-default}"
+
     while true; do
         local act_prof
         act_prof=$(_controller_get_active_profile)
+        local telemetry_prompt
+        telemetry_prompt=$(_controller_build_tui_telemetry_header)
         local choice
-        choice=$(whiptail_view_main_menu "$act_prof" "$IS_SANDBOX_MODE") || break
+        choice=$(whiptail_view_main_menu "$act_prof" "$IS_SANDBOX_MODE" "$telemetry_prompt") || break
 
         case "$choice" in
             1) controller_handle_backup_all "true" "auto" || true ;;
-            2) controller_handle_backup_tag "" "true" "auto" || true ;;
-            3) controller_handle_backup_module "" "true" "auto" || true ;;
-            4) controller_handle_restore_sensitive "true" || true ;;
-            5) controller_handle_restore_module "" "" "true" || true ;;
-            6) controller_handle_restore_all "true" || true ;;
-            7) controller_handle_modules_admin "true" || true ;;
-            8) controller_handle_device_check "true" || true ;;
-            9) controller_handle_profiles_admin "true" || true ;;
+            2) controller_handle_restore_sensitive "true" || true ;;
+            3) controller_handle_backup_submenu "true" || true ;;
+            4) controller_handle_restore_submenu "true" || true ;;
+            5) controller_handle_profiles_admin "true" || true ;;
+            6) controller_handle_modules_admin "true" || true ;;
+            7) controller_handle_device_check "true" || true ;;
+            8) controller_handle_settings_submenu "true" || true ;;
             0) break ;;
             *) whiptail_view_error "Opción no reconocida" "La opción seleccionada no es válida." || true ;;
         esac

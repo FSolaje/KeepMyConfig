@@ -253,6 +253,32 @@ MOCK_EXIT_CODE=0
 echo "50" | whiptail_view_gauge "Progreso" "Cargando..." 0
 assert_eq "0" "$?" "whiptail_view_gauge debe procesar el flujo sin error"
 
+# Test 32: whiptail_view_apply_theme con midnight
+whiptail_view_apply_theme "midnight"
+assert_contains "${NEWT_COLORS:-}" "root=blue,black" "whiptail_view_apply_theme midnight debe configurar NEWT_COLORS"
+
+# Test 33: whiptail_view_apply_theme con cyberdark
+whiptail_view_apply_theme "cyberdark"
+assert_contains "${NEWT_COLORS:-}" "title=brightgreen,black" "whiptail_view_apply_theme cyberdark debe configurar NEWT_COLORS"
+
+# Test 34: whiptail_view_apply_theme con aubergine
+whiptail_view_apply_theme "aubergine"
+assert_contains "${NEWT_COLORS:-}" "border=magenta,black" "whiptail_view_apply_theme aubergine debe configurar NEWT_COLORS"
+
+# Test 35: whiptail_view_apply_theme con amber
+whiptail_view_apply_theme "amber"
+assert_contains "${NEWT_COLORS:-}" "actbutton=black,yellow" "whiptail_view_apply_theme amber debe configurar NEWT_COLORS"
+
+# Test 36: whiptail_view_apply_theme con default desactiva NEWT_COLORS
+whiptail_view_apply_theme "default"
+if [[ -z "${NEWT_COLORS:-}" ]]; then
+    echo "  [PASS] whiptail_view_apply_theme default debe desunsetear NEWT_COLORS"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo "  [FAIL] NEWT_COLORS debería estar vacía con tema default" >&2
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
 
