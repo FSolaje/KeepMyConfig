@@ -46,6 +46,22 @@ Permite respaldar, cifrar, purgar y restaurar configuraciones del sistema y apli
 - **Histórico con Marcas de Tiempo y Auditoría:**
   - Nomenclatura uniforme: `AAAAMMDD_HHMMSS`.
   - Generación de `manifest.log` con inventario de ficheros, hashes SHA-256 y bitácora `backup_history.log`.
+- **Arquitectura Universal de Menús TUI & Personalización Visual:**
+  - **Estructura Híbrida de 7 Menús:** Acceso directo a operaciones inmediatas de respaldo y restauración en el Menú Principal, y submenús especializados para Respaldo, Restauración, Perfiles, Módulos, Almacenamiento y Preferencias.
+  - **Telemetría Dinámica en Cabeceras:** Cada pantalla TUI informa en tiempo real del perfil activo, ruta de destino resuelta, módulos activos y espacio disponible en disco.
+  - **Temas de Color (`NEWT_COLORS`):** Soporte de paletas visuales seleccionables desde la TUI o `config.conf` (`default` nativo del sistema, `midnight`, `cyberdark`, `aubergine`, `amber`).
+- **Pre-Flight Safety Gate & Salvaguardas de Seguridad:**
+  - **Matriz de Impacto Previo:** Inspección interactiva de ámbito, nivel de cifrado GPG, estado de purga y destino de cada módulo antes de iniciar cualquier copia de seguridad.
+  - **Alerta Roja de Purga Irreversible:** Aviso crítico destacado (`\033[41;97;1m` / `--defaultno`) con el listado exhaustivo de rutas a destruir mediante `shred -u` antes de autorizar la acción destructiva. En CLI, exige teclear `SI` en mayúsculas salvo uso deliberado de `--yes` / `-y`.
+  - **Advertencia Previa de Sobreescritura en Restauración:** Muestra el listado de archivos en destino que serán sobrescritos antes de extraer cualquier snapshot.
+- **Asistente de Edición de Módulos y Conmutación de Estado (`[ON]` / `[OFF]`):**
+  - **Edición Interactiva Asistida:** Permite modificar nombre, rutas, etiquetas, sensibilidad y purga de módulos existentes respetando el ámbito global o de perfil con opción de bifurcación (*Override*).
+  - **Sincronización Inteligente de Cifrado y Purga:** Marcado de etiqueta `sensitive` activa directamente GPG AES-256; sin la etiqueta, ofrece cifrado y añade el tag si se acepta. La purga segura (`shred -u`) se oferta universalmente requiriendo confirmación activa con foco en `[NO]`.
+  - **Conmutador Rápido de Estado:** Activa o desactiva módulos individualmente en la TUI o mediante los comandos CLI `--enable-module <id>` y `--disable-module <id>`.
+- **Biblioteca de Plantillas, Ficha Técnica y Resolución de Colisiones:**
+  - **Ficha Técnica de Previsualización:** Muestra un resumen técnico detallado antes de activar cualquier plantilla de la biblioteca.
+  - **Selector Universal de Ámbito:** Permite registrar la receta en el catálogo global (`modules.d/`) o de forma exclusiva en el perfil activo (`profiles/<id>/modules.d/`).
+  - **Gestión Interactiva de Colisiones:** Si el módulo ya existe, la TUI ofrece clonarlo con nuevo identificador, sobrescribirlo o cancelar. En CLI, se gestiona mediante `--as-module <nuevo_id>` y `--force`.
 - **Modo Sandbox y Entorno Aislado de Pruebas (`--test-mode`, `--clean-sandbox`):**
   - **Home Virtual de Pruebas (`user_data/sandbox/home/`):** Confinamiento estricto de `TARGET_USER_HOME` con datos de prueba preconfigurados para todas las recetas (`.bashrc`, `.ssh/id_rsa`, `.config/Code/User/settings.json`, `.gitconfig`, etc.), permitiendo probar el borrado y purga con `shred -u` con total seguridad sin tocar el `$HOME` real.
   - Entorno seguro y confinado en `user_data/sandbox/` para probar recetas, perfiles, asistentes y copias sin alterar configuraciones de producción ni dejar rastros sin seguimiento (*untracked files*) en Git.
@@ -118,11 +134,20 @@ Ejecutar sin argumentos para desplegar la interfaz visual en terminal (en el pri
 ./backup_manager.sh --enable-template firefox
 ./backup_manager.sh --profile docente --enable-template git-config
 
+# Activar una plantilla derivando a un nuevo identificador (clonación) o forzando sobrescritura
+./backup_manager.sh --enable-template firefox --as-module firefox-trabajo
+./backup_manager.sh --enable-template firefox --force
+
+# Conmutar estado de módulos (activar [ON] o desactivar [OFF])
+./backup_manager.sh --disable-module firefox
+./backup_manager.sh --profile docente --enable-module custom-eval
+
 # Exportar un módulo activo a la biblioteca de plantillas
 ./backup_manager.sh --export-template mi-modulo
 
-# Realizar backup completo de todos los módulos
+# Realizar backup completo de todos los módulos (con confirmación desatendida Pre-Flight)
 ./backup_manager.sh --backup-all
+./backup_manager.sh --backup-all --yes
 
 # Realizar backup de una etiqueta específica (ej. desarrollo)
 ./backup_manager.sh --backup-tag dev

@@ -221,24 +221,28 @@ El sistema verificará la presencia de `whiptail` y abrirá el menú principal d
 
 ---
 
-### 3.2 Esquema del Menú Principal
+### 3.2 Esquema de la Arquitectura Universal TUI
+
+KeepMyConfig implementa un modelo de interfaz híbrido estructurado en **un Menú Principal de Acceso Inmediato y 6 Submenús Temáticos Especializados**:
 
 ```text
 ┌────────────────────── KeepMyConfig [Perfil: default] ──────────────────────┐
 │                                                                             │
+│ [PERFIL: default] | [DESTINO: ~/Backups/KeepMyConfig]                       │
+│ [MÓDULOS ACTIVOS: 4/4] | [ESPACIO LIBRE: 124G de 500G]                      │
+│                                                                             │
 │ Bienvenido al gestor integral de copias y recuperación modular en Bash.     │
 │ Seleccione la operación que desea realizar:                                 │
 │                                                                             │
-│    1 [BACKUP]   Realizar Backup Completo                                    │
-│    2 [BACKUP]   Realizar Backup por Etiquetas (Tags)                        │
-│    3 [BACKUP]   Realizar Backup por Módulo Individual                       │
-│    4 [RESTORE]  Restauración Rápida de Datos Sensibles                      │
-│    5 [RESTORE]  Restauración Selectiva (Módulo / Histórico AAAAMMDD_HHMMSS) │
-│    6 [RESTORE]  Restauración Total                                          │
-│    7 [MODULES]  Administrar Módulos y Etiquetas                             │
-│    8 [STORAGE]  Gestión de Almacenamiento y Diagnóstico                     │
-│    9 [PROFILES] Gestión de Perfiles de Backup                               │
-│    0 [SALIR]    Salir del gestor                                            │
+│    1) 🚀 [BACKUP]  Ejecutar Respaldo Inmediato (Completo)                   │
+│    2) 🔑 [RESTORE] Restauración Rápida de Datos Sensibles (Vault)           │
+│    3) 📦 [BACKUP]  Centro de Operaciones de Respaldo...                     │
+│    4) ♻️  [RESTORE] Centro de Recuperación y Restauración...                 │
+│    5) 🧩 [MODS]    Administración de Módulos y Plantillas...                │
+│    6) 👤 [PROFILE] Gestión de Perfiles de Trabajo...                        │
+│    7) 💾 [STORAGE] Destinos de Almacenamiento y Diagnóstico...              │
+│    8) 🎨 [THEMES]  Preferencias y Personalización Visual...                 │
+│    0) 🚪 [SALIR]   Cerrar KeepMyConfig                                      │
 │                                                                             │
 │                             <Aceptar>      <Cancelar>                       │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -246,91 +250,79 @@ El sistema verificará la presencia de `whiptail` y abrirá el menú principal d
 
 ---
 
-### 3.3 Recorrido Detallado por las 9 Opciones
+### 3.3 Recorrido Detallado por los 7 Menús
 
-#### Opción 1: `[BACKUP] Realizar Backup Completo`
-- **¿Qué hace?:** Escanea todos los archivos de configuración registrados en `modules.d/*.conf`. Empaqueta, comprime y almacena cada módulo en la carpeta `archives/` del SSD externo.
-- **Flujo de Seguridad:** Si detecta módulos con `IS_SENSITIVE=true`, solicita una única vez la contraseña GPG AES-256 (con confirmación de doble entrada).
-- **Resultado:** Genera archivos individuales con marca de tiempo `AAAAMMDD_HHMMSS`, actualiza el historial en `logs/backup_history.log` y muestra un reporte detallado con el resumen de la operación.
+#### Menú 1: Menú Principal Híbrido (Operaciones Inmediatas)
+Diseñado para la máxima agilidad operativa diaria:
+- **Opción 1 (`Ejecutar Respaldo Inmediato`):** Lanza el respaldo completo de todos los módulos activos del perfil actual, canalizado a través del *Pre-Flight Safety Gate*.
+- **Opción 2 (`Restauración Rápida de Datos Sensibles`):** Al comenzar la jornada, descifra en memoria y restaura en un solo paso las credenciales y llaves confidenciales.
+- **Opciones 3 a 8:** Navegan hacia los centros de gestión temática especializada.
 
-#### Opción 2: `[BACKUP] Realizar Backup por Etiquetas (Tags)`
-- **¿Qué hace?:** Despliega un menú de casillas de verificación (*Checklist*) con las etiquetas disponibles (por ejemplo: `dev`, `ide`, `auth`, `shell`).
-- **Uso típico:** Si solo desea actualizar sus entornos de desarrollo antes de una clase práctica, marque `dev` e `ide` mediante la barra espaciadora.
+#### Submenú 2: Centro de Operaciones de Respaldo
+Agrupa todas las modalidades de empaquetado y salvaguarda:
+- **1) [BACKUP] Realizar Respaldo Completo:** Procesa todos los módulos activos (`MODULE_ENABLED="true"`).
+- **2) [TAG] Respaldo Filtrado por Etiquetas:** Checklist interactivo para seleccionar etiquetas (`dev`, `ide`, `shell`, etc.).
+- **3) [MOD] Respaldo de Módulo Individual:** Selector único (*Radiolist*) para respaldar una sola receta.
 
-#### Opción 3: `[BACKUP] Realizar Backup por Módulo Individual`
-- **¿Qué hace?:** Lista todos los módulos mediante botones de selección única (*Radiolist*).
-- **Uso típico:** Actualizar únicamente el módulo `ssh-keys` tras haber generado una nueva llave SSH sin necesidad de procesar el resto de módulos.
+#### Submenú 3: Centro de Recuperación y Restauración
+- **1) [VAULT] Restauración Rápida de Datos Sensibles:** Recupera snapshots confidenciales descifrando mediante tubería segura GPG AES-256.
+- **2) [HIST] Restauración Selectiva por Histórico:** Permite elegir un módulo y examinar todos sus puntos en el tiempo (`AAAAMMDD_HHMMSS`) para restaurar versiones exactas.
+- **3) [FULL] Restauración Total:** Desempaqueta secuencialmente todas las configuraciones con advertencia previa de los archivos que serán sobrescritos.
 
-#### Opción 4: `[RESTORE] Restauración Rápida de Datos Sensibles`
-- **¿Qué hace?:** Localiza el snapshot más reciente de **todos** los módulos clasificados como confidenciales (`IS_SENSITIVE=true`).
-- **Flujo:** Solicita la contraseña GPG en una caja oculta (`Passwordbox`), descifra los datos directamente en memoria mediante una tubería segura sin escribir archivos temporales en disco y restaura los ficheros en `$HOME`.
-- **Uso típico:** Al llegar por la mañana a una estación de trabajo recién reiniciada, esta opción recupera en un solo paso sus credenciales de VSCode y llaves SSH.
+#### Submenú 4: Gestión de Perfiles de Trabajo (`profiles/`)
+- **1) [INFO] Ver Detalles del Perfil Activo:** Identificador, nombre, descripción y ruta Zero-Config (`<BACKUP_DESTINATION>/<id_perfil>`).
+- **2) [SWITCH] Conmutar Perfil Activo:** Cambia el perfil en `config/config.conf` persistiendo la preferencia.
+- **3) [NEW] Crear Nuevo Perfil de Backup:** Asistente guiado para nuevos entornos aislados.
+- **4) [LIST] Listar Módulos del Perfil:** Muestra las recetas resolviendo la jerarquía con badges `[Global]`, `[Override]` o `[Exclusivo]`.
+- **5) [EXCL] Gestionar Exclusiones de Módulos (`DISABLED_MODULES`):** Checklist para deshabilitar módulos globales en perfiles secundarios.
+- **6) [DEL] Eliminar Perfil:** Purga segura de la definición de un perfil secundario con **salvaguarda de seguridad estricta** (impide eliminar `default` o el perfil actualmente activo).
 
-#### Opción 5: `[RESTORE] Restauración Selectiva (Histórico)`
-- **¿Qué hace?:**
-  1. Permite seleccionar el módulo deseado (ej. `bash-env`).
-  2. Consulta el historial de copias archivadas y presenta un menú con las fechas y horas registradas (`AAAAMMDD_HHMMSS`).
-  3. Desempaqueta y restaura la versión exacta seleccionada.
+#### Submenú 5: Administración de Módulos y Plantillas
+- **1) [VIEW] Inspeccionar Módulos:** Muestra rutas, etiquetas, cifrado, purga, ámbito y estado `[ON]` / `[OFF]`.
+- **2) [EDIT] ✏️ Modificar un Módulo Existente (Asistente de Edición):**
+  - **Bifurcación de Ámbito (*Override*):** Si se edita un módulo global desde un perfil secundario, el asistente consulta si desea modificar la receta global o crear una derivación exclusiva (*override*) en el perfil activo.
+  - **Edición Guiada:** Permite actualizar nombre descriptivo, rutas (con captura guiada `whiptail_view_input_paths`), etiquetas (checklist interactivo) y estado.
+  - **Sincronización Inteligente de Cifrado:** Si en el checklist se marca `sensitive`, se activa directamente GPG AES-256; si no se marca, se consulta si se desea cifrar y, si se acepta, se incorpora automáticamente la etiqueta `sensitive`.
+  - **Consentimiento Activo Obligatorio para Purga:** La opción de purga irreversible con `shred -u` se oferta universalmente tanto para módulos sensibles como no sensibles, requiriendo confirmación activa con foco en `[NO]`.
+- **3) [TOGGLE] 🔄 Conmutador Rápido de Estado:** Activa (`[ON]`) o desactiva (`[OFF]`) instantáneamente cualquier módulo sin abrir el editor.
+- **4) [ENABLE] 📦 Activar Módulo desde Plantilla:**
+  - **Ficha Técnica Previa:** Muestra un resumen técnico detallado antes de confirmar la activación.
+  - **Consentimiento de Purga de Fábrica:** Si la plantilla incluye purga (ej. `ssh-keys`), se interroga con foco en `[NO]` si desea mantenerla activa o desactivarla por defecto.
+  - **Selector Universal de Ámbito:** Permite elegir entre Catálogo Global (`modules.d/`) o Exclusivo del Perfil Activo (`profiles/<id>/modules.d/`).
+  - **Resolución Interactiva de Colisiones:** Si la receta ya existe, abre un menú de 3 opciones: Clonar con nuevo identificador, Sobrescribir restableciendo a la plantilla limpia, o Cancelar.
+- **5) [CREATE] Crear Nuevo Módulo:** Asistente interactivo con captura de rutas línea a línea.
+- **6) [TMPL-NEW] Redactar Nueva Plantilla:** Diseña recetas directamente en la biblioteca `templates.d/`.
+- **7) [EXPORT] Exportar Módulo Activo a Plantilla:** Promueve una receta validada al catálogo reutilizable.
+- **8) [DEL] Eliminar Módulo:** Baja definitiva del archivo `.conf` en su carpeta correspondiente.
+- **9) [TAG] Registrar Nueva Etiqueta:** Incorporación al catálogo `config/default_tags.conf`.
 
-#### Opción 6: `[RESTORE] Restauración Total`
-- **¿Qué hace?:** Reconstruye completamente el entorno del usuario, procesando secuencialmente el snapshot más reciente de todos los módulos registrados en el almacenamiento.
+#### Submenú 6: Destinos de Almacenamiento y Diagnóstico
+- **1) [DIAG] Diagnóstico de Almacenamiento:** Valida la presencia del archivo marcador jerárquico `.backup_storage_marker`, permisos y espacio disponible en disco.
+- **2) [DEST] Cambiar Destino Canónico (`BACKUP_DESTINATION`):** Actualización de la directiva universal (rutas locales, absolutas o notación `@media/<LABEL>/...`).
+- **3) [WIZARD] Relanzar Asistente de Configuración (Onboarding):** Configuración asistida paso a paso.
+- **4) [MARKER] Desplegar Marcador de Seguridad:** Instalación manual del archivo testigo y estructura de directorios.
 
-#### Opción 7: `[MODULES] Administrar Módulos, Plantillas y Etiquetas`
-- **¿Qué hace?:** Abre un subasistente interactivo que permite:
-  - **Inspeccionar módulos:** Ver las rutas, etiquetas, nivel de seguridad y estado de purga de cualquier módulo disponible para el perfil activo, etiquetado visualmente como `[Global]` o `[Perfil: <id>]`.
-  - **Activar módulo desde plantilla:** Explora la biblioteca `templates.d/` con recetas preconfiguradas listas para usar (Firefox, VSCode, Git, SSH, IntelliJ, etc.), permitiendo instanciarlas en el catálogo global o en el perfil activo.
-  - **Crear un nuevo módulo con selector de ámbito y captura guiada:** Asistente paso a paso que solicita identificador, nombre descriptivo, nivel de seguridad y etiquetas. Si el perfil activo es distinto de `default`, permite elegir si el módulo se registra en el **Catálogo Global (`modules.d/`)** o como **Exclusivo del Perfil Activo (`profiles/<activo>/modules.d/`)**.
-  - **Captura interactiva de rutas línea a línea (Enter para confirmar):** Las rutas no se introducen agrupadas por espacios, sino una a una en un cuadro de diálogo dinámico:
-    - Cada pulsación de Enter confirma y añade la ruta a una lista acumulada visible en pantalla.
-    - Se ofrece orientación explícita: las rutas se procesan relativas a `$HOME` (admitiendo rutas relativas como `.config/app` o completas con `$HOME` / `~`, que el sistema normaliza automáticamente).
-    - Un Enter en campo en blanco finaliza la recogida de rutas.
-  - **Crear nueva plantilla en la biblioteca:** Asistente interactivo para redactar una receta directamente en la biblioteca reutilizable `templates.d/` con el mismo flujo guiado de captura de rutas línea a línea.
-  - **Exportar módulo activo a la biblioteca de plantillas:** Permite promover cualquier receta activa validada del usuario al catálogo general `templates.d/`.
-  - **Sanitización automática de rutas:** Al ingresar rutas de ficheros (ej. `$HOME/Documentos`, `~/Descargas/`), el sistema normaliza automáticamente las rutas a formato relativo respecto a `$HOME`, eliminando barras redundantes y bloqueando intentos de directory traversal (`..`).
-  - **Eliminar un módulo:** Da de baja un archivo de receta de su ámbito correspondiente (`modules.d/` o `profiles/<activo>/modules.d/`).
-  - **Añadir etiquetas:** Enriquecer el catálogo `config/default_tags.conf`.
-
-#### Opción 8: `[STORAGE] Gestión de Almacenamiento y Diagnóstico`
-- **¿Qué hace?:** Abre un submenú integral para controlar el destino universal de copias y auditar su integridad:
-  1. **Ver diagnóstico de almacenamiento y espacio libre:** Audita la conexión a la ruta resuelta de `BACKUP_DESTINATION`, valida el marcador de seguridad jerárquico `.backup_storage_marker` y muestra el espacio disponible en disco.
-  2. **Cambiar ruta de destino de backup (`BACKUP_DESTINATION`):** Permite reconfigurar interactivamente la directiva canónica en `config/config.conf` (admitiendo rutas relativas, absolutas, con tilde `~` o notación `@media/<LABEL>/...`).
-  3. **Asistente de configuración guiada (Onboarding):** Re-ejecuta el flujo interactivo de primera ejecución para detectar discos conectados y seleccionar un destino con despliegue automático del marcador.
-  4. **Desplegar marcador de seguridad en destino actual:** Crea automáticamente la estructura de directorios (`archives/`, `logs/`) e instala el archivo testigo `.backup_storage_marker` en la ruta resuelta de `BACKUP_DESTINATION`.
-
-#### Opción 9: `[PROFILES] Gestión de Perfiles de Backup`
-- **¿Qué hace?:** Abre el gestor modular de perfiles (`profiles/`):
-  1. **Ver detalles del perfil activo:** Inspecciona identificador, nombre, descripción y la ruta física resuelta donde se almacenan sus copias (aplicando la convención Zero-Config: `<BACKUP_DESTINATION>/<id_perfil>`).
-  2. **Cambiar perfil activo:** Conmuta el perfil en `config/config.conf` de manera atómica mediante un selector interactivo.
-  3. **Crear un nuevo perfil:** Asistente paso a paso para definir un nuevo entorno (`ID`, nombre, descripción y carpeta destino asociada opcional).
-  4. **Listar recetas y módulos del perfil activo:** Muestra la lista deduplicada de módulos indicando su alcance exacto: `[Global]`, `[Override]` o `[Exclusivo]`.
-  5. **Gestionar exclusiones de módulos globales (`DISABLED_MODULES`):** Para perfiles particulares, abre una checklist interactiva que permite desactivar selectivamente módulos globales para que no se ejecuten en ese perfil.
-  6. **Eliminar un perfil:** Borrado seguro de un perfil y sus módulos específicos (con protección para impedir borrar `default` o el perfil en uso).
-
-> [!NOTE]
-> El perfil `default` (`profiles/default/profile.conf`) es persistente y dispone de un mecanismo de **auto-reparación preventiva (*auto-healing*)**: si el archivo fuera eliminado de forma accidental, KeepMyConfig lo regenerará automáticamente con su estructura canónica al arrancar.
+#### Submenú 7: Preferencias y Personalización Visual
+- **1) [THEME] 🎨 Selección de Tema Visual TUI (`NEWT_COLORS`):**
+  - **`default` (Por Defecto):** Respeta los colores nativos de la terminal configurada por el usuario (tema de fábrica de KeepMyConfig).
+  - **`midnight` (Medianoche):** Azul profundo de alto contraste nocturno.
+  - **`cyberdark` (Cibernético):** Verde fluorescente sobre fondo negro estilo terminal de ciberseguridad.
+  - **`aubergine` (Berenjena):** Tonos magenta y violeta inspirados en la estética moderna de Lliurex / Ubuntu.
+  - **`amber` (Ámbar):** Resplandor fósforo ámbar clásico estilo monitor monocromático vintage.
+- **2) [PROFILE] 🧠 Memoria de Sesión (`REMEMBER_LAST_PROFILE`):** Configura si la aplicación arranca en el último perfil utilizado o siempre en `default`.
 
 ---
 
-### 3.4 El Flujo "Vault & Shred" y Advertencias de Seguridad
+### 3.4 El Flujo "Vault & Shred" y Pre-Flight Safety Gate
 
-> [!WARNING]
-> **Destrucción Segura de Datos en el Aula:**
-> Cuando un módulo está configurado con `IS_SENSITIVE=true` y `PURGE_AFTER_BACKUP=true` (como `ssh-keys` o `vscode-sensitive`), el sistema ejecuta `shred -u -z -n 3` sobre los ficheros originales del ordenador del aula **inmediatamente después de haber verificado con éxito el archivo cifrado en el SSD**.
+KeepMyConfig implementa un interceptor mandatorio denominado **Pre-Flight Safety Gate** que se ejecuta antes de cualquier operación de respaldo:
 
-Al finalizar un backup de módulos con purga activa, la TUI muestra una **alerta visual preventiva**:
-```text
-┌─────────────────────── ALERTA DE SEGURIDAD ────────────────────────┐
-│                                                                    │
-│ ATENCIÓN: Se han purgado datos sensibles locales mediante         │
-│ 'shred -u' para el módulo 'ssh-keys'.                              │
-│                                                                    │
-│ Los archivos originales han sido borrados de forma segura del      │
-│ equipo del aula. Recuerde restaurar sus datos cuando vuelva a      │
-│ utilizarlos.                                                       │
-│                                                                    │
-│                              <Aceptar>                             │
-└────────────────────────────────────────────────────────────────────┘
-```
+1. **Matriz de Impacto Previo:** Presenta una tabla con todos los módulos a procesar, su ámbito (`[Global]` o `[Perfil]`), si requieren cifrado GPG AES-256, si tienen purga activa y su carpeta destino final.
+2. **Alerta Crítica ante Purga Irreversible (`shred -u`):**
+   Si la operación incluye módulos con purga activa (como `ssh-keys`), el sistema suspende la ejecución y muestra una advertencia de seguridad destacada:
+   - **En TUI (`whiptail`):** Diálogo de alerta con foco predeterminado obligatorio en **`[NO]`** (`--defaultno`), requiriendo que el usuario se desplace deliberadamente a `[SÍ]` para autorizar la destrucción.
+   - **En CLI:** Mensaje de peligro enmarcado en fondo rojo `\033[41;97;1m` listando todas las rutas a destruir, requiriendo teclear **`SI`** en mayúsculas y pulsar Enter (salvo uso de `--yes` / `-y`).
+3. **Advertencia de Sobreescritura en Restauración:** Antes de desempaquetar archivos en el `$HOME`, lista las rutas existentes que serán sustituidas para evitar pérdidas accidentales de configuraciones recientes.
 
 ---
 
@@ -351,33 +343,34 @@ La interfaz de línea de comandos está optimizada para scripts bash, tareas pro
 | Parámetro | Argumento | Descripción |
 | :--- | :--- | :--- |
 | `--setup` | *Ninguno* | Inicia el asistente interactivo de configuración inicial (Onboarding Wizard). |
-| `--backup-all` | *Ninguno* | Realiza el respaldo de todos los módulos registrados. |
+| `--backup-all` | *Ninguno* | Realiza el respaldo de todos los módulos activos del perfil actual. |
 | `--backup-tag` | `<tag>` | Respalda únicamente los módulos asociados a la etiqueta `<tag>`. |
 | `--backup-module` | `<id>` | Respalda el módulo especificado por su `<id>`. |
+| `-y, --yes` | *Ninguno* | Asume confirmación afirmativa en el Pre-Flight Safety Gate (modo desatendido/cron). |
+| `--purge` | *Ninguno* | Fuerza la purga segura con `shred -u` tras el backup (ignora directiva de receta). |
+| `--no-purge` | *Ninguno* | Desactiva la purga tras el backup aunque la receta la tenga activa. |
 | `--restore-sensitive`| *Ninguno* | Restaura todos los módulos sensibles del snapshot más reciente. |
 | `--restore-all` | *Ninguno* | Restaura todos los módulos del snapshot más reciente. |
 | `--restore-module` | `<id>` | Restaura un módulo específico. |
 | `--timestamp` | `<TS>` | *(Opcional)* Especifica la marca de tiempo `AAAAMMDD_HHMMSS` a restaurar. |
-| `--purge` | *Ninguno* | Fuerza la purga segura con `shred -u` tras el backup (ignora receta). |
-| `--no-purge` | *Ninguno* | Desactiva la purga tras el backup aunque la receta lo tenga activo. |
 | `--check-device` | *Ninguno* | Comprueba la accesibilidad del almacenamiento y el marcador de seguridad en `BACKUP_DESTINATION`. |
-| `--init-target` | `<subdir>` | Inicializa una subcarpeta en el almacenamiento (directorios y marcador). |
-| `--set-default` | *Ninguno* | Flag modificador para `--init-target` que lo fija en `config/config.conf`. |
-| `--list-targets`| *Ninguno* | Lista todos los destinos y subcarpetas con marcador en el soporte. |
-| `--set-active-target` | `<subdir>` | Establece el subdirectorio activo en `config/config.conf`. |
-| `--target-subdir` | `<subdir>` | Redirige temporalmente la operación actual a ese subdirectorio. |
 | `--profile` | `<id>` | Aplica un perfil específico de forma temporal para la operación actual. |
 | `--list-profiles` | *Ninguno* | Lista todos los perfiles de backup configurados en el sistema. |
 | `--set-active-profile` | `<id>` | Establece el perfil activo de forma persistente en `config/config.conf`. |
 | `--create-profile` | `<id>` | Crea un nuevo perfil de backup y su estructura de módulos. |
 | `--list-templates` | *Ninguno* | Lista todas las recetas predefinidas en la biblioteca de plantillas (`templates.d/`). |
 | `--enable-template` | `<id>` | Activa la plantilla indicada en el perfil activo (o global si es default). |
+| `--as-module` | `<nuevo_id>` | *(Modificador de plantilla)* Instancia la plantilla con un nuevo identificador (clonación). |
+| `--force` | *Ninguno* | *(Modificador de plantilla/exportación)* Sobrescribe el módulo destino si ya existe. |
 | `--export-template` | `<id>` | Exporta y promueve un módulo activo como nueva plantilla en la biblioteca. |
-| `--list-modules` | *Ninguno* | Imprime en consola todos los módulos registrados y su confidencialidad/ámbito. |
+| `--enable-module` | `<id>` | Activa el estado de un módulo (`[ON]`). |
+| `--disable-module` | `<id>` | Desactiva el estado de un módulo (`[OFF]`) excluyéndolo de los respaldos. |
+| `--list-modules` | *Ninguno* | Imprime en consola todos los módulos registrados, estado `[ON]`/`[OFF]` y ámbito. |
 | `--list-tags` | *Ninguno* | Imprime el catálogo de etiquetas disponibles. |
 | `--test-mode, --sandbox` | *Ninguno* | Activa el entorno aislado de pruebas Sandbox (rutas confinadas en `user_data/sandbox/`). |
 | `--clean-sandbox` | *Ninguno* | Purga y elimina por completo el entorno aislado `user_data/sandbox/`. |
 | `-h, --help` | *Ninguno* | Muestra la ayuda rápida de sintaxis CLI. |
+
 
 ---
 
@@ -511,6 +504,7 @@ Las recetas se procesan dentro de una subshell aislada para evitar la contaminac
 | `MODULE_PATHS` | Array | Sí | Rutas de ficheros o carpetas (relativas a `$HOME` o absolutas). |
 | `IS_SENSITIVE` | Booleano | Sí | `true` para aplicar cifrado GPG AES-256; `false` para plano. |
 | `PURGE_AFTER_BACKUP` | Booleano | No | `true` para activar purga `shred -u` en origen tras el respaldo. |
+| `MODULE_ENABLED` | Booleano | No | `true` por defecto. `false` desactiva el módulo (`[OFF]`), excluyéndolo de respaldos automáticos. |
 | `POST_RESTORE_HOOK` | Función | No | Bloque Bash ejecutado inmediatamente tras desempaquetar. |
 
 ---
