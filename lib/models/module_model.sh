@@ -591,6 +591,65 @@ module_model_get_template() {
 }
 
 # ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# Función: module_model_activate_template_as
+# Descripción: Activa una plantilla permitiendo renombrar el ID, cambiar el
+#              nombre descriptivo, sobrescribir (force) y ajustar purge_after.
+# Parámetros:
+#   $1 - ID de la plantilla origen
+#   $2 - (Opcional) Directorio destino de módulos (por defecto modules.d/)
+#   $3 - (Opcional) Directorio de plantillas origen
+#   $4 - (Opcional) Nuevo ID de módulo resultante (por defecto $tmpl_id)
+#   $5 - (Opcional) Nuevo nombre descriptivo (si vacío, mantiene el de la plantilla)
+#   $6 - (Opcional) Forzar sobrescritura (true/false, default false)
+#   $7 - (Opcional) Sobrescribir PURGE_AFTER_BACKUP (true/false, si vacío mantiene)
+# Retorno:
+#   MOD_OK en éxito, MOD_ERR_ALREADY_EXISTS si ya existe y no se forzó, o código de error.
+# ------------------------------------------------------------------------------
+module_model_activate_template_as() {
+    local tmpl_id="${1:-}"
+    local target_dir="${2:-$_MODULE_MODEL_DEFAULT_DIR}"
+    local templates_dir="${3:-$_MODULE_MODEL_DEFAULT_TEMPLATES_DIR}"
+    local new_mod_id="${4:-$tmpl_id}"
+    local new_name="${5:-}"
+    local force_overwrite="${6:-false}"
+    local override_purge="${7:-}"
+
+    module_model_validate_id "$tmpl_id" || return "$MOD_ERR_INVALID_ID"
+    module_model_validate_id "$new_mod_id" || return "$MOD_ERR_INVALID_ID"
+    [[ -n "$target_dir" ]] || return "$MOD_ERR_CONFIG"
+
+    local src_file="$templates_dir/$tmpl_id.conf"
+    [[ -f "$src_file" && -r "$src_file" ]] || return "$MOD_ERR_NOT_FOUND"
+
+    local dest_file="$target_dir/$new_mod_id.conf"
+    if [[ -f "$dest_file" && "$force_overwrite" != "true" ]]; then
+        return "$MOD_ERR_ALREADY_EXISTS"
+    fi
+
+    mkdir -p "$target_dir" 2>/dev/null || return "$MOD_ERR_IO"
+
+    local meta
+    meta=$(module_model_get "$tmpl_id" "$templates_dir") || return "$?"
+
+    local orig_name orig_tags orig_paths orig_sens orig_purge orig_hook
+    orig_name=$(echo "$meta" | awk -F'=' '$1 == "NAME" {print $2}')
+    orig_tags=$(echo "$meta" | awk -F'=' '$1 == "TAGS" {print $2}')
+    orig_paths=$(echo "$meta" | awk -F'=' '$1 == "PATHS" {print $2}')
+    orig_sens=$(echo "$meta" | awk -F'=' '$1 == "IS_SENSITIVE" {print $2}')
+    orig_purge=$(echo "$meta" | awk -F'=' '$1 == "PURGE_AFTER_BACKUP" {print $2}')
+    orig_hook=$(echo "$meta" | awk -F'=' '$1 == "POST_RESTORE_HOOK" {print $2}')
+
+    local final_name="${new_name:-$orig_name}"
+    local final_purge="$orig_purge"
+    if [[ -n "$override_purge" ]]; then
+        final_purge="$override_purge"
+    fi
+
+    module_model_save "$new_mod_id" "$final_name" "$orig_tags" "$orig_paths" "$orig_sens" "$final_purge" "$orig_hook" "$target_dir" "true"
+}
+
+# ------------------------------------------------------------------------------
 # Función: module_model_activate_template
 # Descripción: Copia una receta desde templates.d/ hacia un catálogo de módulos
 #              (global modules.d/ o local de perfil).
@@ -598,6 +657,8 @@ module_model_get_template() {
 #   $1 - ID de la plantilla a activar
 #   $2 - (Opcional) Directorio destino de módulos (por defecto modules.d/)
 #   $3 - (Opcional) Directorio de plantillas origen
+#   $4 - (Opcional) Forzar sobrescritura (true/false)
+#   $5 - (Opcional) Sobrescribir purga (true/false)
 # Retorno:
 #   MOD_OK en éxito, MOD_ERR_ALREADY_EXISTS si ya existe en destino, o código de error.
 # ------------------------------------------------------------------------------
@@ -605,21 +666,10 @@ module_model_activate_template() {
     local tmpl_id="${1:-}"
     local target_dir="${2:-$_MODULE_MODEL_DEFAULT_DIR}"
     local templates_dir="${3:-$_MODULE_MODEL_DEFAULT_TEMPLATES_DIR}"
+    local force_overwrite="${4:-false}"
+    local override_purge="${5:-}"
 
-    module_model_validate_id "$tmpl_id" || return "$MOD_ERR_INVALID_ID"
-    [[ -n "$target_dir" ]] || return "$MOD_ERR_CONFIG"
-
-    local src_file="$templates_dir/$tmpl_id.conf"
-    [[ -f "$src_file" && -r "$src_file" ]] || return "$MOD_ERR_NOT_FOUND"
-
-    local dest_file="$target_dir/$tmpl_id.conf"
-    if [[ -f "$dest_file" ]]; then
-        return "$MOD_ERR_ALREADY_EXISTS"
-    fi
-
-    mkdir -p "$target_dir" 2>/dev/null || return "$MOD_ERR_IO"
-    cp "$src_file" "$dest_file" || return "$MOD_ERR_IO"
-    return "$MOD_OK"
+    module_model_activate_template_as "$tmpl_id" "$target_dir" "$templates_dir" "$tmpl_id" "" "$force_overwrite" "$override_purge"
 }
 
 # ------------------------------------------------------------------------------
@@ -658,6 +708,7 @@ module_model_create_template() {
 #   $1 - Ruta al archivo .conf del módulo origen
 #   $2 - ID de la plantilla destino en templates.d/
 #   $3 - (Opcional) Directorio de plantillas destino
+#   $4 - (Opcional) Forzar sobrescritura si ya existe (true/false, default false)
 # Retorno:
 #   0 en éxito, código de error en caso de fallo.
 # ------------------------------------------------------------------------------
@@ -665,9 +716,15 @@ module_model_export_to_template() {
     local source_file="${1:-}"
     local target_tmpl_id="${2:-}"
     local templates_dir="${3:-$_MODULE_MODEL_DEFAULT_TEMPLATES_DIR}"
+    local force_overwrite="${4:-false}"
 
     [[ -f "$source_file" && -r "$source_file" ]] || return "$MOD_ERR_NOT_FOUND"
     module_model_validate_id "$target_tmpl_id" || return "$MOD_ERR_INVALID_ID"
+
+    local dest_file="$templates_dir/$target_tmpl_id.conf"
+    if [[ -f "$dest_file" && "$force_overwrite" != "true" ]]; then
+        return "$MOD_ERR_ALREADY_EXISTS"
+    fi
 
     if ! bash -n "$source_file" >/dev/null 2>&1; then
         return "$MOD_ERR_SYNTAX"

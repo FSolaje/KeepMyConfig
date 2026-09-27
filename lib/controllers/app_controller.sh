@@ -1523,6 +1523,8 @@ controller_handle_enable_template() {
     local tmpl_id="${1:-}"
     local is_tui="${2:-false}"
     local target_profile="${3:-}"
+    local as_module_id="${4:-}"
+    local force_flag="${5:-false}"
     local tmpl_dir="${TEMPLATES_DIR:-${CONTROLLER_BASE_DIR}/templates.d}"
 
     if [[ -z "$tmpl_id" ]]; then
@@ -1551,20 +1553,74 @@ controller_handle_enable_template() {
 
     [[ -n "$tmpl_id" ]] || return 0
 
+    local tinfo
+    tinfo=$(module_model_get_template "$tmpl_id" "$tmpl_dir" 2>/dev/null) || {
+        local not_found_msg="No se encontró la plantilla '$tmpl_id' en la biblioteca ($tmpl_dir)."
+        if [[ "$is_tui" == "true" ]]; then
+            whiptail_view_error "Plantilla No Encontrada" "$not_found_msg"
+        else
+            ansi_view_error "$not_found_msg"
+        fi
+        return 1
+    }
+
+    local tname ttags tpaths tsens tpurge thook
+    tname=$(echo "$tinfo" | grep '^NAME=' | cut -d'=' -f2-)
+    ttags=$(echo "$tinfo" | grep '^TAGS=' | cut -d'=' -f2-)
+    tpaths=$(echo "$tinfo" | grep '^PATHS=' | cut -d'=' -f2-)
+    tsens=$(echo "$tinfo" | grep '^IS_SENSITIVE=' | cut -d'=' -f2- || echo "false")
+    tpurge=$(echo "$tinfo" | grep '^PURGE_AFTER_BACKUP=' | cut -d'=' -f2- || echo "false")
+    thook=$(echo "$tinfo" | grep '^POST_RESTORE_HOOK=' | cut -d'=' -f2- || echo "")
+
+    # 1. Ficha Técnica y Confirmación Previa de Activación (RF-04.4)
+    if [[ "$is_tui" == "true" ]]; then
+        local sheet_msg="FICHA TÉCNICA DE LA PLANTILLA:\n\n"
+        sheet_msg+="• Identificador:   $tmpl_id\n"
+        sheet_msg+="• Nombre:          $tname\n"
+        sheet_msg+="• Etiquetas:       $ttags\n"
+        sheet_msg+="• Cifrado GPG:     $([[ "$tsens" == "true" ]] && echo "SÍ (AES-256)" || echo "No")\n"
+        sheet_msg+="• Purga Shred:     $([[ "$tpurge" == "true" ]] && echo "SÍ (Destrucción en origen tras backup)" || echo "No")\n"
+        if [[ -n "$thook" ]]; then
+            sheet_msg+="• Hook Post-Rest:  $thook\n"
+        fi
+        sheet_msg+="\n• Rutas a respaldar:\n$(echo "$tpaths" | tr '|' '\n' | sed 's/^/    - /')\n\n"
+        sheet_msg+="¿Desea proceder a activar esta plantilla en su sistema?"
+
+        if ! whiptail_view_yesno "Ficha Técnica: $tmpl_id" "$sheet_msg"; then
+            return 0
+        fi
+    fi
+
+    # 2. Consentimiento activo obligatorio para purga shred si viene de fábrica (RF-04 / RF-04.4)
+    local override_purge=""
+    if [[ "$tpurge" == "true" ]]; then
+        if [[ "$is_tui" == "true" ]]; then
+            if ! whiptail_view_confirm_critical "Atención: Purga Activa de Fábrica" \
+                "AVISO CRÍTICO DE SEGURIDAD:\n\nLa plantilla '$tmpl_id' incluye por defecto la purga irreversible con 'shred -u' de los archivos originales en su equipo tras la copia.\n\n¿Desea MANTENER la purga automática activa?"; then
+                override_purge="false"
+            else
+                override_purge="true"
+            fi
+        fi
+    fi
+
+    # 3. Selector Universal de Ámbito de Activación (RF-04.5)
     local act_prof="${target_profile:-$(_controller_get_active_profile)}"
     local target_dir="$MODULES_DIR"
     local scope_desc="Catálogo Global"
 
     if [[ "$is_tui" == "true" ]]; then
-        if [[ "$act_prof" != "default" && -n "$act_prof" ]]; then
-            local scope_choice
-            scope_choice=$(whiptail_view_menu "Ámbito de Activación" "¿Dónde desea activar esta plantilla?" \
-                "1" "Catálogo Global (modules.d/ - disponible para todos)" \
-                "2" "Exclusivo del Perfil '$act_prof' (profiles/$act_prof/modules.d/)") || return 0
-            if [[ "$scope_choice" == "2" ]]; then
-                target_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}/${act_prof}/modules.d"
-                scope_desc="Perfil '$act_prof'"
-            fi
+        local scope_choice
+        scope_choice=$(whiptail_view_menu "Ámbito de Activación" "¿Dónde desea registrar esta receta?" \
+            "1" "Catálogo Global (modules.d/ - disponible para todos los perfiles)" \
+            "2" "Exclusivo del Perfil '$act_prof' (profiles/$act_prof/modules.d/)") || return 0
+        if [[ "$scope_choice" == "2" ]]; then
+            target_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}/${act_prof}/modules.d"
+            scope_desc="Perfil '$act_prof'"
+            mkdir -p "$target_dir" 2>/dev/null || true
+        else
+            target_dir="$MODULES_DIR"
+            scope_desc="Catálogo Global"
         fi
     else
         if [[ -n "$target_profile" && "$target_profile" != "default" ]]; then
@@ -1573,24 +1629,82 @@ controller_handle_enable_template() {
         fi
     fi
 
+    # 4. Gestión y Resolución de Colisiones (RF-04.1 & RF-04.2)
+    local target_mod_id="${as_module_id:-$tmpl_id}"
+    local target_name="$tname"
+    local effective_force="$force_flag"
+    local dest_conf="${target_dir}/${target_mod_id}.conf"
+
+    if [[ -f "$dest_conf" ]]; then
+        if [[ "$effective_force" == "true" ]]; then
+            : # Forzado explícito
+        elif [[ "$is_tui" == "true" ]]; then
+            local col_choice
+            col_choice=$(whiptail_view_menu "Colisión de Módulo" \
+                "El módulo '$target_mod_id' ya existe en ($scope_desc).\n¿Cómo desea proceder?" \
+                "1" "Clonar con nuevo identificador (Derivar receta)" \
+                "2" "Sobrescribir y restablecer a la plantilla limpia" \
+                "0" "Cancelar") || return 0
+
+            case "$col_choice" in
+                1)
+                    local def_clone_id="${target_mod_id}-copia"
+                    target_mod_id=$(whiptail_view_input "Clonar Módulo" "Introduzca el nuevo ID único:" "$def_clone_id") || return 0
+                    [[ -n "$target_mod_id" ]] || return 0
+                    target_name=$(whiptail_view_input "Clonar Módulo" "Nombre descriptivo:" "$tname (Copia)") || return 0
+                    [[ -n "$target_name" ]] || target_name="$tname (Copia)"
+                    if [[ -f "${target_dir}/${target_mod_id}.conf" ]]; then
+                        whiptail_view_error "Colisión" "El identificador clonado '$target_mod_id' ya existe en ($scope_desc)."
+                        return 1
+                    fi
+                    ;;
+                2)
+                    if ! whiptail_view_yesno "Confirmar Sobrescritura" \
+                        "¿Está completamente seguro de SOBRESCRIBIR '$target_mod_id' en ($scope_desc)?\nSe perderán todas las modificaciones anteriores."; then
+                        return 0
+                    fi
+                    effective_force="true"
+                    ;;
+                0|*)
+                    return 0
+                    ;;
+            esac
+        else
+            ansi_view_error "El módulo '$target_mod_id' ya está activo en ($scope_desc). Use --force para sobrescribir o --as-module <nuevo_id> para clonar."
+            return 1
+        fi
+    fi
+
     local act_status=0
-    module_model_activate_template "$tmpl_id" "$target_dir" "$tmpl_dir" || act_status=$?
+    module_model_activate_template_as "$tmpl_id" "$target_dir" "$tmpl_dir" "$target_mod_id" "$target_name" "$effective_force" "$override_purge" || act_status=$?
 
     if (( act_status == 0 )); then
         if [[ "$scope_desc" == "Catálogo Global" && "$act_prof" != "default" ]]; then
-            profile_model_enable_module "$act_prof" "$tmpl_id" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null || true
+            profile_model_enable_module "$act_prof" "$target_mod_id" "${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}" 2>/dev/null || true
         fi
+
+        local purge_status_str="Desactivada"
+        if [[ "$override_purge" == "false" ]]; then
+            purge_status_str="Desactivada por usuario"
+        elif [[ "$override_purge" == "true" || ("$tpurge" == "true" && -z "$override_purge") ]]; then
+            purge_status_str="Activa (shred -u)"
+        fi
+
         if [[ "$is_tui" == "true" ]]; then
-            whiptail_view_msgbox "Plantilla Activada" "La plantilla '$tmpl_id' ha sido activada en ($scope_desc):\n${target_dir}/${tmpl_id}.conf\n\nYa forma parte de los módulos a respaldar."
+            whiptail_view_msgbox "Plantilla Activada" "La receta se ha registrado con éxito:\n\n• ID:      $target_mod_id\n• Nombre:  $target_name\n• Ámbito:  $scope_desc\n• Purga:   $purge_status_str\n• Archivo: ${target_dir}/${target_mod_id}.conf\n\nEl módulo está [ON] y listo para respaldos."
         else
-            ansi_view_success "Plantilla '$tmpl_id' activada en ($scope_desc): ${target_dir}/${tmpl_id}.conf"
+            if [[ "$target_mod_id" == "$tmpl_id" ]]; then
+                ansi_view_success "Plantilla '$tmpl_id' activada en ($scope_desc): ${target_dir}/${target_mod_id}.conf (Purga: $purge_status_str)"
+            else
+                ansi_view_success "Plantilla '$tmpl_id' activada (como '$target_mod_id') en ($scope_desc): ${target_dir}/${target_mod_id}.conf (Purga: $purge_status_str)"
+            fi
         fi
         return 0
     elif (( act_status == MOD_ERR_ALREADY_EXISTS )); then
         if [[ "$is_tui" == "true" ]]; then
-            whiptail_view_error "Módulo Existente" "Ya existe un módulo activo con ID '$tmpl_id' en ($scope_desc)."
+            whiptail_view_error "Módulo Existente" "Ya existe un módulo activo con ID '$target_mod_id' en ($scope_desc)."
         else
-            ansi_view_error "El módulo '$tmpl_id' ya está activo en ($scope_desc)."
+            ansi_view_error "El módulo '$target_mod_id' ya está activo en ($scope_desc)."
         fi
         return 1
     else
@@ -1607,15 +1721,16 @@ controller_handle_export_template() {
     local mod_id="${1:-}"
     local is_tui="${2:-false}"
     local target_tmpl_id="${3:-}"
+    local force_flag="${4:-false}"
     local tmpl_dir="${TEMPLATES_DIR:-${CONTROLLER_BASE_DIR}/templates.d}"
     local act_prof
     act_prof=$(_controller_get_active_profile)
 
     if [[ "$is_tui" == "true" && -z "$mod_id" ]]; then
         local all_mods
-        all_mods=$(_controller_list_modules) || true
+        all_mods=$(_controller_list_all_modules "$act_prof") || true
         if [[ -z "$all_mods" ]]; then
-            whiptail_view_msgbox "Sin Módulos" "No hay módulos activos en el perfil '$act_prof' para exportar."
+            whiptail_view_msgbox "Sin Módulos" "No hay módulos registrados en el perfil '$act_prof' para exportar."
             return 0
         fi
         local m_items=()
@@ -1626,7 +1741,7 @@ controller_handle_export_template() {
             mname=$(echo "$minfo" | grep '^NAME=' | cut -d'=' -f2- || echo "$m")
             m_items+=("$m" "$mname")
         done
-        mod_id=$(whiptail_view_menu "Exportar a Plantilla" "Seleccione el módulo activo a promover como plantilla:" "${m_items[@]}") || return 0
+        mod_id=$(whiptail_view_menu "Exportar a Plantilla" "Seleccione el módulo a promover como plantilla:" "${m_items[@]}") || return 0
     fi
 
     [[ -n "$mod_id" ]] || return 1
@@ -1649,15 +1764,39 @@ controller_handle_export_template() {
     target_tmpl_id="${target_tmpl_id:-$mod_id}"
 
     if [[ -f "${tmpl_dir}/${target_tmpl_id}.conf" ]]; then
-        if [[ "$is_tui" == "true" ]]; then
-            if ! whiptail_view_yesno "Plantilla Existente" "Ya existe una plantilla con ID '$target_tmpl_id' en la biblioteca.\n¿Desea sobrescribirla?"; then
-                return 0
-            fi
+        if [[ "$force_flag" == "true" ]]; then
+            :
+        elif [[ "$is_tui" == "true" ]]; then
+            local exp_choice
+            exp_choice=$(whiptail_view_menu "Plantilla Existente" \
+                "Ya existe una plantilla con ID '$target_tmpl_id' en la biblioteca.\n¿Cómo desea proceder?" \
+                "1" "Guardar con un nuevo identificador de plantilla" \
+                "2" "Sobrescribir la plantilla existente" \
+                "0" "Cancelar") || return 0
+            case "$exp_choice" in
+                1)
+                    target_tmpl_id=$(whiptail_view_input "Nuevo ID de Plantilla" "Introduzca el nuevo ID:" "${target_tmpl_id}-copia") || return 0
+                    [[ -n "$target_tmpl_id" ]] || return 0
+                    if [[ -f "${tmpl_dir}/${target_tmpl_id}.conf" ]]; then
+                        whiptail_view_error "Colisión" "La plantilla '$target_tmpl_id' también existe ya."
+                        return 1
+                    fi
+                    ;;
+                2)
+                    force_flag="true"
+                    ;;
+                0|*)
+                    return 0
+                    ;;
+            esac
+        else
+            ansi_view_error "La plantilla '$target_tmpl_id' ya existe en $tmpl_dir. Use --force para sobrescribirla."
+            return 1
         fi
     fi
 
     local exp_status=0
-    module_model_export_to_template "$mod_path" "$target_tmpl_id" "$tmpl_dir" || exp_status=$?
+    module_model_export_to_template "$mod_path" "$target_tmpl_id" "$tmpl_dir" "$force_flag" || exp_status=$?
 
     if (( exp_status == 0 )); then
         if [[ "$is_tui" == "true" ]]; then
@@ -2635,6 +2774,8 @@ controller_run_cli() {
     local action=""
     local param_val=""
     local timestamp_val=""
+    local as_module_val=""
+    local force_flag="false"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -2674,8 +2815,11 @@ controller_run_cli() {
                 echo ""
                 echo "Biblioteca de Plantillas y Recetas:"
                 echo "  --list-templates                               Listar plantillas disponibles en la biblioteca."
-                echo "  --enable-template <id> [--profile <perfil>]    Activar una plantilla en global o en un perfil."
-                echo "  --export-template <id>                         Exportar un módulo activo a la biblioteca de plantillas."
+                echo "  --enable-template <id> [opciones]              Activar una plantilla en global o en un perfil."
+                echo "      --profile <perfil>                         Activar en el perfil indicado."
+                echo "      --as-module <nuevo_id>                     Clonar/derivar con un identificador diferente."
+                echo "      --force                                    Sobrescribir si el módulo ya existe."
+                echo "  --export-template <id> [--force]               Exportar un módulo activo a la biblioteca de plantillas."
                 echo ""
                 echo "Entorno de Pruebas y Desarrollo (Sandbox):"
                 echo "  --test-mode, --sandbox                         Activar entorno aislado en user_data/sandbox/."
@@ -2804,6 +2948,14 @@ controller_run_cli() {
                 param_val="${2:-}"
                 shift 2 || true
                 ;;
+            --as-module)
+                as_module_val="${2:-}"
+                shift 2 || true
+                ;;
+            --force)
+                force_flag="true"
+                shift
+                ;;
             --test-mode|--sandbox)
                 controller_enable_sandbox_mode
                 shift
@@ -2876,10 +3028,10 @@ controller_run_cli() {
             controller_handle_list_templates "false"
             ;;
         enable-template)
-            controller_handle_enable_template "$param_val" "false" "$ACTIVE_PROFILE_OVERRIDE"
+            controller_handle_enable_template "$param_val" "false" "$ACTIVE_PROFILE_OVERRIDE" "$as_module_val" "$force_flag"
             ;;
         export-template)
-            controller_handle_export_template "$param_val" "false" "$param_val"
+            controller_handle_export_template "$param_val" "false" "$param_val" "$force_flag"
             ;;
         enable-module)
             controller_handle_toggle_module "$param_val" "true" "$ACTIVE_PROFILE_OVERRIDE" "false"
