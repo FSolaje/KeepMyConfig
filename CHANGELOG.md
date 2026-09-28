@@ -7,6 +7,8 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+## [0.1.0-alpha.4] - 2026-09-29
+
 ### Fixed
 - **Gestor Robusto de Rutas y Prevención de Duplicación en Perfiles:**
   - Desacoplamiento de rutas absolutas completas (`^/`) y notación semántica (`^@media/`) en `profile_model.sh`, evitando la concatenación redundante al destino base.

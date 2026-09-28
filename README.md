@@ -11,8 +11,8 @@
 > **KeepMyConfig se encuentra actualmente en fase ALFA de desarrollo activo (`v0.1.0-alpha.X`).**
 >
 > 🛑 **RIESGO REAL Y POTENCIAL DE PÉRDIDA IRREVERSIBLE DE DATOS:**
-> - Esta versión **contiene errores conocidos y bugs activos**, especialmente en la resolución y validación de rutas de almacenamiento en unidades externas, anidamiento de subdirectorios y asignación de destinos en perfiles.
-> - La aplicación incorpora rutinas de **purga segura destructiva e irrecuperable** mediante el comando `shred -u -z -n 3` (destinado a eliminar credenciales y claves locales tras el respaldo). Si se produce una anomalía en la ruta de destino, o si una copia se genera de forma anómala, **los archivos de origen locales pueden resultar destruidos permanentemente sin posibilidad de recuperación**.
+> - Aunque en esta versión `v0.1.0-alpha.4` se ha resuelto la duplicación de rutas y se ha incorporado la salvaguarda obligatoria *Safe Destruction Gate* (que bloquea la purga destructiva si el archivo respaldado falla o no existe físicamente), el software continúa en **fase de desarrollo experimental**.
+> - La aplicación incorpora rutinas de **purga segura destructiva e irrecuperable** mediante el comando `shred -u -z -n 3` (destinado a eliminar credenciales y claves locales tras el respaldo). En fases tempranas, cualquier incompatibilidad imprevista podría entrañar riesgos para los archivos locales.
 >
 > 📋 **DIRECTRICES OBLIGATORIAS DE USO:**
 > 1. **NO UTILIZAR EN ENTORNOS DE PRODUCCIÓN:** Bajo ninguna circunstancia emplee esta versión con datos reales, críticos o de producción.
@@ -57,8 +57,8 @@ Recomendada para puestos de trabajo fijos o cuentas de usuario individuales:
 
 ```bash
 # 1. Descargar y descomprimir el paquete oficial
-tar -xzf KeepMyConfig-v0.1.0-alpha.2.tar.gz
-cd KeepMyConfig-v0.1.0-alpha.2
+tar -xzf KeepMyConfig-v0.1.0-alpha.4.tar.gz
+cd KeepMyConfig-v0.1.0-alpha.4
 
 # 2. Ejecutar el instalador asistido (sin sudo)
 ./install.sh
@@ -80,8 +80,8 @@ Diseñada para transportar tu entorno en un pendrive o disco SSD externo y usarl
 
 ```bash
 # 1. Descomprimir directamente en la raíz de tu pendrive o disco externo
-tar -xzf KeepMyConfig-v0.1.0-alpha.2-portable.tar.gz
-cd KeepMyConfig-v0.1.0-alpha.2-portable
+tar -xzf KeepMyConfig-v0.1.0-alpha.4-portable.tar.gz
+cd KeepMyConfig-v0.1.0-alpha.4-portable
 
 # 2. Ejecutar sin instalar nada en el sistema
 ./keepmyconfig.sh

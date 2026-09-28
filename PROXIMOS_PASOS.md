@@ -1,11 +1,11 @@
 # Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
-> **Estado actual:** **PARADA TÉCNICA Y BLINDAJE DE RUTAS**. Sub-Hito 12.6 aparcado preventivamente. Fase 1 completada al 100%: Incorporados avisos críticos de versión alfa experimental y disclaimer de pérdida de datos por purga y rutas en `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md`. Batería de 11 suites con **624/624 pruebas unitarias al 100%** y escáner SAST limpio sin alertas.
+> **Estado actual:** **VERSIÓN v0.1.0-alpha.4 PUBLICABLE**. Corrección crítica de blindaje de rutas y almacenamiento completada e integrada en `develop`. Tag anotado `v0.1.0-alpha.4` generado. Batería de 12 suites con **650/650 pruebas unitarias al 100%** y escáner SAST limpio sin alertas.
 > **Paso inmediato:** 
-> 1. Solicitar aprobación humana y realizar el commit atómico de documentación: `docs: incorporar advertencia critica de version alfa y disclaimer de perdida de datos en readme y manual`.
-> 2. Crear rama GitFlow dedicada `dev/fix/path-manager-and-profile-storage-init` desde `develop`.
-> 3. Iniciar el ciclo SDD de la Tarea 2: Rediseño del gestor de rutas, prevención de duplicación y despliegue automático del marcador de almacenamiento en la creación de perfiles.
+> 1. Sincronizar ramas y tags con el repositorio remoto GitHub (`git push origin develop` y `git push origin v0.1.0-alpha.4`).
+> 2. En la interfaz web de GitHub (`/releases`), retirar las releases previas (`v0.1.0-alpha.1`, `alpha.2`, `alpha.3`) para evitar descargas de binarios vulnerables, conservando sus tags.
+> 3. Decidir continuidad: retomar el Sub-Hito 12.6 (*Blindaje Criptográfico de Integridad del Código Bash*) o avanzar hacia el Hito 13 (*Almacenamiento Remoto SSH/SFTP/Rsync*).
 
 ---
 
