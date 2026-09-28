@@ -191,13 +191,14 @@ profile_model_get() {
 # ------------------------------------------------------------------------------
 # Función: profile_model_sanitize_target_subdir
 # Descripción: Normaliza y sanea la subcarpeta de destino (TARGET_SUBDIR) de un
-#              perfil para que sea siempre una ruta relativa dentro del medio de
-#              almacenamiento, eliminando prefijos ($HOME, ~, /home/<user>/),
-#              barras iniciales redundantes y bloqueando '..'.
+#              perfil:
+#              - Preserva destinos absolutos o de montaje (/media/..., /run/media/..., /mnt/..., /tmp/..., @media/...)
+#              - Sanea subcarpetas relativas eliminando prefijos ($HOME, ~, /home/<user>/),
+#                barras iniciales redundantes y bloqueando '..'.
 # Parámetros:
-#   $1 - Subcarpeta ingresada
+#   $1 - Subcarpeta o ruta absoluta ingresada
 # Salida stdout:
-#   Subcarpeta relativa limpia (o cadena vacía si apunta a la raíz del volumen)
+#   Ruta absoluta limpia o subcarpeta relativa limpia (cadena vacía para raíz)
 # Retorno:
 #   PROFILE_OK si es válida, PROFILE_ERR_PARAM si contiene '..'
 # ------------------------------------------------------------------------------
@@ -220,10 +221,24 @@ profile_model_sanitize_target_subdir() {
         return "$PROFILE_ERR_PARAM"
     fi
 
-    # Eliminar prefijos de inicio: ${HOME}, $HOME, ~, /home/<usuario>
+    # Reducir secuencias de múltiples barras consecutivas a una sola
+    clean=$(echo "$clean" | sed -E 's#/{2,}#/#g')
+
+    # Caso 1: Destino absoluto de almacenamiento o prefijo semántico:
+    # Rutas que apuntan a montajes del sistema o almacenamiento externo:
+    # /media/..., /run/media/..., /mnt/..., /tmp/..., @media/...
+    if [[ "$clean" =~ ^/(media|run/media|mnt|tmp)(/|$) || "$clean" =~ ^@media/ ]]; then
+        # Eliminar barras finales si no es la raíz sola
+        [[ "$clean" != "/" ]] && clean="${clean%/}"
+        echo "$clean"
+        return "$PROFILE_OK"
+    fi
+
+    # Caso 2: Si contiene prefijos de usuario tradicionales ($HOME, ~, /home/<usuario>):
+    # Para subcarpetas relativas dentro del medio:
     clean=$(echo "$clean" | sed -E 's#^(\$\{HOME\}|\$HOME|~|/home/[^/]+)(/.*)?$#\2#')
 
-    # Eliminar barras iniciales
+    # Eliminar barras iniciales redundantes para subcarpetas relativas
     clean=$(echo "$clean" | sed -E 's#^/+##')
 
     # Eliminar barras finales
@@ -243,12 +258,13 @@ profile_model_sanitize_target_subdir() {
 
 # ------------------------------------------------------------------------------
 # Función: profile_model_get_destination
-# Descripción: Resuelve el subdirectorio o ruta efectiva de backup para un perfil
-#              siguiendo el principio de convención sobre configuración (Zero-Config):
+# Descripción: Resuelve el subdirectorio o ruta efectiva de backup para un perfil:
+#              - Si TARGET_SUBDIR es una ruta absoluta autónoma (^/ o ^@media/),
+#                se resuelve directamente sin concatenar al base_dest (Override Autónomo).
 #              - Si perfil es 'default': destino base (o TARGET_SUBDIR si se define)
 #              - Si perfil específico:
 #                * Si TARGET_SUBDIR está definido: base / TARGET_SUBDIR
-#                * Si TARGET_SUBDIR está vacío: base / <profile_id>
+#                * Si TARGET_SUBDIR está vacío: base / <profile_id> (Zero-Config)
 # Parámetros:
 #   $1 - ID del perfil
 #   $2 - (Opcional) BACKUP_DESTINATION base
@@ -272,6 +288,15 @@ profile_model_get_destination() {
     p_sub=$(echo "$p_info" | grep '^TARGET_SUBDIR=' | cut -d'=' -f2-)
     p_sub=$(profile_model_sanitize_target_subdir "$p_sub") || p_sub=""
 
+    # 1. Si TARGET_SUBDIR es un Destino Autónomo Absoluto o Semántico (^/ o ^@media/)
+    if [[ "$p_sub" =~ ^/ || "$p_sub" =~ ^@media/ ]]; then
+        local resolved_abs
+        resolved_abs=$(device_model_resolve_destination "$p_sub" 2>/dev/null || echo "$p_sub")
+        [[ "$resolved_abs" != "/" ]] && resolved_abs="${resolved_abs%/}"
+        echo "$resolved_abs"
+        return "$PROFILE_OK"
+    fi
+
     local effective_sub=""
     if [[ "$profile_id" == "default" ]]; then
         if [[ -n "$p_sub" && "$p_sub" != "." ]]; then
@@ -290,10 +315,11 @@ profile_model_get_destination() {
     if [[ -n "$base_dest" ]]; then
         local resolved_base
         resolved_base=$(device_model_resolve_destination "$base_dest" 2>/dev/null || echo "$base_dest")
+        [[ "$resolved_base" != "/" ]] && resolved_base="${resolved_base%/}"
         if [[ -n "$effective_sub" ]]; then
-            echo "${resolved_base%/}/$effective_sub"
+            echo "$resolved_base/$effective_sub"
         else
-            echo "${resolved_base%/}"
+            echo "$resolved_base"
         fi
     else
         echo "$effective_sub"
