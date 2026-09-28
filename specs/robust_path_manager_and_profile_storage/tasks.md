@@ -43,7 +43,7 @@
 ---
 
 ## Fase 3: Despliegue Asistido del Marcador al Crear Perfiles (`app_controller.sh`)
-- [ ] Actualizar el asistente interactivo de creación de perfiles (`controller_handle_create_profile`):
+- [x] Actualizar el asistente interactivo de creación de perfiles (`controller_handle_create_profile`):
   - Clarificar las opciones de destino en la TUI (Zero-Config, subcarpeta relativa o ruta absoluta).
   - Resolver el destino efectivo del perfil recién creado.
   - Comprobar la presencia del marcador `.backup_storage_marker`.
