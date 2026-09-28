@@ -354,6 +354,21 @@ assert_equals "auto-zero" "$sub_zero_rel" "Sin base_dest, get_destination debe r
 sub_def_rel=$(profile_model_get_destination "default" "" "$SANDBOX_PROFILES")
 assert_equals "" "$sub_def_rel" "Sin base_dest, default debe retornar cadena vacía"
 
+# Caso E: Perfil con Destino Absoluto Autónomo (/media/..., /mnt/..., /tmp/...) -> Override Autónomo
+profile_model_create "prof-abs-media" "Media Profile" "Test" "/media/usuario/DISCO_BACKUP/Backups" "$SANDBOX_PROFILES"
+dest_abs=$(profile_model_get_destination "prof-abs-media" "/media/usuario/DISCO_BACKUP" "$SANDBOX_PROFILES")
+assert_equals "/media/usuario/DISCO_BACKUP/Backups" "$dest_abs" "Destino absoluto /media/... NO debe duplicarse con base_dest"
+
+# Caso F: sanitize_target_subdir preserva rutas absolutas completas y limpia barras redundantes
+san_media=$(profile_model_sanitize_target_subdir "///media///usuario///DISCO_BACKUP///Backups///")
+assert_equals "/media/usuario/DISCO_BACKUP/Backups" "$san_media" "sanitize_target_subdir debe preservar la barra inicial y normalizar en /media/..."
+
+san_mnt=$(profile_model_sanitize_target_subdir "/mnt/nfs_backup//servidor/")
+assert_equals "/mnt/nfs_backup/servidor" "$san_mnt" "sanitize_target_subdir debe preservar la barra inicial y normalizar en /mnt/..."
+
+san_sem=$(profile_model_sanitize_target_subdir "@media/DISCO_BACKUP/Copias")
+assert_equals "@media/DISCO_BACKUP/Copias" "$san_sem" "sanitize_target_subdir debe preservar etiquetas semánticas @media/..."
+
 # ==============================================================================
 # Resumen
 # ==============================================================================

@@ -17,11 +17,11 @@
 ---
 
 ## Fase 1: Saneamiento y Desacoplamiento de Rutas en `profile_model.sh`
-- [ ] Modificar `profile_model_sanitize_target_subdir` en `lib/models/profile_model.sh`:
+- [x] Modificar `profile_model_sanitize_target_subdir` en `lib/models/profile_model.sh`:
   - Preservar rutas absolutas completas sin despojar la barra inicial `/`.
   - Normalizar rutas con tilde `~` y prefijos de usuario.
   - Saneamiento de subcarpetas relativas estrictas.
-- [ ] Modificar `profile_model_get_destination`:
+- [x] Modificar `profile_model_get_destination`:
   - Si el destino del perfil es una ruta absoluta (`^/`), devolverlo directamente sin concatenar al `base_dest`.
   - Si es una subcarpeta relativa, concatenar una sola vez al `base_dest`.
 - [ ] **Hito de Commit 1 (fix):**
