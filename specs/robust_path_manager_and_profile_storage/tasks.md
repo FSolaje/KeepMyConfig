@@ -9,7 +9,7 @@
 - [x] Crear especificación técnica detallada (`specs/robust_path_manager_and_profile_storage/spec.md`).
 - [x] Crear plan técnico y arquitectura de componentes (`specs/robust_path_manager_and_profile_storage/plan.md`).
 - [x] Crear desglose atómico de tareas secuenciales (`specs/robust_path_manager_and_profile_storage/tasks.md`).
-- [ ] **Hito de Commit 0 (docs - mandatorio previo a codificación):**
+- [x] **Hito de Commit 0 (docs - mandatorio previo a codificación):**
   ```bash
   docs(spec): definir requerimientos, plan tecnico y tareas para gestor robusto de rutas e inicializacion de perfiles
   ```
@@ -24,7 +24,7 @@
 - [x] Modificar `profile_model_get_destination`:
   - Si el destino del perfil es una ruta absoluta (`^/`), devolverlo directamente sin concatenar al `base_dest`.
   - Si es una subcarpeta relativa, concatenar una sola vez al `base_dest`.
-- [ ] **Hito de Commit 1 (fix):**
+- [x] **Hito de Commit 1 (fix):**
   ```bash
   fix(profile): desacoplar destinos absolutos y subcarpetas relativas en perfiles
   ```
@@ -35,7 +35,7 @@
 - [x] Implementar `device_model_normalize_path` para purgar barras consecutivas (`//` -> `/`) y trailing slashes.
 - [x] Implementar `device_model_detect_path_recursion` para detectar duplicaciones o anidamiento de prefijos base.
 - [x] Integrar detector en `device_model_validate_storage` emitiendo error `DEV_ERR_RECURSIVE_PATH` (`12`) y bloqueando la operación.
-- [ ] **Hito de Commit 2 (fix):**
+- [x] **Hito de Commit 2 (fix):**
   ```bash
   fix(device): incorporar normalizacion canonica de rutas y detector de recursion
   ```
@@ -49,7 +49,7 @@
   - Comprobar la presencia del marcador `.backup_storage_marker`.
   - Desplegar diálogo afirmativo/negativo en TUI ofreciendo inicializar la carpeta y desplegar el marcador en ese instante.
   - Soporte de flag `--init-storage` / `--yes` en CLI.
-- [ ] **Hito de Commit 3 (feat):**
+- [x] **Hito de Commit 3 (feat):**
   ```bash
   feat(controller): ofrecer despliegue automatico de marcador al crear o configurar perfil
   ```
@@ -61,7 +61,7 @@
   - Verificar que el archivo respaldado existe en disco y su tamaño es mayor que 0 antes de autorizar la purga.
   - Verificar que la ruta no contiene anomalías sintácticas (`//`).
   - Abortar la purga y preservar los archivos locales si la comprobación falla.
-- [ ] **Hito de Commit 4 (fix):**
+- [x] **Hito de Commit 4 (fix):**
   ```bash
   fix(backup): reforzar verificacion de integridad de archivo y ruta previo a la purga shred
   ```
@@ -76,7 +76,7 @@
   - Despliegue asistido del marcador en `controller_handle_create_profile`.
   - Salvaguarda pre-shred ante fallos de archivo.
 - [x] Ejecutar la suite completa y certificar 100% de éxito.
-- [ ] **Hito de Commit 5 (test):**
+- [x] **Hito de Commit 5 (test):**
   ```bash
   test: incorporar suite unitaria de validacion de rutas e inicializacion de perfil
   ```
@@ -84,11 +84,11 @@
 ---
 
 ## Fase 6: Documentación Pública y Sincronización
-- [ ] Actualizar [`MANUAL_USUARIO.md`](../../MANUAL_USUARIO.md) detallando el nuevo comportamiento de destinos en perfiles y la inicialización automática del marcador.
-- [ ] Actualizar [`README.md`](../../README.md).
-- [ ] Actualizar [`CHANGELOG.md`](../../CHANGELOG.md) bajo `[Unreleased]`.
-- [ ] Actualizar [`PROXIMOS_PASOS.md`](../../PROXIMOS_PASOS.md).
-- [ ] **Hito de Commit 6 (docs):**
+- [x] Actualizar [`MANUAL_USUARIO.md`](../../MANUAL_USUARIO.md) detallando el nuevo comportamiento de destinos en perfiles y la inicialización automática del marcador.
+- [x] Actualizar [`README.md`](../../README.md).
+- [x] Actualizar [`CHANGELOG.md`](../../CHANGELOG.md) bajo `[Unreleased]`.
+- [x] Actualizar [`PROXIMOS_PASOS.md`](../../PROXIMOS_PASOS.md).
+- [x] **Hito de Commit 6 (docs):**
   ```bash
   docs: documentar en manual y changelog el gestor de rutas y despliegue guiado de marcador
   ```
