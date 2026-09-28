@@ -1504,7 +1504,7 @@ controller_handle_init_target() {
 
     local storage_root=""
     if [[ -n "${STORAGE_ID_TYPE:-}" ]]; then
-        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-}" "${STORAGE_STATIC_FALLBACK:-}") || true
     fi
     if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
         storage_root=$(device_model_resolve_destination "${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}")
@@ -1555,7 +1555,7 @@ controller_handle_list_targets() {
 
     local storage_root=""
     if [[ -n "${STORAGE_ID_TYPE:-}" ]]; then
-        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-}" "${STORAGE_STATIC_FALLBACK:-}") || true
     fi
     if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
         storage_root=$(device_model_resolve_destination "${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}")
@@ -1615,7 +1615,7 @@ controller_handle_set_active_target() {
 
     local storage_root=""
     if [[ -n "${STORAGE_ID_TYPE:-}" ]]; then
-        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-}" "${STORAGE_STATIC_FALLBACK:-}") || true
     fi
     if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
         storage_root=$(device_model_resolve_destination "${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}")
