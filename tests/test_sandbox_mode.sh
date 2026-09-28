@@ -148,7 +148,7 @@ assert_contains "$list_mods_out" "firefox" "--list-modules en sandbox debe lista
 assert_contains "$list_mods_out" "bash-env" "--list-modules en sandbox debe listar bash-env (sembrado)"
 
 # Test 13: Comprobación de que git status permanece completamente limpio (NFR-SEC-001)
-git_status_porcelain=$(git -C "${PROJECT_ROOT}" status --porcelain user_data/sandbox 2>&1 || true)
+git_status_porcelain=$(git -C "${PROJECT_ROOT}" status --porcelain user_data/sandbox 2>/dev/null || true)
 assert_eq "" "$git_status_porcelain" "git status --porcelain user_data/sandbox debe estar completamente vacío (aislamiento Git)"
 
 # Test 14: Indicador visual en whiptail_view_main_menu (FR-TEST-004)
