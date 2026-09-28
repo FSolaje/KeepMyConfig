@@ -169,10 +169,14 @@
 > **Nota de Estado:** Aparcado temporalmente para priorizar la resolución del incidente crítico de duplicación de rutas y flujo de inicialización del marcador de almacenamiento.
 - [x] **Fase 0 (Documentos SDD):** Creados y aprobados `specs/codebase_integrity_and_security/` (`spec.md`, `plan.md`, `tasks.md`). *Aparcado para retomar tras corregir el gestor de rutas*.
 
-### Corrección Crítica: Rediseño del Gestor de Rutas, Prevención de Duplicación y Marcador en Perfiles (En Curso)
-- [x] **Fase 1 (Avisos de Versión Alfa):** Incorporación de advertencias destacadas (`> [!CAUTION]`) y descargos de responsabilidad en `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md`.
-- [ ] **Fase 2 (SDD Gestor de Rutas y Perfiles):** Especificación técnica `specs/robust_path_manager_and_profile_storage/` con soporte para rutas absolutas completas sin despojar `/`, validación anti-duplicación y despliegue interactivo del marcador `.backup_storage_marker` al crear un perfil.
-- [ ] **Fase 3 (Implementación y Pruebas Unitarias):** Ajuste de `profile_model.sh`, `device_model.sh`, `app_controller.sh` y suite de tests.
+### Corrección Crítica: Rediseño del Gestor de Rutas, Prevención de Duplicación y Marcador en Perfiles (Completado)
+- [x] **Fase 0 (Documentos SDD):** Especificación técnica `specs/robust_path_manager_and_profile_storage/` (`spec.md`, `plan.md`, `tasks.md`) y commit previo obligatorio `bbcf7dc` (`docs(spec)`).
+- [x] **Fase 1 (Saneamiento y Desacoplamiento en `profile_model.sh`):** Override autónomo para destinos absolutos y notación `@media/`, preservación de barra inicial y deduplicación (`96d09d3`).
+- [x] **Fase 2 (Normalización y Anti-Recursión en `device_model.sh`):** Implementación de `device_model_normalize_path`, `device_model_detect_path_recursion` y código `DEV_ERR_RECURSIVE_PATH` (`12`) (`423c4fc`).
+- [x] **Fase 3 (Despliegue Asistido del Marcador en `app_controller.sh`):** Diálogo interactivo en TUI y soporte CLI desatendido `--init-storage` al crear perfiles (`3cc9004`).
+- [x] **Fase 4 (Salvaguarda Pre-Shred Reforzada en `backup_model.sh`):** Safe Destruction Gate comprobando existencia física, tamaño > 0 y ausencia de recursión antes de autorizar `shred -u`, con código `BACKUP_ERR_SAFE_PURGE_GATE` (`14`) (`5801b71`).
+- [x] **Fase 5 (Suite Integral Automatizada):** Creación de `tests/test_path_manager.sh` con 26 aserciones de integración (total: 650/650 pruebas al 100% en 12 suites) (`a1e4965`).
+- [x] **Fase 6 (Documentación Pública y Sincronización):** Actualización rigurosa de `README.md`, `MANUAL_USUARIO.md`, `CHANGELOG.md` y `PROXIMOS_PASOS.md`.
 
 ### Hito 13: Almacenamiento Remoto (SSH, SFTP, Rsync)
 - [ ] **Ampliación de `BACKUP_DESTINATION`:** Añadir soporte para destinos remotos (`ssh://user@host/path`, `sftp://`, `rsync://`).

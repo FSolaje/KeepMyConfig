@@ -35,8 +35,8 @@ Resuelve de forma definitiva el problema de la **congelación de discos y pérdi
 ## 1. Características Clave
 
 - 🛡️ **100% Non-Root:** No requiere ni solicita permisos de superusuario (`sudo`). Todo opera en el espacio del usuario y sus puntos de montaje.
-- 🔐 **Gestión Efímera "Vault & Shred":** Cifrado simétrico de datos sensibles con **GPG (AES-256)** y destrucción segura en el equipo local mediante **`shred -u -z -n 3`**.
-- 🗂️ **Sistema de Perfiles & Convención Zero-Config:** Gestión multi-perfil (`docente`, `desarrollo`, `default`) con aislamiento automático de copias en subdirectorios `<DESTINO>/<perfil>`.
+- 🔐 **Gestión Efímera "Vault & Shred" con Safe Destruction Gate:** Cifrado simétrico de datos sensibles con **GPG (AES-256)** y destrucción segura local con **`shred -u -z -n 3`**, blindada con verificación estricta de existencia y tamaño de archivo pre-shred.
+- 🗂️ **Gestor de Rutas Robusto & Sistema Multi-Perfil:** Soporte de destinos independientes (rutas absolutas), subcarpetas relativas y convención Zero-Config (`<DESTINO>/<perfil>`), con detector activo anti-recursión y despliegue guiado de marcadores.
 - 🧩 **Biblioteca de Plantillas (`templates.d/`):** Catálogo de recetas predefinidas listas para activar (`vscode`, `ssh-keys`, `bash-env`, `firefox`, `git-config`, etc.).
 - 🛑 **Pre-Flight Safety Gate:** Matriz interactiva de impacto previo y alertas rojas ante borrados destructivos antes de autorizar cualquier respaldo.
 - 🧪 **Modo Sandbox Aislado:** Entorno seguro en `user_data/sandbox/` con un **Home Virtual** completo para probar recetas y borrado seguro sin tocar datos reales.
@@ -111,6 +111,7 @@ Para tareas inmediatas, secuencias de arranque o integración en scripts:
 | **Copia y Purga Segura** | `keepmyconfig --backup-tag sensitive --purge` | Respalda datos sensibles con GPG y los destruye localmente con `shred`. |
 | **Modo Sandbox Seguro** | `keepmyconfig --test-mode` | Inicia la TUI en un entorno aislado con Home Virtual de prueba. |
 | **Asistente de Almacenamiento** | `keepmyconfig --setup` | Reconfigura la ruta de backup y comprueba discos externos. |
+| **Crear Perfil con Marcador** | `keepmyconfig --create-profile <id> [--init-storage]` | Crea un perfil e inicializa su carpeta y marcador de seguridad. |
 | **Listar Módulos y Estado** | `keepmyconfig --list-modules` | Muestra qué recetas están activadas `[ON]` o inactivas `[OFF]`. |
 
 > [!TIP]
@@ -132,7 +133,7 @@ Para evitar que contraseñas, perfiles de navegador o llaves SSH (`id_rsa`) qued
            ▼
  2. Verificación de Integridad y Hash SHA-256 en Destino
            │
-           ▼
+           ▼  [Safe Destruction Gate: Archivo > 0 bytes y ruta sin anomalías]
  3. Destrucción Irreversible Local con 'shred -u -z -n 3'
            │
       [Equipo Limpio sin Rastro de Credenciales]
@@ -162,7 +163,7 @@ KeepMyConfig/
 │   └── controllers/         # Enrutamiento, pre-flight safety gate y orquestación MVC
 ├── assets/                  # Icono vectorial oficial SVG y plantilla .desktop
 ├── scripts/                 # Herramientas de empaquetado y distribución (package.sh)
-└── tests/                   # Suite de pruebas unitarias automatizadas (624 tests)
+└── tests/                   # Suite de pruebas unitarias automatizadas (650 tests en 12 suites)
 ```
 
 ---

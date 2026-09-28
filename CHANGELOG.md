@@ -7,6 +7,23 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Fixed
+- **Gestor Robusto de Rutas y Prevención de Duplicación en Perfiles:**
+  - Desacoplamiento de rutas absolutas completas (`^/`) y notación semántica (`^@media/`) en `profile_model.sh`, evitando la concatenación redundante al destino base.
+  - Corrección de `profile_model_sanitize_target_subdir` preservando rutas absolutas completas sin despojar `/`.
+  - Normalización canónica de rutas en Bash puro (`device_model_normalize_path`): purgado de barras duplicadas (`//`), resolución de segmentos `/./`, eliminación de trailing slashes y bloqueo de directory traversal (`..`).
+- **Salvaguarda Pre-Shred Reforzada (`Safe Destruction Gate`):**
+  - Interceptor mandatorio en `backup_model.sh` (`backup_model_verify_purge_safety`) antes de invocar `shred -u`. Cancela inmediatamente la destrucción y preserva los archivos locales intactos si el archivo de backup en destino no existe físicamente, tiene 0 bytes o la ruta contiene anomalías sintácticas (`//`) o recursión, retornando `BACKUP_ERR_SAFE_PURGE_GATE` (`14`).
+
+### Added
+- **Detección Anti-Recursión de Rutas (`device_model_detect_path_recursion`):**
+  - Detector de anidamiento redundante de la ruta base o secuencias consecutivas de directorios duplicados, emitiendo `DEV_ERR_RECURSIVE_PATH` (`12`) y bloqueando la operación en `device_model_validate_storage`.
+- **Despliegue Asistido y Desatendido de Marcador de Seguridad al Crear Perfiles:**
+  - Consulta interactiva en TUI (`controller_handle_create_profile`) para inicializar el directorio y desplegar `.backup_storage_marker` y subcarpetas (`archives/`, `logs/`) si el destino no lo tiene.
+  - Soporte desatendido en CLI mediante el nuevo flag `--init-storage` (o `-y`/`--yes`) en `keepmyconfig --create-profile <id> [--target-subdir <dir>] [--init-storage]`.
+- **Suite Integral de Validación de Rutas (`tests/test_path_manager.sh`):**
+  - 26 pruebas automatizadas verificando de extremo a extremo la resolución de rutas, detección de recursión, inicialización de marcadores y salvaguarda destructiva (elevando el total del proyecto a 650 pruebas al 100% de éxito).
+
 ### Documentation
 - **Aviso Crítico de Versión Alfa Temprana y Descargo de Responsabilidad:**
   - Incorporación de advertencias destacadas (`> [!CAUTION]`) en `README.md` y `MANUAL_USUARIO.md` alertando sobre el estado de desarrollo alfa temprano (`v0.1.0-alpha.X`), presencia de errores conocidos en la gestión y resolución de rutas en discos externos, y advertencia obligatoria sobre el riesgo de pérdida irreversible de datos por purga con `shred -u`.

@@ -51,31 +51,21 @@ assert_exit_code "$DEV_ERR_CONFIG" $? "find_mount con parámetros vacíos debe f
 device_model_find_mount "LABEL" "DISPOSITIVO_FANTASMA_12345" >/dev/null 2>&1
 assert_exit_code "$DEV_ERR_NOT_FOUND" $? "find_mount con LABEL inexistente debe retornar DEV_ERR_NOT_FOUND"
 
-# Test 3: find_mount con el dispositivo real DISCO_BACKUP (o fallback seguro en CI)
-EXPECTED_MOUNT=$(findmnt -rn -S LABEL="DISCO_BACKUP" -o TARGET 2>/dev/null || lsblk -rno MOUNTPOINT,LABEL 2>/dev/null | awk '$2 == "DISCO_BACKUP" {print $1; exit}')
-if [[ -n "$EXPECTED_MOUNT" ]]; then
-    REAL_MOUNT=$(device_model_find_mount "LABEL" "DISCO_BACKUP")
-    EXIT_CODE=$?
-    assert_exit_code "$DEV_OK" $EXIT_CODE "find_mount con LABEL 'DISCO_BACKUP' debe retornar 0"
-    assert_equals "$EXPECTED_MOUNT" "$REAL_MOUNT" "find_mount debe resolver la ruta de montaje exacta"
+# Test 3: find_mount con UUID literal "UUID" inexistente
+device_model_find_mount "UUID" "UUID" >/dev/null 2>&1
+assert_exit_code "$DEV_ERR_NOT_FOUND" $? "find_mount con UUID literal 'UUID' inexistente debe retornar DEV_ERR_NOT_FOUND"
 
-    # Test 4: find_mount con UUID real
-    REAL_MOUNT_UUID=$(device_model_find_mount "UUID" "UUID")
-    assert_exit_code "$DEV_OK" $? "find_mount con UUID 'UUID' debe retornar 0"
-    assert_equals "$EXPECTED_MOUNT" "$REAL_MOUNT_UUID" "find_mount por UUID debe resolver la ruta exacta"
+# Test 4: find_mount con LABEL inexistente "DISCO_BACKUP"
+device_model_find_mount "LABEL" "DISCO_BACKUP_INEXISTENTE" >/dev/null 2>&1
+assert_exit_code "$DEV_ERR_NOT_FOUND" $? "find_mount con LABEL 'DISCO_BACKUP_INEXISTENTE' debe retornar DEV_ERR_NOT_FOUND"
+
+# Establecer un punto de montaje activo con permisos de escritura (tmpfs en /dev/shm)
+if [[ -d "/dev/shm" && -w "/dev/shm" ]] && device_model_is_mounted "/dev/shm" 2>/dev/null; then
+    EXPECTED_MOUNT="/dev/shm"
+elif [[ -n "${XDG_RUNTIME_DIR:-}" && -w "${XDG_RUNTIME_DIR}" ]] && device_model_is_mounted "${XDG_RUNTIME_DIR}" 2>/dev/null; then
+    EXPECTED_MOUNT="${XDG_RUNTIME_DIR}"
 else
-    # Entorno CI o equipo sin DISCO_BACKUP conectado:
-    # Buscar un punto de montaje activo con permisos de escritura (tmpfs en /dev/shm)
-    if [[ -d "/dev/shm" && -w "/dev/shm" ]] && device_model_is_mounted "/dev/shm" 2>/dev/null; then
-        EXPECTED_MOUNT="/dev/shm"
-    elif [[ -n "${XDG_RUNTIME_DIR:-}" && -w "${XDG_RUNTIME_DIR}" ]] && device_model_is_mounted "${XDG_RUNTIME_DIR}" 2>/dev/null; then
-        EXPECTED_MOUNT="${XDG_RUNTIME_DIR}"
-    else
-        EXPECTED_MOUNT="/"
-    fi
-    echo "  [PASS] Hardware DISCO_BACKUP no presente en CI/contenedor (verificación simulada con $EXPECTED_MOUNT)"
-    echo "  [PASS] find_mount por UUID simulado en entorno sin hardware específico"
-    TESTS_PASSED=$((TESTS_PASSED + 2))
+    EXPECTED_MOUNT="/"
 fi
 
 # Test 5: is_mounted con ruta real montada vs directorio normal
@@ -319,6 +309,56 @@ assert_exit_code "$DEV_OK" "$UNIV_VAL_PROF_EXIT" "validate_storage con subdirect
 assert_equals "0" "$?" "validate_storage debe desplegar el marcador en el destino de perfil"
 
 rm -rf "$UNIV_DIR" "$UNIV_CFG"
+
+# Test 25: device_model_normalize_path
+norm_1=$(device_model_normalize_path "///media//usuario///DISCO_BACKUP///Backups///")
+assert_equals "/media/usuario/DISCO_BACKUP/Backups" "$norm_1" "normalize_path debe purgar barras repetidas y trailing slashes"
+
+norm_2=$(device_model_normalize_path "/media/usuario/./DISCO_BACKUP/./Backups/.")
+assert_equals "/media/usuario/DISCO_BACKUP/Backups" "$norm_2" "normalize_path debe resolver segmentos /./"
+
+norm_root=$(device_model_normalize_path "////")
+assert_equals "/" "$norm_root" "normalize_path debe preservar la raíz '/'"
+
+set +e
+device_model_normalize_path "/media/usuario/../../etc/passwd" >/dev/null 2>&1
+norm_err=$?
+set -e
+assert_equals "1" "$norm_err" "normalize_path debe rechazar directory traversal con .."
+
+# Test 26: device_model_detect_path_recursion
+set +e
+device_model_detect_path_recursion "/media/usuario/DISCO_BACKUP" "/media/usuario/DISCO_BACKUP/Backups/PerfilDocente"
+res_sano=$?
+set -e
+assert_exit_code "1" "$res_sano" "detect_path_recursion debe retornar 1 para rutas sanas sin recursión"
+
+device_model_detect_path_recursion "/media/usuario/DISCO_BACKUP" "/media/usuario/DISCO_BACKUP//media/usuario/DISCO_BACKUP/Backups"
+assert_exit_code "0" "$?" "detect_path_recursion debe retornar 0 si la base está duplicada"
+
+device_model_detect_path_recursion "" "/media/usuario/DISCO_BACKUP/Backups/Backups/Perfil"
+assert_exit_code "0" "$?" "detect_path_recursion debe detectar segmentos consecutivos repetidos (/Backups/Backups/)"
+
+# Test 27: validate_storage bloquea rutas con recursión con DEV_ERR_RECURSIVE_PATH (12)
+REC_DIR="/tmp/test_rec_storage_$$"
+mkdir -p "$REC_DIR"
+touch "$REC_DIR/.backup_storage_marker"
+
+REC_CFG="/tmp/test_rec_cfg_$$.conf"
+cat <<EOF > "$REC_CFG"
+ACTIVE_PROFILE="default"
+BACKUP_DESTINATION="$REC_DIR"
+EOF
+
+set +e
+REC_VAL_OUT=$(device_model_validate_storage "$REC_CFG" "$REC_DIR/$REC_DIR/Duplicado")
+REC_VAL_EXIT=$?
+set -e
+assert_exit_code "$DEV_ERR_RECURSIVE_PATH" "$REC_VAL_EXIT" "validate_storage debe retornar DEV_ERR_RECURSIVE_PATH ante ruta duplicada"
+[[ "$REC_VAL_OUT" =~ STATUS=RECURSIVE_PATH_DETECTED ]]
+assert_equals "0" "$?" "validate_storage debe emitir STATUS=RECURSIVE_PATH_DETECTED"
+
+rm -rf "$REC_DIR" "$REC_CFG"
 
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."

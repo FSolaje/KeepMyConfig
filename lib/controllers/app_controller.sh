@@ -1504,7 +1504,7 @@ controller_handle_init_target() {
 
     local storage_root=""
     if [[ -n "${STORAGE_ID_TYPE:-}" ]]; then
-        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-}" "${STORAGE_STATIC_FALLBACK:-}") || true
     fi
     if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
         storage_root=$(device_model_resolve_destination "${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}")
@@ -1555,7 +1555,7 @@ controller_handle_list_targets() {
 
     local storage_root=""
     if [[ -n "${STORAGE_ID_TYPE:-}" ]]; then
-        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-}" "${STORAGE_STATIC_FALLBACK:-}") || true
     fi
     if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
         storage_root=$(device_model_resolve_destination "${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}")
@@ -1615,7 +1615,7 @@ controller_handle_set_active_target() {
 
     local storage_root=""
     if [[ -n "${STORAGE_ID_TYPE:-}" ]]; then
-        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-DISCO_BACKUP}" "${STORAGE_STATIC_FALLBACK:-}") || true
+        storage_root=$(device_model_find_mount "${STORAGE_ID_TYPE}" "${STORAGE_ID_VALUE:-}" "${STORAGE_STATIC_FALLBACK:-}") || true
     fi
     if [[ -z "$storage_root" || ! -d "$storage_root" ]]; then
         storage_root=$(device_model_resolve_destination "${BACKUP_DESTINATION:-~/Backups/KeepMyConfig}")
@@ -2954,6 +2954,7 @@ controller_handle_create_profile() {
     local desc="${3:-}"
     local target_subdir="${4:-}"
     local is_tui="${5:-false}"
+    local init_storage="${6:-false}"
     local profiles_dir="${PROFILES_DIR:-${CONTROLLER_BASE_DIR}/profiles}"
 
     if [[ "$is_tui" == "true" && -z "$profile_id" ]]; then
@@ -3005,6 +3006,33 @@ controller_handle_create_profile() {
             ansi_view_error "$err_msg"
         fi
         return "$status"
+    fi
+
+    # Resolver destino efectivo del perfil y verificar presencia del marcador
+    local eff_base="${BACKUP_DESTINATION:-}"
+    if [[ -z "$eff_base" ]]; then
+        local cfg_file="$(_controller_get_config_file)"
+        eff_base=$(grep '^BACKUP_DESTINATION=' "$cfg_file" 2>/dev/null | cut -d'=' -f2- | tr -d '"')
+        eff_base="${eff_base:-~/Backups/KeepMyConfig}"
+    fi
+
+    local eff_dest
+    eff_dest=$(profile_model_get_destination "$profile_id" "$eff_base" "$profiles_dir" 2>/dev/null || true)
+    eff_dest=$(device_model_normalize_path "$eff_dest" 2>/dev/null || echo "$eff_dest")
+
+    if [[ -n "$eff_dest" ]] && ! device_model_check_marker "$eff_dest" >/dev/null 2>&1; then
+        if [[ "$is_tui" == "true" ]]; then
+            if whiptail_view_yesno "Inicializar Almacenamiento de Perfil" \
+                "El destino de almacenamiento configurado para este perfil:\n\n  $eff_dest\n\nno contiene el marcador de seguridad .backup_storage_marker.\n\n¿Desea inicializar la carpeta y desplegar el marcador ahora?"; then
+                controller_handle_deploy_marker "$eff_dest" "true"
+            fi
+        else
+            if [[ "$init_storage" == "true" || "${CLI_ASSUME_YES:-false}" == "true" ]]; then
+                controller_handle_deploy_marker "$eff_dest" "false"
+            else
+                ansi_view_info "Nota: El destino '$eff_dest' no tiene marcador .backup_storage_marker. Puede crearlo con: $0 --init-target '$eff_dest' o pasar --init-storage."
+            fi
+        fi
     fi
 
     if [[ "$is_tui" == "true" ]]; then
@@ -3246,6 +3274,7 @@ controller_run_cli() {
     local timestamp_val=""
     local as_module_val=""
     local force_flag="false"
+    local init_storage_flag="false"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -3281,7 +3310,7 @@ controller_run_cli() {
                 echo "  --profile <id>                                 Usar perfil temporal para la operación actual."
                 echo "  --list-profiles                                Listar todos los perfiles disponibles."
                 echo "  --set-active-profile <id>                      Fijar perfil activo en config/config.conf."
-                echo "  --create-profile <id>                          Crear un nuevo perfil de backup."
+                echo "  --create-profile <id> [--target-subdir <dir>] [--init-storage]  Crear un nuevo perfil de backup."
                 echo ""
                 echo "Biblioteca de Plantillas y Recetas:"
                 echo "  --list-templates                               Listar plantillas disponibles en la biblioteca."
@@ -3357,6 +3386,10 @@ controller_run_cli() {
                 action="init-target"
                 param_val="${2:-}"
                 shift 2 || true
+                ;;
+            --init-storage)
+                init_storage_flag="true"
+                shift
                 ;;
             --set-default)
                 set_default_flag="true"
@@ -3499,7 +3532,11 @@ controller_run_cli() {
             controller_handle_set_active_profile "$param_val" "false"
             ;;
         create-profile)
-            controller_handle_create_profile "$param_val" "$param_val" "Perfil creado desde CLI" "" "false"
+            local auto_init="false"
+            if [[ "$init_storage_flag" == "true" || "${CLI_ASSUME_YES:-false}" == "true" ]]; then
+                auto_init="true"
+            fi
+            controller_handle_create_profile "$param_val" "$param_val" "Perfil creado desde CLI" "${TARGET_SUBDIR_OVERRIDE:-}" "false" "$auto_init"
             ;;
         list-templates)
             controller_handle_list_templates "false"
