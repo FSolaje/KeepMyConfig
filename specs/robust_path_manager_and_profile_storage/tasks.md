@@ -69,13 +69,13 @@
 ---
 
 ## Fase 5: Suite de Pruebas Unitarias Automatizadas
-- [ ] Crear suite `tests/test_path_manager.sh` cubriendo:
+- [x] Crear suite `tests/test_path_manager.sh` cubriendo:
   - Rutas absolutas independientes en perfiles.
   - Subcarpetas relativas en perfiles.
   - Detección de duplicación y bloqueo ante recursión.
   - Despliegue asistido del marcador en `controller_handle_create_profile`.
   - Salvaguarda pre-shred ante fallos de archivo.
-- [ ] Ejecutar la suite completa y certificar 100% de éxito.
+- [x] Ejecutar la suite completa y certificar 100% de éxito.
 - [ ] **Hito de Commit 5 (test):**
   ```bash
   test: incorporar suite unitaria de validacion de rutas e inicializacion de perfil
