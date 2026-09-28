@@ -7,6 +7,10 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Documentation
+- **Aviso Crítico de Versión Alfa Temprana y Descargo de Responsabilidad:**
+  - Incorporación de advertencias destacadas (`> [!CAUTION]`) en `README.md` y `MANUAL_USUARIO.md` alertando sobre el estado de desarrollo alfa temprano (`v0.1.0-alpha.X`), presencia de errores conocidos en la gestión y resolución de rutas en discos externos, y advertencia obligatoria sobre el riesgo de pérdida irreversible de datos por purga con `shred -u`.
+
 ### Breaking Changes
 - **Ruta Universal de Almacenamiento (`BACKUP_DESTINATION`):**
   - Se eliminan de forma definitiva las directivas fragmentadas `STORAGE_ID_TYPE`, `STORAGE_ID_VALUE`, `STORAGE_SUBDIR` y `STORAGE_STATIC_FALLBACK` en `config/config.conf`.

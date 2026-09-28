@@ -1,8 +1,11 @@
 # Próximos Pasos: KeepMyConfig - Gestor de Backup y Recuperación (MVC en Bash)
 
 > **Nombre Oficial de la Aplicación:** **KeepMyConfig**  
-> **Estado actual:** Repositorio publicado y sincronizado en GitHub (`git@github.com:FSolaje/KeepMyConfig.git`). Versión Alfa **`v0.1.0-alpha.3`** publicada en Releases. Sub-Hito 12.5 (Sistema de Empaquetado y Distribución Automatizada) completado al 100% e integrado en `develop`. Batería de 11 suites con **624/624 pruebas unitarias al 100%**, escáner SAST impecable y documentación pública plenamente sincronizada.  
-> **Paso inmediato para la próxima sesión:** Iniciar el **Sub-Hito 12.6: Blindaje Criptográfico de Integridad y Protección de Código Bash ante Manipulación** en la rama `dev/feature/codebase-integrity` bajo flujo SDD estricto.
+> **Estado actual:** **PARADA TÉCNICA Y BLINDAJE DE RUTAS**. Sub-Hito 12.6 aparcado preventivamente. Fase 1 completada al 100%: Incorporados avisos críticos de versión alfa experimental y disclaimer de pérdida de datos por purga y rutas en `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md`. Batería de 11 suites con **624/624 pruebas unitarias al 100%** y escáner SAST limpio sin alertas.
+> **Paso inmediato:** 
+> 1. Solicitar aprobación humana y realizar el commit atómico de documentación: `docs: incorporar advertencia critica de version alfa y disclaimer de perdida de datos en readme y manual`.
+> 2. Crear rama GitFlow dedicada `dev/fix/path-manager-and-profile-storage-init` desde `develop`.
+> 3. Iniciar el ciclo SDD de la Tarea 2: Rediseño del gestor de rutas, prevención de duplicación y despliegue automático del marcador de almacenamiento en la creación de perfiles.
 
 ---
 
@@ -161,15 +164,15 @@
 - [x] **Fase 5:** Actualización del workflow `.github/workflows/release.yml` para invocar `scripts/package.sh` y adjuntar artefactos duales y checksums (`fb8ac1e`).
 - [x] **Fase 6:** Sincronización mandatoria de documentación pública (`README.md`, `MANUAL_USUARIO.md`, `CHANGELOG.md`, `PROXIMOS_PASOS.md`).
 
-### Sub-Hito 12.6: Blindaje Criptográfico de Integridad y Protección de Código Bash ante Manipulación (Próximo)
+### Sub-Hito 12.6: Blindaje Criptográfico de Integridad y Protección de Código Bash ante Manipulación (Aparcado Temporalmente)
 > **Motivación y Análisis de Vulnerabilidad:** Al tratarse de un software completamente escrito en Bash, el código fuente reside en texto plano interpretado en `$HOME/.local/share/KeepMyConfig/lib/`. Cualquier script o proceso en el espacio de usuario podría alterar, corromper o inyectar código malicioso en las librerías del core (ej. captura de claves GPG o alteración de la purga segura con `shred`).  
-- [ ] **Documentos SDD:** Crear `specs/codebase_integrity_and_security/` (`spec.md`, `plan.md`, `tasks.md`).
-- [ ] **Sello Criptográfico en Empaquetado:** Generación del manifiesto de integridad `.app_integrity.sha256` en `scripts/package.sh` cubriendo `backup_manager.sh` y todos los scripts de `lib/`.
-- [ ] **Guarda de Autenticidad en Tiempo de Carga:** Comprobación ultrarrápida al inicio de `backup_manager.sh` contra `.app_integrity.sha256`. Bloqueo inmediato con código de salida crítico y alerta de seguridad si cualquier script de lógica ha sido alterado.
-- [ ] **Endurecimiento de Permisos (Hardening) en `install.sh`:** Aplicación de permisos estrictos de solo lectura (`chmod -R 0555` / `chmod -R u-w`) sobre `lib/` y binarios, preservando permisos de escritura únicamente en carpetas de datos del usuario (`config/`, `modules.d/`, `profiles/`).
-- [ ] **Firma Digital GPG Opcional:** Evaluación de soporte para verificación de firma `.asc` del manifiesto para entornos de alta seguridad.
-- [ ] **Compatibilidad con Desarrollo / Sandbox:** Variable de elusión controlada `KEEP_MY_CONFIG_DEV=true` y modo test para permitir desarrollo activo sin alertas espurias.
-- [ ] **Suite de Pruebas:** Pruebas unitarias de integridad simulando inyección de código y validando la detección inmediata.
+> **Nota de Estado:** Aparcado temporalmente para priorizar la resolución del incidente crítico de duplicación de rutas y flujo de inicialización del marcador de almacenamiento.
+- [x] **Fase 0 (Documentos SDD):** Creados y aprobados `specs/codebase_integrity_and_security/` (`spec.md`, `plan.md`, `tasks.md`). *Aparcado para retomar tras corregir el gestor de rutas*.
+
+### Corrección Crítica: Rediseño del Gestor de Rutas, Prevención de Duplicación y Marcador en Perfiles (En Curso)
+- [x] **Fase 1 (Avisos de Versión Alfa):** Incorporación de advertencias destacadas (`> [!CAUTION]`) y descargos de responsabilidad en `README.md`, `MANUAL_USUARIO.md` y `CHANGELOG.md`.
+- [ ] **Fase 2 (SDD Gestor de Rutas y Perfiles):** Especificación técnica `specs/robust_path_manager_and_profile_storage/` con soporte para rutas absolutas completas sin despojar `/`, validación anti-duplicación y despliegue interactivo del marcador `.backup_storage_marker` al crear un perfil.
+- [ ] **Fase 3 (Implementación y Pruebas Unitarias):** Ajuste de `profile_model.sh`, `device_model.sh`, `app_controller.sh` y suite de tests.
 
 ### Hito 13: Almacenamiento Remoto (SSH, SFTP, Rsync)
 - [ ] **Ampliación de `BACKUP_DESTINATION`:** Añadir soporte para destinos remotos (`ssh://user@host/path`, `sftp://`, `rsync://`).
