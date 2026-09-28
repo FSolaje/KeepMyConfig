@@ -4,6 +4,26 @@ Sistema modular y desacoplado de copias de seguridad e histórico para terminal,
 
 Permite respaldar, cifrar, purgar y restaurar configuraciones del sistema y aplicaciones en un disco externo (SSD/USB) de forma atómica o por lotes, garantizando la persistencia de datos ante restauraciones periódicas del SAI.
 
+> [!CAUTION]
+> ### ⚠️ AVISO CRÍTICO: VERSIÓN ALFA TEMPRANA — SOFTWARE EN DESARROLLO EXPERIMENTAL
+> **KeepMyConfig se encuentra actualmente en fase ALFA de desarrollo activo (`v0.1.0-alpha.X`).**
+>
+> 🛑 **RIESGO REAL Y POTENCIAL DE PÉRDIDA IRREVERSIBLE DE DATOS:**
+> - Aunque en la versión `v0.1.0-alpha.4` se ha resuelto la duplicación de rutas y se ha incorporado la salvaguarda obligatoria *Safe Destruction Gate* (que bloquea la purga destructiva si el archivo respaldado falla o no existe físicamente), el software continúa en **fase de desarrollo experimental**.
+> - La aplicación incorpora rutinas de **purga segura destructiva e irrecuperable** mediante el comando `shred -u -z -n 3` (destinado a eliminar credenciales y claves locales tras el respaldo). En fases tempranas, cualquier incompatibilidad imprevista podría entrañar riesgos para los archivos locales.
+>
+> 📋 **DIRECTRICES OBLIGATORIAS DE USO:**
+> 1. **NO UTILIZAR EN ENTORNOS DE PRODUCCIÓN:** Bajo ninguna circunstancia emplee esta versión con datos reales, críticos o de producción.
+> 2. **COPIAS DE SEGURIDAD PREVIAS EXTERNAS:** No utilice este software con ningún archivo o directorio sin disponer previamente de una copia de seguridad externa independiente, aislada y verificada.
+> 3. **PROBAR EXCLUSIVAMENTE EN MODO SANDBOX:** Para evaluar o probar el software, utilice siempre el modo aislado de pruebas:
+>    ```bash
+>    keepmyconfig --test-mode
+>    ```
+>    o configure rutas de prueba ficticias en entornos no críticos.
+>
+> ⚖️ **EXENCIÓN DE RESPONSABILIDAD:**
+> El software se proporciona "tal cual", sin garantía de ningún tipo, expresa o implícita. Los autores y colaboradores no se hacen responsables de ninguna pérdida de datos, daños a sistemas de archivos, corrupción de información o interrupciones operativas derivadas de su uso.
+
 ---
 
 ## Características Principales
