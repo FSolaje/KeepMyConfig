@@ -14,6 +14,7 @@ export DEV_ERR_NOT_FOUND=2
 export DEV_ERR_NOT_MOUNTED=3
 export DEV_ERR_NO_MARKER=4
 export DEV_ERR_NOT_WRITABLE=5
+export DEV_ERR_RECURSIVE_PATH=12
 
 # ------------------------------------------------------------------------------
 # Función: device_model_find_mount
@@ -353,6 +354,107 @@ device_model_resolve_destination() {
 }
 
 # ------------------------------------------------------------------------------
+# Función: device_model_normalize_path
+# Descripción: Normaliza canónicamente una ruta de archivo o directorio:
+#              - Reduce barras múltiples consecutivas (// -> /).
+#              - Resuelve segmentos /./ a /.
+#              - Elimina trailing slash salvo si la ruta es la raíz '/'.
+#              - Bloquea intentos de directory traversal con '..'.
+# Parámetros:
+#   $1 - Ruta a normalizar
+# Salida stdout:
+#   Ruta canónica normalizada.
+# Retorno:
+#   0 en éxito, 1 si está vacía o contiene '..'.
+# ------------------------------------------------------------------------------
+device_model_normalize_path() {
+    local p="${1:-}"
+    [[ -n "$p" ]] || return 1
+
+    # Bloquear traversal con '..'
+    if [[ "$p" =~ (^|/)\.\.(/|$) ]]; then
+        return 1
+    fi
+
+    # Reducir barras consecutivas '//' a '/'
+    while [[ "$p" == *"//"* ]]; do
+        p="${p//\/\///}"
+    done
+
+    # Eliminar segmentos '/./'
+    while [[ "$p" == *"/./"* ]]; do
+        p="${p//\/.\//\/}"
+    done
+
+    # Eliminar '/.' residual al final
+    [[ "$p" != "/." ]] && p="${p%/.}"
+
+    # Eliminar barra final salvo si es exactamente '/'
+    if [[ "$p" != "/" ]]; then
+        p="${p%/}"
+    fi
+
+    echo "$p"
+    return 0
+}
+
+# ------------------------------------------------------------------------------
+# Función: device_model_detect_path_recursion
+# Descripción: Detecta si en una ruta destino hay duplicación de la base o
+#              segmentos idénticos repetidos consecutivamente de forma anómala.
+# Parámetros:
+#   $1 - Ruta base (ej: storage_root o mountpoint)
+#   $2 - Ruta destino completa a evaluar
+# Retorno:
+#   0 si se detecta duplicación o recursión anormal (PELIGRO).
+#   1 si la ruta es lineal y válida (SIN RECURSIÓN).
+# ------------------------------------------------------------------------------
+device_model_detect_path_recursion() {
+    local base="${1:-}"
+    local target="${2:-}"
+
+    [[ -n "$target" ]] || return 1
+
+    # Normalizar ambas rutas para comparar
+    base=$(device_model_normalize_path "$base" 2>/dev/null || echo "$base")
+    target=$(device_model_normalize_path "$target" 2>/dev/null || echo "$target")
+
+    # 1. Si la ruta base (no vacía y distinta de '/') aparece más de una vez en target
+    if [[ -n "$base" && "$base" != "/" ]]; then
+        local count
+        count=$(grep -F -o "$base" <<< "$target" | wc -l)
+        if (( count > 1 )); then
+            return 0
+        fi
+
+        # También comprobar si el target contiene '${base#/}' anidado en una subcarpeta
+        local base_rel="${base#/}"
+        if [[ -n "$base_rel" && "$target" == *"/$base_rel"* && "$target" != "$base"* ]]; then
+            return 0
+        fi
+    fi
+
+    # 2. Detectar carpetas idénticas consecutivas de al menos 3 caracteres
+    local -a parts
+    IFS="/" read -ra parts <<< "$target"
+    local prev=""
+    for part in "${parts[@]}"; do
+        [[ -z "$part" ]] && continue
+        if [[ -n "$prev" && "$part" == "$prev" && ${#part} -ge 3 ]]; then
+            return 0
+        fi
+        prev="$part"
+    done
+
+    # 3. Detectar si un prefijo multi-directorio (ej. /media/... o /run/media/...) se repite
+    if [[ "$target" =~ /media/[^/]+/[^/]+.*/media/[^/]+/[^/]+ ]] || [[ "$target" =~ /run/media/[^/]+/[^/]+.*/run/media/[^/]+/[^/]+ ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+# ------------------------------------------------------------------------------
 # Función: device_model_detect_external_drives
 # Descripción: Audita puntos de montaje bajo /media/$USER/ y /run/media/$USER/,
 #              o particiones externas detectables con lsblk, devolviendo
@@ -517,6 +619,19 @@ device_model_validate_storage() {
         [[ -n "$base_dest" ]] || return "$DEV_ERR_CONFIG"
         backup_dir=$(device_model_resolve_destination "$base_dest") || return "$?"
         [[ -z "$storage_root" ]] && storage_root="$backup_dir"
+    fi
+
+    # Normalizar canónicamente backup_dir
+    backup_dir=$(device_model_normalize_path "$backup_dir" 2>/dev/null || echo "$backup_dir")
+
+    # Comprobación de Anti-Recursión / Duplicación de Rutas
+    if { [[ -n "$storage_root" ]] && device_model_detect_path_recursion "$storage_root" "$backup_dir"; } || device_model_detect_path_recursion "" "$backup_dir"; then
+        echo "STATUS=RECURSIVE_PATH_DETECTED"
+        echo "ERROR_CODE=$DEV_ERR_RECURSIVE_PATH"
+        echo "MOUNTPOINT="
+        echo "BACKUP_DIR=$backup_dir"
+        echo "MESSAGE=Se ha detectado duplicacion o recursion en la ruta de almacenamiento ('$backup_dir')."
+        return "$DEV_ERR_RECURSIVE_PATH"
     fi
 
     # 2. Verificar que si apunta a un soporte extraíble montado en /media o /run/media esté activo

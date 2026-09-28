@@ -15,6 +15,7 @@ export BACKUP_ERR_PASSPHRASE=4
 export BACKUP_ERR_ARCHIVE=5
 export BACKUP_ERR_CORRUPT=6
 export BACKUP_ERR_SHRED=7
+export BACKUP_ERR_SAFE_PURGE_GATE=14
 
 # Cargar modelos colaboradores si no están ya en memoria
 _BACKUP_MODEL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,6 +26,10 @@ fi
 if ! declare -F crypto_model_encrypt_pipe >/dev/null 2>&1; then
     # shellcheck source=./crypto_model.sh
     source "$_BACKUP_MODEL_DIR/crypto_model.sh"
+fi
+if ! declare -F device_model_detect_path_recursion >/dev/null 2>&1; then
+    # shellcheck source=./device_model.sh
+    source "$_BACKUP_MODEL_DIR/device_model.sh"
 fi
 
 # ------------------------------------------------------------------------------
@@ -148,6 +153,40 @@ backup_model_verify_archive() {
     fi
 
     return "$BACKUP_OK"
+}
+
+# ------------------------------------------------------------------------------
+# Función: backup_model_verify_purge_safety
+# Descripción: Barrera de seguridad (Safe Destruction Gate) previa a la purga
+#              con shred -u. Verifica que el archivo empaquetado y su manifiesto
+#              existen físicamente en disco, su tamaño es mayor a 0 bytes y
+#              la ruta no presenta secuencias de barras duplicadas (//) ni
+#              anomalías de recursión.
+# Parámetros:
+#   $1 - Ruta al archivo consolidado ($final_archive)
+#   $2 - Ruta al archivo de manifiesto ($final_manifest)
+# Retorno:
+#   0 si es seguro proceder con la purga, 1 si debe abortarse.
+# ------------------------------------------------------------------------------
+backup_model_verify_purge_safety() {
+    local archive_path="${1:-}"
+    local manifest_path="${2:-}"
+
+    # 1. Comprobar existencia y tamaño no nulo de archivo y manifiesto
+    [[ -n "$archive_path" && -f "$archive_path" && -s "$archive_path" ]] || return 1
+    [[ -n "$manifest_path" && -f "$manifest_path" && -s "$manifest_path" ]] || return 1
+
+    # 2. Comprobar que no haya barras consecutivas (anomalías sintácticas en la ruta)
+    [[ "$archive_path" != *"//"* ]] || return 1
+
+    # 3. Comprobar anti-recursión si device_model está disponible
+    if declare -F device_model_detect_path_recursion >/dev/null 2>&1; then
+        if device_model_detect_path_recursion "" "$archive_path"; then
+            return 1
+        fi
+    fi
+
+    return 0
 }
 
 # ------------------------------------------------------------------------------
@@ -347,6 +386,18 @@ EOF
     fi
 
     if [[ $should_purge -eq 1 ]]; then
+        # Barrera de Seguridad Crítica Pre-Shred (Safe Destruction Gate)
+        if ! backup_model_verify_purge_safety "$final_archive" "$final_manifest"; then
+            purged_status="safety_aborted"
+            echo "ERROR: Safe Destruction Gate abortó la purga. El archivo de backup no existe en destino, está vacío o tiene ruta anómala." >&2
+            echo "STATUS=SAFE_PURGE_ABORTED"
+            echo "ERROR_CODE=$BACKUP_ERR_SAFE_PURGE_GATE"
+            echo "MODULE_ID=$mod_id"
+            echo "ARCHIVE_FILE=$final_archive"
+            echo "MESSAGE=Purga con shred cancelada para proteger los archivos originales locales."
+            return "$BACKUP_ERR_SAFE_PURGE_GATE"
+        fi
+
         local shred_fail=0
         for rel_path in "${existing_rel_paths[@]}"; do
             local full_path="$target_home/$rel_path"

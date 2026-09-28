@@ -361,13 +361,26 @@ Agrupa todas las modalidades de empaquetado y salvaguarda:
 - **8) [DEL] Eliminar Módulo:** Baja definitiva del archivo `.conf` en su carpeta correspondiente.
 - **9) [TAG] Registrar Nueva Etiqueta:** Incorporación al catálogo `config/default_tags.conf`.
 
-##### Submenú 6: Destinos de Almacenamiento y Diagnóstico
+##### Submenú 6: Gestión de Perfiles de Trabajo
+- **1) [INFO] Ver Detalles del Perfil Activo:** Muestra el ID, nombre, descripción, subdirectorio o ruta configurada y módulos activos.
+- **2) [SWITCH] Cambiar Perfil Activo:** Selector interactivo para alternar el perfil activo del sistema.
+- **3) [CREATE] Crear un Nuevo Perfil:**
+  Asistente guiado que solicita identificador, nombre, descripción y destino. Permite tres modalidades de almacenamiento:
+  - **Zero-Config (Dejar en blanco):** Asigna automáticamente la convención `<BACKUP_DESTINATION>/<id_perfil>`.
+  - **Subcarpeta Relativa (ej: `Trabajo/Docente`):** Se anida limpiamente dentro del almacenamiento base.
+  - **Ruta Absoluta Independiente (ej: `/media/usuario/OTRO_DISCO/Backups` o `~/MisBackups`):** Define un destino autónomo fuera del almacenamiento base.
+  - **Despliegue Asistido de Marcador:** Si la ruta elegida no contiene `.backup_storage_marker`, el sistema consulta si desea inicializar la carpeta y desplegar el marcador y subdirectorios (`archives/`, `logs/`) en ese mismo instante.
+- **4) [LIST] Listar Recetas del Perfil:** Inventario de módulos visibles distinguiendo `[Global]`, `[Exclusivo]` o `[Override]`.
+- **5) [EXCL] Gestionar Exclusiones:** Desactiva recetas globales específicamente para el perfil activo (`DISABLED_MODULES`).
+- **6) [DEL] Eliminar Perfil:** Borrado definitivo de perfiles secundarios (el perfil `default` está protegido).
+
+##### Submenú 7: Destinos de Almacenamiento y Diagnóstico
 - **1) [DIAG] Diagnóstico de Almacenamiento:** Valida la presencia del archivo marcador jerárquico `.backup_storage_marker`, permisos y espacio disponible en disco.
 - **2) [DEST] Cambiar Destino Canónico (`BACKUP_DESTINATION`):** Actualización de la directiva universal (rutas locales, absolutas o notación `@media/<LABEL>/...`).
 - **3) [WIZARD] Relanzar Asistente de Configuración (Onboarding):** Configuración asistida paso a paso.
 - **4) [MARKER] Desplegar Marcador de Seguridad:** Instalación manual del archivo testigo y estructura de directorios.
 
-##### Submenú 7: Preferencias y Personalización Visual
+##### Submenú 8: Preferencias y Personalización Visual
 - **1) [THEME] 🎨 Selección de Tema Visual TUI (`NEWT_COLORS`):** Selección de paletas cromáticas.
 - **2) [PROFILE] 🧠 Memoria de Sesión (`REMEMBER_LAST_PROFILE`):** Configura si la aplicación arranca en el último perfil utilizado o siempre en `default`.
 
@@ -448,7 +461,8 @@ keepmyconfig --enable-module firefox
 | `--profile` | `<id>` | Aplica un perfil específico de forma temporal para la operación actual. |
 | `--list-profiles` | *Ninguno* | Lista todos los perfiles de backup configurados en el sistema. |
 | `--set-active-profile` | `<id>` | Establece el perfil activo de forma persistente en `config/config.conf`. |
-| `--create-profile` | `<id>` | Crea un nuevo perfil de backup y su estructura de módulos. |
+| `--create-profile` | `<id>` | Crea un nuevo perfil de backup (admite `--target-subdir` e `--init-storage`). |
+| `--init-storage` | *Ninguno* | Inicializa la carpeta y despliega `.backup_storage_marker` y subcarpetas al crear un perfil. |
 | `--list-templates` | *Ninguno* | Lista todas las recetas predefinidas en la biblioteca de plantillas (`templates.d/`). |
 | `--enable-template` | `<id>` | Activa la plantilla indicada en el perfil activo (o global si es default). |
 | `--as-module` | `<nuevo_id>` | *(Modificador de plantilla)* Instancia la plantilla con un nuevo identificador (clonación). |
@@ -502,6 +516,8 @@ Añada una regla para ejecutar la copia de lunes a viernes a las 14:30:
 | **`4`** | **Error Criptográfico** | Contraseña GPG incorrecta o archivo vault dañado/corrupto. |
 | **`5`** | **Argumento Inválido** | Parámetros CLI faltantes o no reconocidos. |
 | **`10`** | **Dependencia Faltante** | `whiptail` u otra herramienta indispensable no está instalada en el sistema. |
+| **`12`** | **Ruta Recursiva / Duplicada** | Detección de duplicación de base o recursión anómala en la ruta destino. |
+| **`14`** | **Salvaguarda Pre-Shred Abortada** | Safe Destruction Gate canceló la purga con shred: archivo ausente, vacío o ruta anómala. |
 
 ---
 
