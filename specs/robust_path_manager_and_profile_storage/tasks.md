@@ -57,7 +57,7 @@
 ---
 
 ## Fase 4: Salvaguarda Pre-Shred Reforzada (`backup_model.sh`)
-- [ ] Modificar `backup_model_run` y `backup_model_run_all`:
+- [x] Modificar `backup_model_run` y `backup_model_run_all`:
   - Verificar que el archivo respaldado existe en disco y su tamaño es mayor que 0 antes de autorizar la purga.
   - Verificar que la ruta no contiene anomalías sintácticas (`//`).
   - Abortar la purga y preservar los archivos locales si la comprobación falla.

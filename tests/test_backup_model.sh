@@ -195,6 +195,87 @@ echo "$ALL_OUT" | grep -qs "BACKUP_SUCCESS=bash-env"
 assert_equals "0" "$?" "run_all debe incluir bash-env"
 
 
+# ------------------------------------------------------------------------------
+# Test 10: Validación directa de backup_model_verify_purge_safety
+# ------------------------------------------------------------------------------
+SAFE_TEST_DIR="$SANDBOX_DIR/safe_gate_test"
+mkdir -p "$SAFE_TEST_DIR"
+TEST_ARCHIVE="$SAFE_TEST_DIR/test_backup.tar.zst"
+TEST_MANIFEST="$SAFE_TEST_DIR/test_backup.manifest.log"
+
+echo "CONTENIDO_REAL_BACKUP" > "$TEST_ARCHIVE"
+echo "MANIFEST_VALIDO" > "$TEST_MANIFEST"
+
+backup_model_verify_purge_safety "$TEST_ARCHIVE" "$TEST_MANIFEST"
+assert_exit_code "0" "$?" "verify_purge_safety debe retornar 0 cuando archivo y manifiesto son válidos y >0 bytes"
+
+# Fichero inexistente
+set +e
+backup_model_verify_purge_safety "$SAFE_TEST_DIR/fantasma.tar.zst" "$TEST_MANIFEST"
+gate_res_missing=$?
+set -e
+assert_exit_code "1" "$gate_res_missing" "verify_purge_safety debe retornar 1 si el archivo de backup no existe"
+
+# Fichero vacío (0 bytes)
+: > "$SAFE_TEST_DIR/empty.tar.zst"
+set +e
+backup_model_verify_purge_safety "$SAFE_TEST_DIR/empty.tar.zst" "$TEST_MANIFEST"
+gate_res_empty=$?
+set -e
+assert_exit_code "1" "$gate_res_empty" "verify_purge_safety debe retornar 1 si el archivo de backup tiene 0 bytes"
+
+# Ruta con barras duplicadas
+set +e
+backup_model_verify_purge_safety "$SAFE_TEST_DIR//test_backup.tar.zst" "$TEST_MANIFEST"
+gate_res_slash=$?
+set -e
+assert_exit_code "1" "$gate_res_slash" "verify_purge_safety debe retornar 1 si la ruta contiene //"
+
+# Ruta con recursión
+set +e
+backup_model_verify_purge_safety "$SAFE_TEST_DIR/$SAFE_TEST_DIR/test_backup.tar.zst" "$TEST_MANIFEST"
+gate_res_rec=$?
+set -e
+assert_exit_code "1" "$gate_res_rec" "verify_purge_safety debe retornar 1 si la ruta contiene recursión"
+
+# ------------------------------------------------------------------------------
+# Test 11: Simulación de fallo en Safe Destruction Gate protegiendo archivos de origen
+# ------------------------------------------------------------------------------
+# Crear archivo sensible en origen
+mkdir -p "$MOCK_HOME/sensitive_test"
+echo "SECRET_LOCAL_CANNOT_BE_PURGED" > "$MOCK_HOME/sensitive_test/secret.txt"
+
+# Crear una receta de prueba con PURGE_AFTER_BACKUP=true
+TEST_RECIPES_DIR="$SANDBOX_DIR/test_recipes"
+mkdir -p "$TEST_RECIPES_DIR"
+cat <<EOF > "$TEST_RECIPES_DIR/safe-gate-mod.conf"
+MODULE_ID="safe-gate-mod"
+MODULE_NAME="Safe Gate Test Module"
+MODULE_DESCRIPTION="Prueba de salvaguarda"
+MODULE_TAGS=("test")
+IS_SENSITIVE=false
+PURGE_AFTER_BACKUP=true
+MODULE_PATHS=("sensitive_test/secret.txt")
+EOF
+
+# Sobrescribir temporalmente backup_model_verify_purge_safety para forzar fallo
+eval "$(echo 'backup_model_verify_purge_safety() { return 1; }')"
+
+set +e
+RUN_GATE_FAIL_OUT=$(backup_model_run "safe-gate-mod" "$MOCK_STORAGE" "$MOCK_HOME" "" "false" "false" "$TEST_RECIPES_DIR" 2>/dev/null)
+gate_run_exit=$?
+set -e
+
+assert_exit_code "$BACKUP_ERR_SAFE_PURGE_GATE" "$gate_run_exit" "backup_model_run debe abortar con BACKUP_ERR_SAFE_PURGE_GATE si la salvaguarda falla"
+[[ "$RUN_GATE_FAIL_OUT" =~ STATUS=SAFE_PURGE_ABORTED ]]
+assert_equals "0" "$?" "El reporte debe indicar STATUS=SAFE_PURGE_ABORTED"
+[[ -f "$MOCK_HOME/sensitive_test/secret.txt" ]]
+assert_equals "0" "$?" "Los archivos originales del usuario NO deben haber sido borrados tras el bloqueo de la salvaguarda"
+
+# Restaurar función real
+# shellcheck source=../lib/models/backup_model.sh
+source "$PROJECT_ROOT/lib/models/backup_model.sh"
+
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
 if [[ $TESTS_FAILED -eq 0 ]]; then
