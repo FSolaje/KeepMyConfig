@@ -32,9 +32,9 @@
 ---
 
 ## Fase 2: Normalización Canónica y Detección Anti-Recursión en `device_model.sh`
-- [ ] Implementar `device_model_normalize_path` para purgar barras consecutivas (`//` -> `/`) y trailing slashes.
-- [ ] Implementar `device_model_detect_path_recursion` para detectar duplicaciones o anidamiento de prefijos base.
-- [ ] Integrar detector en `device_model_validate_storage` emitiendo error `DEV_ERR_RECURSIVE_PATH` (`12`) y bloqueando la operación.
+- [x] Implementar `device_model_normalize_path` para purgar barras consecutivas (`//` -> `/`) y trailing slashes.
+- [x] Implementar `device_model_detect_path_recursion` para detectar duplicaciones o anidamiento de prefijos base.
+- [x] Integrar detector en `device_model_validate_storage` emitiendo error `DEV_ERR_RECURSIVE_PATH` (`12`) y bloqueando la operación.
 - [ ] **Hito de Commit 2 (fix):**
   ```bash
   fix(device): incorporar normalizacion canonica de rutas y detector de recursion
