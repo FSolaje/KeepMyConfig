@@ -29,8 +29,16 @@ jobs:
 
       - name: Run Test Suites
         run: |
+          FAILED=0
           for test_file in tests/test_*.sh; do
             echo "::group::Running $test_file"
-            bash "$test_file"
+            if ! bash "$test_file"; then
+              echo "::error file=$test_file::Test suite $test_file failed!"
+              FAILED=1
+            fi
             echo "::endgroup::"
           done
+          if [[ $FAILED -ne 0 ]]; then
+            echo "❌ Una o más suites de pruebas unitarias han fallado."
+            exit 1
+          fi
