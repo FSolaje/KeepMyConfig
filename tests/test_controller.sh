@@ -440,6 +440,18 @@ assert_eq "0" "$preflight_confirm_exit" "_controller_run_preflight_gate ante pur
 
 
 
+# Test 31: Despliegue asistido/automático del marcador de almacenamiento en creación de perfiles
+INIT_PROF_DIR="/tmp/test_init_profile_storage_$$"
+mkdir -p "$INIT_PROF_DIR"
+rm -f "$INIT_PROF_DIR/.backup_storage_marker"
+
+controller_handle_create_profile "autostorage" "Perfil AutoStorage" "Prueba de marcador" "$INIT_PROF_DIR" "false" "true" >/dev/null
+assert_eq "0" "$?" "controller_handle_create_profile con init_storage=true debe retornar 0"
+assert_eq "1" "$([[ -f "$INIT_PROF_DIR/.backup_storage_marker" ]] && echo 1 || echo 0)" "El marcador .backup_storage_marker debe haberse desplegado en el destino del perfil"
+assert_eq "1" "$([[ -d "$INIT_PROF_DIR/archives" ]] && echo 1 || echo 0)" "La subcarpeta archives debe haberse creado en el destino del perfil"
+
+rm -rf "$INIT_PROF_DIR"
+
 echo "==============================================================="
 echo "Resumen de pruebas: $TESTS_PASSED superadas, $TESTS_FAILED fallidas."
 
