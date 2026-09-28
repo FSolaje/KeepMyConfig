@@ -1,6 +1,6 @@
 # Manual de Usuario y Administración: KeepMyConfig
 
-> **Versión:** 0.1.0-alpha.2 (Early Alpha)  
+> **Versión:** 0.1.0-alpha.4 (Early Alpha)  
 > **Sistema Operativo Objetivo:** Lliurex 25 / Ubuntu 24.04 LTS  
 > **Privilegios:** Usuario estándar sin privilegios (`non-root`, sin `sudo`)  
 > **Arquitectura:** Modelo-Vista-Controlador (MVC) en Bash 5+  
@@ -10,8 +10,8 @@
 > **KeepMyConfig se encuentra actualmente en fase ALFA de desarrollo activo (`v0.1.0-alpha.X`).**
 >
 > 🛑 **RIESGO REAL Y POTENCIAL DE PÉRDIDA IRREVERSIBLE DE DATOS:**
-> - Esta versión **contiene errores conocidos y bugs activos**, especialmente en la resolución y validación de rutas de almacenamiento en unidades externas, anidamiento de subdirectorios y asignación de destinos en perfiles.
-> - La aplicación incorpora rutinas de **purga segura destructiva e irrecuperable** mediante el comando `shred -u -z -n 3` (destinado a eliminar credenciales y claves locales tras el respaldo). Si se produce una anomalía en la ruta de destino, o si una copia se genera de forma anómala, **los archivos de origen locales pueden resultar destruidos permanentemente sin posibilidad de recuperación**.
+> - Aunque en esta versión `v0.1.0-alpha.4` se ha resuelto la duplicación de rutas y se ha incorporado la salvaguarda obligatoria *Safe Destruction Gate* (que bloquea la purga destructiva si el archivo respaldado falla o no existe físicamente), el software continúa en **fase de desarrollo experimental**.
+> - La aplicación incorpora rutinas de **purga segura destructiva e irrecuperable** mediante el comando `shred -u -z -n 3` (destinado a eliminar credenciales y claves locales tras el respaldo). En fases tempranas, cualquier incompatibilidad imprevista podría entrañar riesgos para los archivos locales.
 >
 > 📋 **DIRECTRICES OBLIGATORIAS DE USO:**
 > 1. **NO UTILIZAR EN ENTORNOS DE PRODUCCIÓN:** Bajo ninguna circunstancia emplee esta versión con datos reales, críticos o de producción.
@@ -244,7 +244,7 @@ La Edición Portable está concebida para usuarios que transportan su entorno en
 2. La carpeta contendrá el marcador `.portable` y el lanzador ejecutable `keepmyconfig.sh`.
 3. Ejecute directamente:
    ```bash
-   cd /media/$USER/MI_PENDIVE/KeepMyConfig-v0.1.0-alpha.2-portable
+   cd /media/$USER/MI_PENDIVE/KeepMyConfig-v0.1.0-alpha.4-portable
    ./keepmyconfig.sh
    ```
 4. **Compatibilidad total con sistemas de archivos externos:** El lanzador `keepmyconfig.sh` es un script wrapper directo (no un enlace simbólico UNIX), lo que garantiza su funcionamiento sin errores en unidades formateadas con FAT32, exFAT o NTFS.
