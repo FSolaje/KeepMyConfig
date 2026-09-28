@@ -4,6 +4,27 @@
 [![Linux](https://img.shields.io/badge/platform-linux-lightgrey.svg)](https://www.kernel.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![SemVer 2.0.0](https://img.shields.io/badge/semver-2.0.0-green.svg)](https://semver.org/)
+[![Status: Early Alpha](https://img.shields.io/badge/status-early%20alpha%20(experimental)-red.svg)](https://github.com/FSolaje/KeepMyConfig)
+
+> [!CAUTION]
+> ### ⚠️ AVISO CRÍTICO: VERSIÓN ALFA TEMPRANA — SOFTWARE EN DESARROLLO EXPERIMENTAL
+> **KeepMyConfig se encuentra actualmente en fase ALFA de desarrollo activo (`v0.1.0-alpha.X`).**
+>
+> 🛑 **RIESGO REAL Y POTENCIAL DE PÉRDIDA IRREVERSIBLE DE DATOS:**
+> - Esta versión **contiene errores conocidos y bugs activos**, especialmente en la resolución y validación de rutas de almacenamiento en unidades externas, anidamiento de subdirectorios y asignación de destinos en perfiles.
+> - La aplicación incorpora rutinas de **purga segura destructiva e irrecuperable** mediante el comando `shred -u -z -n 3` (destinado a eliminar credenciales y claves locales tras el respaldo). Si se produce una anomalía en la ruta de destino, o si una copia se genera de forma anómala, **los archivos de origen locales pueden resultar destruidos permanentemente sin posibilidad de recuperación**.
+>
+> 📋 **DIRECTRICES OBLIGATORIAS DE USO:**
+> 1. **NO UTILIZAR EN ENTORNOS DE PRODUCCIÓN:** Bajo ninguna circunstancia emplee esta versión con datos reales, críticos o de producción.
+> 2. **COPIAS DE SEGURIDAD PREVIAS EXTERNAS:** No utilice este software con ningún archivo o directorio sin disponer previamente de una copia de seguridad externa independiente, aislada y verificada.
+> 3. **PROBAR EXCLUSIVAMENTE EN MODO SANDBOX:** Para evaluar o probar el software, utilice siempre el modo aislado de pruebas:
+>    ```bash
+>    keepmyconfig --test-mode
+>    ```
+>    o configure rutas de prueba ficticias en entornos no críticos.
+>
+> ⚖️ **EXENCIÓN DE RESPONSABILIDAD:**
+> El software se proporciona "tal cual", sin garantía de ningún tipo, expresa o implícita. Los autores y colaboradores no se hacen responsables de ninguna pérdida de datos, daños a sistemas de archivos, corrupción de información o interrupciones operativas derivadas de su uso.
 
 **KeepMyConfig** es un gestor modular y desacoplado de copias de seguridad, cifrado y restauración en terminal bajo arquitectura **MVC en Bash puro**, diseñado específicamente para entornos educativos y corporativos con permisos restringidos (sin privilegios `sudo`) como **Lliurex 25 (Ubuntu 24.04 LTS)**.
 

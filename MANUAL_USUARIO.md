@@ -1,9 +1,29 @@
 # Manual de Usuario y Administración: KeepMyConfig
 
-> **Versión:** 0.1.0-alpha.2  
+> **Versión:** 0.1.0-alpha.2 (Early Alpha)  
 > **Sistema Operativo Objetivo:** Lliurex 25 / Ubuntu 24.04 LTS  
 > **Privilegios:** Usuario estándar sin privilegios (`non-root`, sin `sudo`)  
 > **Arquitectura:** Modelo-Vista-Controlador (MVC) en Bash 5+  
+
+> [!CAUTION]
+> ### ⚠️ AVISO CRÍTICO: VERSIÓN ALFA TEMPRANA — SOFTWARE EN DESARROLLO EXPERIMENTAL
+> **KeepMyConfig se encuentra actualmente en fase ALFA de desarrollo activo (`v0.1.0-alpha.X`).**
+>
+> 🛑 **RIESGO REAL Y POTENCIAL DE PÉRDIDA IRREVERSIBLE DE DATOS:**
+> - Esta versión **contiene errores conocidos y bugs activos**, especialmente en la resolución y validación de rutas de almacenamiento en unidades externas, anidamiento de subdirectorios y asignación de destinos en perfiles.
+> - La aplicación incorpora rutinas de **purga segura destructiva e irrecuperable** mediante el comando `shred -u -z -n 3` (destinado a eliminar credenciales y claves locales tras el respaldo). Si se produce una anomalía en la ruta de destino, o si una copia se genera de forma anómala, **los archivos de origen locales pueden resultar destruidos permanentemente sin posibilidad de recuperación**.
+>
+> 📋 **DIRECTRICES OBLIGATORIAS DE USO:**
+> 1. **NO UTILIZAR EN ENTORNOS DE PRODUCCIÓN:** Bajo ninguna circunstancia emplee esta versión con datos reales, críticos o de producción.
+> 2. **COPIAS DE SEGURIDAD PREVIAS EXTERNAS:** No utilice este software con ningún archivo o directorio sin disponer previamente de una copia de seguridad externa independiente, aislada y verificada.
+> 3. **PROBAR EXCLUSIVAMENTE EN MODO SANDBOX:** Para evaluar o probar el software, utilice siempre el modo aislado de pruebas:
+>    ```bash
+>    keepmyconfig --test-mode
+>    ```
+>    o configure rutas de prueba ficticias en entornos no críticos.
+>
+> ⚖️ **EXENCIÓN DE RESPONSABILIDAD:**
+> El software se proporciona "tal cual", sin garantía de ningún tipo, expresa o implícita. Los autores y colaboradores no se hacen responsables de ninguna pérdida de datos, daños a sistemas de archivos, corrupción de información o interrupciones operativas derivadas de su uso.
 
 ---
 
@@ -84,6 +104,10 @@ En entornos educativos basados en **Lliurex 25 / Ubuntu 24.04 LTS** (como aulas 
 2. Proteger con cifrado militar (GPG AES-256) cualquier dato privado o llave de seguridad.
 3. Purgar del ordenador del aula los datos sensibles mediante borrado seguro irrecuperable (`shred -u`), eliminando el riesgo de que otros alumnos o usuarios accedan a sus credenciales.
 4. Restaurar el entorno completo en cuestión de segundos al iniciar sesión en cualquier equipo.
+
+> [!WARNING]
+> **ADVERTENCIA DE SEGURIDAD DURANTE LA FASE ALFA:**
+> Al estar en fase alfa, se recomienda enfáticamente desactivar la purga automática (`PURGE_AFTER_BACKUP=false`) en las recetas de módulos sensibles hasta verificar que la ruta de almacenamiento en su unidad externa resuelve de forma exacta y sin duplicidades. Nunca opere sobre credenciales o llaves SSH únicas sin un respaldo externo preexistente.
 
 ---
 
@@ -370,6 +394,10 @@ KeepMyConfig implementa un interceptor mandatorio denominado **Pre-Flight Safety
    - **En TUI (`whiptail`):** Diálogo de alerta con foco predeterminado obligatorio en **`[NO]`** (`--defaultno`), requiriendo que el usuario se desplace deliberadamente a `[SÍ]` para autorizar la destrucción.
    - **En CLI:** Mensaje de peligro enmarcado en fondo rojo `\033[41;97;1m` listando todas las rutas a destruir, requiriendo teclear **`SI`** en mayúsculas y pulsar Enter (salvo uso de `--yes` / `-y`).
 3. **Advertencia de Sobreescritura en Restauración:** Antes de desempaquetar archivos en el `$HOME`, lista las rutas existentes que serán sustituidas para evitar pérdidas accidentales de configuraciones recientes.
+
+> [!CAUTION]
+> **RESTRICCIÓN EN FASE ALFA PARA PURGA CON SHRED:**
+> La purga segura (`shred -u`) destruye físicamente los archivos locales en el equipo. Durante la fase alfa, ante cualquier duda o comportamiento imprevisto en la ruta de copia, **aborte la operación seleccionando `[NO]`** y compruebe previamente el archivo comprimido generado en el disco de respaldo antes de autorizar cualquier eliminación local.
 
 ---
 
